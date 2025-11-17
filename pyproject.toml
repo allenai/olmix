@@ -1,25 +1,167 @@
-[tool.black]
-line-length = 100
-
-include = '\.pyi?$'
-
-exclude = '''
-(
-      __pycache__
-    | \.git
-    | \.mypy_cache
-    | \.pytest_cache
-    | \.vscode
-    | \.venv
-    | \bdist\b
-    | \bdoc\b
-)
-'''
-
-[tool.isort]
-profile = "black"
-multi_line_output = 3
-
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "olmix"
+description = "A Python project for research and development"
+readme = "README.md"
+license = {text = "Apache-2.0"}
+authors = [
+    {name = "", email = "@allenai.org"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+requires-python = ">=3.11"
+dependencies = [
+    # Add your core dependencies here
+]
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/allenai/olmix"
+Repository = "https://github.com/allenai/olmix"
+Issues = "https://github.com/allenai/olmix/issues"
+
+[project.optional-dependencies]
+dev = [
+    # Testing
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-timeout>=2.1.0",
+    "flaky>=3.7.0",
+
+    # Code formatting and linting (ruff does both)
+    "ruff>=0.1.5",
+
+    # Type checking
+    "pyright>=1.1.350",
+
+    # Pre-commit hooks
+    "pre-commit>=3.3.3",
+]
+
+all = [
+    "olmix[dev]",
+]
+
+[tool.setuptools]
+packages = ["olmix"]
+
+[tool.setuptools.dynamic]
+version = {attr = "olmix.version.__version__"}
+
+# Ruff configuration (handles both linting and formatting)
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle errors
+    "F",     # pyflakes
+    "I",     # isort
+    "N",     # pep8-naming
+    "W",     # pycodestyle warnings
+    "UP",    # pyupgrade
+    "B",     # flake8-bugbear
+    "C90",   # mccabe complexity
+    "RUF",   # ruff specific rules
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "B008",  # do not perform function calls in argument defaults
+    "B905",  # `zip()` without an explicit `strict=` parameter
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]  # Allow unused imports in __init__ files
+"tests/*" = ["S101"]       # Allow assert statements in tests
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.isort]
+known-first-party = ["olmix"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+
+# Pyright configuration
+[tool.pyright]
+pythonVersion = "3.11"
+typeCheckingMode = "strict"
+reportMissingImports = true
+reportMissingTypeStubs = false
+exclude = [
+    "**/__pycache__",
+    ".venv",
+    "build",
+    "dist",
+    "docs",
+]
+
+# Pytest configuration
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--tb=short",
+    "--disable-warnings",
+    "-v",
+]
+markers = [
+    "unit: Unit tests that don't require external resources",
+    "integration: Integration tests that may require external resources",
+    "slow: Tests that take a long time to run",
+    "gpu: Tests that require GPU",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+
+# Coverage configuration
+[tool.coverage.run]
+branch = true
+source = ["olmix"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__init__.py",
+    "*/conftest.py",
+    "*/version.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if TYPE_CHECKING:",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if False:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@abstractmethod",
+]
+precision = 2
+show_missing = true
+skip_covered = false
+
+[tool.coverage.html]
+directory = "htmlcov"
