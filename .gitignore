@@ -1,11 +1,16 @@
 # build artifacts
 
 .eggs/
-.mypy_cache
-my_package.egg-info/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+*.egg
 build/
 dist/
 pip-wheel-metadata/
+wheels/
+*.manifest
+*.spec
 
 
 # dev tools
@@ -41,8 +46,14 @@ __pycache__
 # testing and continuous integration
 
 .coverage
+.coverage.*
+coverage.xml
+htmlcov/
 .pytest_cache/
 .benchmarks
+.tox/
+.nox/
+.hypothesis/
 
 # documentation build artifacts
 
