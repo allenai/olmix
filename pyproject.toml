@@ -8,7 +8,7 @@ description = "A Python project for research and development"
 readme = "README.md"
 license = {text = "Apache-2.0"}
 authors = [
-    {name = "", email = "@allenai.org"}
+    {name = "Kyle Lo", email = "kylel@allenai.org"}
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
