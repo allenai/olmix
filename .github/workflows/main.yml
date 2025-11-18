@@ -81,7 +81,7 @@ jobs:
         run: uv pip install --system -e ".[dev]"
 
       - name: Run tests with coverage
-        run: uvx pytest --cov=olmix --cov-report=term --cov-report=xml --cov-report=html
+        run: pytest --cov=olmix --cov-report=term --cov-report=xml --cov-report=html
 
       - name: Upload coverage reports
         if: matrix.python-version == '3.11'
