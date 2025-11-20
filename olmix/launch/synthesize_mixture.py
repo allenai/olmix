@@ -30,7 +30,7 @@ logging.getLogger("botocore").setLevel(logging.WARNING)
 import hashlib
 import json
 
-from regmixer.aliases import ExperimentConfig, SourceConfig
+from aliases import ExperimentConfig, SourceConfig
 
 
 class ConfigDefaults:
