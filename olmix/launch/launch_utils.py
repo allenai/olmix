@@ -1,29 +1,29 @@
 import json
 import logging
 import os
-from pathlib import Path
-from typing import List, Optional, Tuple
 from collections import defaultdict
+from pathlib import Path
+
 import yaml
 
-from aliases import (
+from olmix.aliases import (
     ExperimentConfig,
     SourceConfig,
     SourceInstance,
 )
-from synthesize_mixture import mk_mixtures
+from olmix.launch.synthesize_mixture import mk_mixtures
 
 logger = logging.getLogger(__name__)
 
+
 def config_from_path(config: Path) -> ExperimentConfig:
-    with open(config, "r") as f:
+    with open(config) as f:
         data = yaml.safe_load(f)
 
     return ExperimentConfig(**data)
 
-def mk_source_instances(
-    sources: list[SourceConfig], mix_map: dict[str, tuple[float, float]]
-) -> list[SourceInstance]:
+
+def mk_source_instances(sources: list[SourceConfig], mix_map: dict[str, tuple[float, float]]) -> list[SourceInstance]:
     instances = []
 
     for source in sources:
@@ -55,23 +55,27 @@ def mk_source_instances(
     return instances
 
 
-def prettify_mixes(mixes: list[dict[str, Tuple[float, float]]]):
+def prettify_mixes(mixes: list[dict[str, tuple[float, float]]]):
     result = {"mixes": mixes}
     return json.dumps(result, indent=2)
 
 
 def mk_mixes(
-    config_file: Path, group_uuid: str, output: Optional[Path] = None, use_cache: bool = True
-) -> list[dict[str, Tuple[float, float]]]:
-    with open(config_file, "r") as f:
+    config_file: Path, output: Path | None = None, use_cache: bool = True, group_uuid: str | None = None
+) -> list[dict[str, tuple[float, float]]]:
+    import uuid
+
+    with open(config_file) as f:
         data = yaml.safe_load(f)
 
     config = ExperimentConfig(**data)
+    if group_uuid is None:
+        group_uuid = str(uuid.uuid4())[:8]
     mixes = mk_mixtures(config, group_uuid, use_cache=use_cache)
     mix_string = prettify_mixes(mixes)
 
     if not output:
-        output = Path(f"/tmp/regmixer/{config.name}_{group_uuid}.json")
+        output = Path(f"/tmp/olmix/{config.name}_{group_uuid}.json")
 
     if output:
         os.makedirs(os.path.dirname(output), exist_ok=True)

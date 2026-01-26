@@ -11,32 +11,20 @@ class WandbMetrics(Enum):
     csqa_val_rc_5shot_bpb = "eval/downstream/csqa_val_rc_5shot (BPB v2)"
     gsm8k_gold_bpb_5shot = "eval/downstream/gsm8k_gold_bpb_5shot (BPB v2)"
     hellaswag_rc_5shot_bpb = "eval/downstream/hellaswag_rc_5shot (BPB v2)"
-    minerva_math_precalculus_gold_bpb_0shot = (
-        "eval/downstream/minerva_math_precalculus_gold_bpb_0shot (BPB v2)"
-    )
-    minerva_math_prealgebra_gold_bpb_0shot = (
-        "eval/downstream/minerva_math_prealgebra_gold_bpb_0shot (BPB v2)"
-    )
-    minerva_math_number_theory_gold_0shot = (
-        "eval/downstream/minerva_math_number_theory_gold_bpb_0shot (BPB v2)"
-    )
+    minerva_math_precalculus_gold_bpb_0shot = "eval/downstream/minerva_math_precalculus_gold_bpb_0shot (BPB v2)"
+    minerva_math_prealgebra_gold_bpb_0shot = "eval/downstream/minerva_math_prealgebra_gold_bpb_0shot (BPB v2)"
+    minerva_math_number_theory_gold_0shot = "eval/downstream/minerva_math_number_theory_gold_bpb_0shot (BPB v2)"
     minerva_math_intermediate_algebra_gold_bpb_0shot = (
         "eval/downstream/minerva_math_intermediate_algebra_gold_bpb_0shot (BPB v2)"
     )
-    minerva_math_geometry_gold_bpb_0shot = (
-        "eval/downstream/minerva_math_geometry_gold_bpb_0shot (BPB v2)"
-    )
+    minerva_math_geometry_gold_bpb_0shot = "eval/downstream/minerva_math_geometry_gold_bpb_0shot (BPB v2)"
     minerva_math_counting_and_probability_gold_bpb_0shot = (
         "eval/downstream/minerva_math_counting_and_probability_gold_bpb_0shot (BPB v2)"
     )
-    minerva_math_algebra_gold_bpb_0shot = (
-        "eval/downstream/minerva_math_algebra_gold_bpb_0shot (BPB v2)"
-    )
+    minerva_math_algebra_gold_bpb_0shot = "eval/downstream/minerva_math_algebra_gold_bpb_0shot (BPB v2)"
     mmlu_humanities_test_rc_5shot_bpb = "eval/downstream/mmlu_humanities_test_rc_5shot (BPB v2)"
     mmlu_other_test_rc_5shot_bpb = "eval/downstream/mmlu_other_test_rc_5shot (BPB v2)"
-    mmlu_social_sciences_test_rc_5shot_bpb = (
-        "eval/downstream/mmlu_social_sciences_test_rc_5shot (BPB v2)"
-    )
+    mmlu_social_sciences_test_rc_5shot_bpb = "eval/downstream/mmlu_social_sciences_test_rc_5shot (BPB v2)"
     mmlu_stem_test_rc_5shot_bpb = "eval/downstream/mmlu_stem_test_rc_5shot (BPB v2)"
     piqa_val_rc_5shot_bpb = "eval/downstream/piqa_val_rc_5shot (BPB v2)"
     socialiqa_val_rc_5shot_bpb = "eval/downstream/socialiqa_val_rc_5shot (BPB v2)"
@@ -49,32 +37,20 @@ class WandbMetrics(Enum):
     csqa_val_rc_5shot_bpb_v1 = "eval/downstream/csqa_val_rc_5shot (BPB)"
     gsm8k_gold_bpb_5shot_v1 = "eval/downstream/gsm8k_gold_bpb_5shot (BPB)"
     hellaswag_rc_5shot_bpb_v1 = "eval/downstream/hellaswag_rc_5shot (BPB)"
-    minerva_math_precalculus_gold_bpb_0shot_v1 = (
-        "eval/downstream/minerva_math_precalculus_gold_bpb_0shot (BPB)"
-    )
-    minerva_math_prealgebra_gold_bpb_0shot_v1 = (
-        "eval/downstream/minerva_math_prealgebra_gold_bpb_0shot (BPB)"
-    )
-    minerva_math_number_theory_gold_0shot_v1 = (
-        "eval/downstream/minerva_math_number_theory_gold_bpb_0shot (BPB)"
-    )
+    minerva_math_precalculus_gold_bpb_0shot_v1 = "eval/downstream/minerva_math_precalculus_gold_bpb_0shot (BPB)"
+    minerva_math_prealgebra_gold_bpb_0shot_v1 = "eval/downstream/minerva_math_prealgebra_gold_bpb_0shot (BPB)"
+    minerva_math_number_theory_gold_0shot_v1 = "eval/downstream/minerva_math_number_theory_gold_bpb_0shot (BPB)"
     minerva_math_intermediate_algebra_gold_bpb_0shot_v1 = (
         "eval/downstream/minerva_math_intermediate_algebra_gold_bpb_0shot (BPB)"
     )
-    minerva_math_geometry_gold_bpb_0shot_v1 = (
-        "eval/downstream/minerva_math_geometry_gold_bpb_0shot (BPB)"
-    )
+    minerva_math_geometry_gold_bpb_0shot_v1 = "eval/downstream/minerva_math_geometry_gold_bpb_0shot (BPB)"
     minerva_math_counting_and_probability_gold_bpb_0shot_v1 = (
         "eval/downstream/minerva_math_counting_and_probability_gold_bpb_0shot (BPB)"
     )
-    minerva_math_algebra_gold_bpb_0shot_v1 = (
-        "eval/downstream/minerva_math_algebra_gold_bpb_0shot (BPB)"
-    )
+    minerva_math_algebra_gold_bpb_0shot_v1 = "eval/downstream/minerva_math_algebra_gold_bpb_0shot (BPB)"
     mmlu_humanities_test_rc_5shot_bpb_v1 = "eval/downstream/mmlu_humanities_test_rc_5shot (BPB)"
     mmlu_other_test_rc_5shot_bpb_v1 = "eval/downstream/mmlu_other_test_rc_5shot (BPB)"
-    mmlu_social_sciences_test_rc_5shot_bpb_v1 = (
-        "eval/downstream/mmlu_social_sciences_test_rc_5shot (BPB)"
-    )
+    mmlu_social_sciences_test_rc_5shot_bpb_v1 = "eval/downstream/mmlu_social_sciences_test_rc_5shot (BPB)"
     mmlu_stem_test_rc_5shot_bpb_v1 = "eval/downstream/mmlu_stem_test_rc_5shot (BPB)"
     piqa_val_rc_5shot_bpb_v1 = "eval/downstream/piqa_val_rc_5shot (BPB)"
     socialiqa_val_rc_5shot_bpb_v1 = "eval/downstream/socialiqa_val_rc_5shot (BPB)"
@@ -815,42 +791,42 @@ class GroupedWandbMetrics(Enum):
         "socialiqa:rc::olmes:full",
         "squad:rc::gen2mc",
         "winogrande:rc::olmes:full",
-        #"ultrachat_masked_ppl",
-        #"wildchat_masked_ppl"
+        # "ultrachat_masked_ppl",
+        # "wildchat_masked_ppl"
     ]
 
     math_tasks = [
         "basic_skills_arithmetic:rc::olmes",
-        "minerva_math_algebra:bpb::olmes", 
+        "minerva_math_algebra:bpb::olmes",
         "minerva_math_counting_and_probability:bpb::olmes",
         "minerva_math_geometry:bpb::olmes",
         "minerva_math_intermediate_algebra:bpb::olmes",
         "minerva_math_number_theory:bpb::olmes",
         "minerva_math_prealgebra:bpb::olmes",
-        "minerva_math_precalculus:bpb::olmes"
+        "minerva_math_precalculus:bpb::olmes",
     ]
 
     code_tasks_new = [
         "basic_skills_coding:rc::olmes",
-        "codex_humaneval:3shot:bpb::none", 
-        "mbpp:3shot:bpb::none", 
-        "mt_mbpp_v2fix:bash", 
-        "mt_mbpp_v2fix:c", 
-        "mt_mbpp_v2fix:cpp", 
-        "mt_mbpp_v2fix:csharp", 
-        "mt_mbpp_v2fix:go", 
-        "mt_mbpp_v2fix:haskell", 
-        "mt_mbpp_v2fix:java", 
-        "mt_mbpp_v2fix:javascript", 
-        "mt_mbpp_v2fix:matlab", 
-        "mt_mbpp_v2fix:php", 
-        "mt_mbpp_v2fix:python", 
-        "mt_mbpp_v2fix:r", 
-        "mt_mbpp_v2fix:ruby", 
-        "mt_mbpp_v2fix:rust", 
-        "mt_mbpp_v2fix:scala", 
-        "mt_mbpp_v2fix:swift", 
-        "mt_mbpp_v2fix:typescript"
+        "codex_humaneval:3shot:bpb::none",
+        "mbpp:3shot:bpb::none",
+        "mt_mbpp_v2fix:bash",
+        "mt_mbpp_v2fix:c",
+        "mt_mbpp_v2fix:cpp",
+        "mt_mbpp_v2fix:csharp",
+        "mt_mbpp_v2fix:go",
+        "mt_mbpp_v2fix:haskell",
+        "mt_mbpp_v2fix:java",
+        "mt_mbpp_v2fix:javascript",
+        "mt_mbpp_v2fix:matlab",
+        "mt_mbpp_v2fix:php",
+        "mt_mbpp_v2fix:python",
+        "mt_mbpp_v2fix:r",
+        "mt_mbpp_v2fix:ruby",
+        "mt_mbpp_v2fix:rust",
+        "mt_mbpp_v2fix:scala",
+        "mt_mbpp_v2fix:swift",
+        "mt_mbpp_v2fix:typescript",
     ]
 
     qa_tasks = [
@@ -865,8 +841,8 @@ class GroupedWandbMetrics(Enum):
         "drop:rc:bpb::gen2mc",
         "hellaswag:rc::olmes",
         "jeopardy:rc:bpb::gen2mc",
-        #"lab_bench_dbqa",
-        #"lab_bench_protocolqa",
+        # "lab_bench_dbqa",
+        # "lab_bench_protocolqa",
         "lambada",
         "medmcqa:rc:bpb::none",
         "mmlu_abstract_algebra:rc::olmes",
@@ -928,10 +904,10 @@ class GroupedWandbMetrics(Enum):
         "mmlu_world_religions:rc::olmes",
         "naturalqs:rc:bpb::gen2mc",
         "piqa:rc::olmes:full",
-        #"qasper_yesno:rc::olmes",
+        # "qasper_yesno:rc::olmes",
         "sciq:bpb::olmo1",
-        #"sciriff_yesno:rc::olmes",
-        #"socialiqa:rc::olmes:full",
+        # "sciriff_yesno:rc::olmes",
+        # "socialiqa:rc::olmes:full",
         "squad:rc:bpb::gen2mc",
         "winogrande:rc::olmes:full",
     ]
@@ -2097,39 +2073,35 @@ class ObjectiveWeights(Enum):
         "olmo3:dev:7b:mcqa:stem": 0.3 / 3,
     }
 
-
-
-
     code_tasks_new_weights = {
         "basic_skills_coding:rc::olmes": 0.25,
-        "codex_humaneval:3shot:bpb::none": 0.25, 
-        "mbpp:3shot:bpb::none": 0.25, 
+        "codex_humaneval:3shot:bpb::none": 0.25,
+        "mbpp:3shot:bpb::none": 0.25,
         "mt_mbpp_v2fix:bash": 0.25 / 17,
-        "mt_mbpp_v2fix:c": 0.25 / 17, 
-        "mt_mbpp_v2fix:cpp": 0.25 / 17, 
-        "mt_mbpp_v2fix:csharp": 0.25 / 17, 
-        "mt_mbpp_v2fix:go": 0.25 / 17, 
-        "mt_mbpp_v2fix:haskell": 0.25 / 17, 
-        "mt_mbpp_v2fix:java": 0.25 / 17, 
-        "mt_mbpp_v2fix:javascript": 0.25 / 17, 
-        "mt_mbpp_v2fix:matlab": 0.25 / 17, 
-        "mt_mbpp_v2fix:php": 0.25 / 17, 
-        "mt_mbpp_v2fix:python": 0.25 / 17, 
-        "mt_mbpp_v2fix:r": 0.25 / 17, 
-        "mt_mbpp_v2fix:ruby": 0.25 / 17, 
-        "mt_mbpp_v2fix:rust": 0.25 / 17, 
-        "mt_mbpp_v2fix:scala": 0.25 / 17, 
-        "mt_mbpp_v2fix:swift": 0.25 / 17, 
-        "mt_mbpp_v2fix:typescript": 0.25 / 17
+        "mt_mbpp_v2fix:c": 0.25 / 17,
+        "mt_mbpp_v2fix:cpp": 0.25 / 17,
+        "mt_mbpp_v2fix:csharp": 0.25 / 17,
+        "mt_mbpp_v2fix:go": 0.25 / 17,
+        "mt_mbpp_v2fix:haskell": 0.25 / 17,
+        "mt_mbpp_v2fix:java": 0.25 / 17,
+        "mt_mbpp_v2fix:javascript": 0.25 / 17,
+        "mt_mbpp_v2fix:matlab": 0.25 / 17,
+        "mt_mbpp_v2fix:php": 0.25 / 17,
+        "mt_mbpp_v2fix:python": 0.25 / 17,
+        "mt_mbpp_v2fix:r": 0.25 / 17,
+        "mt_mbpp_v2fix:ruby": 0.25 / 17,
+        "mt_mbpp_v2fix:rust": 0.25 / 17,
+        "mt_mbpp_v2fix:scala": 0.25 / 17,
+        "mt_mbpp_v2fix:swift": 0.25 / 17,
+        "mt_mbpp_v2fix:typescript": 0.25 / 17,
     }
 
-
     code_tasks_new_weights_extreme = {
-        "basic_skills_coding:rc::olmes": 1.0/3,
-        "codex_humaneval:3shot:bpb::none": 1.0/3, 
-        "mbpp:3shot:bpb::none": 1.0/3, 
+        "basic_skills_coding:rc::olmes": 1.0 / 3,
+        "codex_humaneval:3shot:bpb::none": 1.0 / 3,
+        "mbpp:3shot:bpb::none": 1.0 / 3,
         "mt_mbpp_v2fix:bash": 0,
-        "mt_mbpp_v2fix:c": 0, 
+        "mt_mbpp_v2fix:c": 0,
         "mt_mbpp_v2fix:cpp": 0,
         "mt_mbpp_v2fix:csharp": 0,
         "mt_mbpp_v2fix:go": 0,
@@ -2144,5 +2116,5 @@ class ObjectiveWeights(Enum):
         "mt_mbpp_v2fix:rust": 0,
         "mt_mbpp_v2fix:scala": 0,
         "mt_mbpp_v2fix:swift": 0,
-        "mt_mbpp_v2fix:typescript": 0
+        "mt_mbpp_v2fix:typescript": 0,
     }
