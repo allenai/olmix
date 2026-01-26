@@ -1,0 +1,30 @@
+# Minimal test configuration for olmo2_30m model
+# Use this to verify the launch pipeline works
+#
+# Usage:
+#   olmix launch validate --config configs/examples/test_olmo2_30m.yaml
+#   olmix launch run --config configs/examples/test_olmo2_30m.yaml --dry-run
+
+name: olmix-test-30m
+description: Test 30M model training (minimal run)
+budget: ai2/oe-data
+workspace: ai2/dolma2
+cluster: ai2/saturn-cirrascale
+
+# Model settings
+proxy_model_id: olmo2_30m
+tokenizer: dolma2
+
+# Minimal run for testing
+nodes: 1
+gpus: 1
+variants: 1
+max_tokens: 10000000      # 10M tokens - very short test
+sequence_length: 2048
+seed: 42
+
+# Single data source for testing (dolma2-tokenized)
+sources:
+  - name: wikipedia
+    paths:
+      - "s3://ai2-llm/preprocessed/wikipedia-dolma-0823/allenai/dolma2-tokenizer/*.npy"
