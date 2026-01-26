@@ -75,7 +75,7 @@ def mk_mixes(
     mix_string = prettify_mixes(mixes)
 
     if not output:
-        output = Path(f"/tmp/olmix/{config.name}_{group_uuid}.json")
+        output = Path(f"output/mixes/{config.name}_{group_uuid}.json")
 
     if output:
         os.makedirs(os.path.dirname(output), exist_ok=True)

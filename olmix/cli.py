@@ -266,7 +266,7 @@ def launch_cancel(config: Path, group_id: str):
             client.stop(job["id"])
 
 
-@launch.command("validate")
+@launch.command("preview")
 @click.option(
     "-c",
     "--config",
@@ -278,10 +278,10 @@ def launch_cancel(config: Path, group_id: str):
     "--quick",
     is_flag=True,
     default=False,
-    help="Quick validation: skip dataset preparation (much faster, but doesn't verify data accessibility).",
+    help="Quick mode: skip dataset preparation (much faster, but doesn't verify data accessibility).",
 )
-def launch_validate(config: Path, quick: bool):
-    """Validate an experiment configuration."""
+def launch_preview(config: Path, quick: bool):
+    """Preview sampled mixtures and training commands without launching."""
     from olmix.aliases import ExperimentConfig
     from olmix.launch.beaker import mk_experiment_group, mk_instance_cmd
     from olmix.launch.launch_utils import mk_mixes

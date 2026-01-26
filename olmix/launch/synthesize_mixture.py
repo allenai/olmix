@@ -3,15 +3,12 @@ import logging
 import os
 import pathlib
 import random
-import re
 from collections import defaultdict
 from copy import deepcopy
-from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
 import gcsfs
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import s3fs
@@ -517,30 +514,13 @@ def mk_mixtures(
 
         weight_maps.append(weight_map)
 
+    # Log weight ranges for topics
     for i in range(len(domains)):
         if ":" in domains[i]:
             weights = np.array([mix[0][i] for mix in mixtures])
             logger.info(f"Topic {domains[i]}, min: {weights.min()}, max: {weights.max()}")
 
-            out_dir = Path("cache") / "swarms" / str(group_uuid)
-            out_dir.mkdir(parents=True, exist_ok=True)
-
-            # Sanitize source to be filesystem-friendly
-            safe_topic = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(domains[i]))
-            out_path = out_dir / f"{safe_topic}_weights_hist.png"
-
-            # Plot histogram
-            plt.figure(figsize=(8, 5))
-            plt.hist(weights[~np.isnan(weights)], bins=10)
-            plt.title(f"{safe_topic}")
-            plt.xlabel("Weight")
-            plt.ylabel("Frequency")
-            plt.tight_layout()
-
-            # Save & close
-            plt.savefig(out_path, dpi=200)
-            plt.close()
-
+    # Log weight ranges for sources
     source_to_indices = defaultdict(list)
     for i, domain in enumerate(domains):
         source = domain.split(":", 1)[0]
@@ -553,25 +533,6 @@ def mk_mixtures(
             source_weights.append(total)
         source_weights = np.array(source_weights)
         logger.info(f"Source {source}, min: {source_weights.min()}, max: {source_weights.max()}")
-
-        out_dir = Path("cache") / "swarms" / str(group_uuid)
-        out_dir.mkdir(parents=True, exist_ok=True)
-
-        # Sanitize source to be filesystem-friendly
-        safe_source = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(source))
-        out_path = out_dir / f"{safe_source}_source_weights_hist.png"
-
-        # Plot histogram
-        plt.figure(figsize=(8, 5))
-        plt.hist(source_weights[~np.isnan(source_weights)], bins=10)
-        plt.title(f"{source}")
-        plt.xlabel("Weight")
-        plt.ylabel("Frequency")
-        plt.tight_layout()
-
-        # Save & close
-        plt.savefig(out_path, dpi=200)
-        plt.close()
 
     return weight_maps
 

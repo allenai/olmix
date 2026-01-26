@@ -2,7 +2,7 @@
 # Use this to verify the launch pipeline works
 #
 # Usage:
-#   olmix launch validate --config configs/examples/test_olmo2_30m.yaml
+#   olmix launch preview --config configs/examples/test_olmo2_30m.yaml
 #   olmix launch run --config configs/examples/test_olmo2_30m.yaml --dry-run
 
 name: olmix-test-30m
@@ -21,7 +21,7 @@ tokenizer: dolma2
 chinchilla_multiple: 0.017
 nodes: 1
 gpus: 1
-variants: 1
+variants: 2
 seed: 42
 
 # Data sources for testing (dolma2-tokenized)
