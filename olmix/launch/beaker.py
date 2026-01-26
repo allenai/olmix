@@ -3,7 +3,7 @@
 import logging
 
 from beaker import Beaker
-from olmo_core.launch.beaker import BeakerEnvSecret, BeakerLaunchConfig, BeakerWekaBucket
+from olmo_core.launch.beaker import BeakerEnvSecret, BeakerEnvVar, BeakerLaunchConfig, BeakerWekaBucket
 
 from olmix.aliases import (
     ExperimentConfig,
@@ -167,44 +167,22 @@ def mk_launch_configs(group: ExperimentGroup, beaker_user: str) -> list[BeakerLa
     if group.config.weka:
         weka_buckets.append(BeakerWekaBucket("oe-training-default", "/weka/oe-training-default"))
 
-    setup_steps = [
-        'git clone "$REPO_URL"',
-        "conda shell.bash activate base",
-        "cd olmix",
-        'git checkout "$GIT_REF"',
-        "git submodule update --init --recursive",
-        "pip install -e '.[all]'",
-        "pip install torch==2.7.0 torchaudio torchvision --index-url https://download.pytorch.org/whl/test/cu128",
-        "pip freeze",
-        # Move AWS credentials from env to relevant files
-        "mkdir -p ~/.aws",
-        "printenv AWS_CONFIG > ~/.aws/config",
-        "printenv AWS_CREDENTIALS > ~/.aws/credentials",
-    ]
+    # Build environment variables
+    env_vars: list[BeakerEnvVar] = []
 
     if group.config.wandb_debug:
-        setup_steps.append("export WANDB_DEBUG=true")
+        env_vars.append(BeakerEnvVar(name="WANDB_DEBUG", value="true"))
 
     if group.config.gpus == 1:
-        setup_steps += [
-            # Single-process values
-            "export WORLD_SIZE=1 RANK=0 LOCAL_RANK=0",
-            "export MASTER_ADDR=127.0.0.1",
-            # Pick a free port for the training PG (env:// consumers)
-            "export MASTER_PORT=$(python - <<'PY'\n"
-            "import socket, contextlib\n"
-            "with contextlib.closing(socket.socket()) as s:\n"
-            "    s.bind(('', 0)); print(s.getsockname()[1])\n"
-            "PY)",
-            # Also set the *distributed default* port
-            "export TORCH_DISTRIBUTED_DEFAULT_PORT=$(python - <<'PY'\n"
-            "import socket, contextlib\n"
-            "with contextlib.closing(socket.socket()) as s:\n"
-            "    s.bind(('', 0)); print(s.getsockname()[1])\n"
-            "PY)",
-            # Keep the job on GPU 0 even if the box has more
-            "export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}",
-        ]
+        # Single-process environment variables
+        env_vars.extend(
+            [
+                BeakerEnvVar(name="WORLD_SIZE", value="1"),
+                BeakerEnvVar(name="RANK", value="0"),
+                BeakerEnvVar(name="LOCAL_RANK", value="0"),
+                BeakerEnvVar(name="MASTER_ADDR", value="127.0.0.1"),
+            ]
+        )
 
     return [
         BeakerLaunchConfig(
@@ -223,16 +201,16 @@ def mk_launch_configs(group: ExperimentGroup, beaker_user: str) -> list[BeakerLa
             preemptible=group.config.preemptible,
             beaker_image="petew/olmo-core-tch270cu128-v2.1",
             priority=group.config.priority.value,
+            env_vars=env_vars,
             env_secrets=[
                 BeakerEnvSecret(name="BEAKER_TOKEN", secret=f"{beaker_user}_BEAKER_TOKEN"),
                 BeakerEnvSecret(name="WANDB_API_KEY", secret=f"{beaker_user}_WANDB_API_KEY"),
-                BeakerEnvSecret(name="AWS_CONFIG", secret=f"{beaker_user}_AWS_CONFIG"),
-                BeakerEnvSecret(name="AWS_CREDENTIALS", secret=f"{beaker_user}_AWS_CREDENTIALS"),
                 BeakerEnvSecret(name="R2_ENDPOINT_URL", secret="R2_ENDPOINT_URL"),
                 BeakerEnvSecret(name="WEKA_ENDPOINT_URL", secret="WEKA_ENDPOINT_URL"),
                 BeakerEnvSecret(name="GOOGLE_CLOUD_PROJECT", secret="GOOGLE_CLOUD_PROJECT"),
             ],
-            setup_steps=setup_steps,
+            aws_config_secret=f"{beaker_user}_AWS_CONFIG",
+            aws_credentials_secret=f"{beaker_user}_AWS_CREDENTIALS",
         )
         for experiment in group.instances
     ]

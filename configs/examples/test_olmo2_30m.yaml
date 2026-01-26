@@ -7,9 +7,10 @@
 
 name: olmix-test-30m
 description: Test 30M model training (minimal run)
-budget: ai2/oe-data
-workspace: ai2/dolma2
-cluster: ai2/saturn-cirrascale
+budget: ai2/oe-base
+workspace: ai2/oe-data
+cluster: ai2/jupiter
+priority: high
 
 # Model settings
 proxy_model_id: olmo2_30m
