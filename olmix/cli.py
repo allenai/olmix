@@ -112,7 +112,7 @@ def launch_run(config: Path, mixture_file: Path | None, dry_run: bool, no_cache:
     experiment_config = ExperimentConfig(**data)
     group_uuid = generate_uuid()[:8]
 
-    beaker_user = (Beaker.from_env().account.whoami().name).upper()
+    beaker_user = Beaker.from_env().user_name.upper()
     logger.info(f"Launching experiment group '{group_uuid}' as user '{beaker_user}'")
 
     logger.info("Generating experiment group from the following config...")
