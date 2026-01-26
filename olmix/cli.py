@@ -160,9 +160,11 @@ def launch_run(config: Path, mixture_file: Path | None, dry_run: bool, no_cache:
     with yaspin(text="Launching experiment group...", color="yellow") as spinner:
         try:
             if dry_run:
-                logger.info("Dry run mode enabled. Printing experiment configurations...")
+                logger.info("Dry run mode enabled. Running dry-run for each experiment...")
+                torchrun = experiment_config.gpus > 1
                 for lc in launch_configs:
-                    logger.info(lc.build_experiment_spec())
+                    logger.info(f"Dry run for {lc.name}:")
+                    lc.dry_run(torchrun=torchrun)
                 return
 
             results = []
