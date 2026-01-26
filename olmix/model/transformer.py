@@ -22,12 +22,12 @@ from olmo_core.distributed.parallel import DataParallelType
 from olmo_core.float8 import Float8Config
 from olmo_core.nn.transformer import TransformerConfig
 from olmo_core.optim import (
-    LinearWithWarmup,
+    WSDS,
     OptimGroupOverride,
     Scheduler,
+    SchedulerUnits,
     SkipStepAdamWConfig,
 )
-from olmo_core.optim.scheduler import CosWithWarmupAndLinearDecay
 from olmo_core.train import Duration, TrainerConfig
 from olmo_core.train.callbacks import (
     Callback,
@@ -48,6 +48,8 @@ logger = logging.getLogger(__name__)
 # Constants for scaling law calculations
 BATCH_DIVISOR = 32
 SAVE_INTERVAL = 1000
+SEQUENCE_LENGTH = 8192  # Fixed sequence length for Chinchilla strategy
+TOKENS_PER_PARAM = 20  # Chinchilla optimal tokens per parameter
 
 # Direct factory mappings to olmo-core
 TOKENIZERS: dict[str, Callable[[], TokenizerConfig]] = {
@@ -74,11 +76,13 @@ class TransformerConfigBuilder:
     """
     A builder class for configuring and creating a transformer model training configuration.
 
+    Uses Chinchilla-based scaling laws for batch size, learning rate, and duration.
+    Uses WSDS (Warmup-Stable-Decay-Stable) scheduler with multi-period checkpoints.
+
     Attributes:
         run_name: The name of the run.
         sources: A list of source instances.
-        sequence_length: The sequence length for the model.
-        max_tokens: The maximum number of tokens to be processed in a batch.
+        chinchilla_multiple: Multiplier for Chinchilla optimal tokens (trains for 20 * params * N).
         transformer_config: The model configuration (TransformerConfig from olmo-core).
         group_id: The group ID for the run.
         cluster: The cluster name.
@@ -95,8 +99,7 @@ class TransformerConfigBuilder:
 
     run_name: str
     sources: list[SourceInstance]
-    sequence_length: int
-    max_tokens: int
+    chinchilla_multiple: float
     transformer_config: TransformerConfig
     group_id: str
     cluster: str
@@ -115,8 +118,7 @@ class TransformerConfigBuilder:
         self,
         run_name: str,
         sources: list[SourceInstance],
-        sequence_length: int,
-        max_tokens: int,
+        chinchilla_multiple: float,
         group_id: str,
         cluster: str,
         beaker_user: str,
@@ -134,8 +136,8 @@ class TransformerConfigBuilder:
     ):
         self.run_name = run_name
         self.sources = sources
-        self.sequence_length = sequence_length
-        self.max_tokens = max_tokens
+        self.chinchilla_multiple = chinchilla_multiple
+        self.sequence_length = SEQUENCE_LENGTH  # Fixed at 8192
         self.group_id = group_id
         self.seed = seed
         self.beaker_user = beaker_user
@@ -186,56 +188,94 @@ class TransformerConfigBuilder:
         else:
             self.work_dir = f"{self.root_dir}/{self.beaker_user.lower()}/{self.run_name}/dataset-cache"
 
-    def get_warmup_steps(self, parameters: int) -> int:
-        """Returns the number of warmup steps based on the model parameters."""
-        if self.train_type == TrainType.anneal:
-            return 0
-        bsz = self.global_batch_size if self.global_batch_size is not None else self.get_batch_size(parameters)
-        return round(parameters / (bsz * self.sequence_length))
+    def get_warmup_tokens(self, num_params: int) -> int:
+        """Returns the number of warmup tokens.
 
-    def get_batch_size(self, parameters: int) -> int:
+        Uses 1 token per parameter, but capped at 5% of total duration to ensure
+        warmup doesn't exceed total training time for small chinchilla_multiple.
         """
-        Returns the global batch size based on the sequence length and model parameters.
+        default_warmup = num_params
+        max_tokens = self.get_duration(num_params)
+        max_warmup = int(max_tokens * 0.05)  # Cap at 5% of total duration
+        return min(default_warmup, max_warmup)
 
-        Taken directly from OLMo-core model_ladder.py.
+    def get_batch_size(self, num_params: int) -> int:
         """
-        if self.train_type == TrainType.anneal:
-            return 1024
+        Returns the global batch size based on model parameters using Chinchilla formula.
 
-        assert self.sequence_length in {2048, 4096, 8192}
-        seq_len_divisor = self.sequence_length // 2048
-
-        global_batch_size = 160 * (parameters / 108000000) ** (2 / 3)
-        global_batch_size /= seq_len_divisor
-        global_batch_size /= BATCH_DIVISOR
-        global_batch_size = round(global_batch_size)
-        global_batch_size *= BATCH_DIVISOR
-        global_batch_size = self.next_power_of_2(global_batch_size)
-
-        return global_batch_size
+        Formula: 2048 * 160 * (N / 108M)^(2/3), rounded to next power of 2.
+        """
+        batch_size = round(2048 * 160 * (num_params / 108_000_000) ** (2 / 3))
+        return self.next_power_of_2(batch_size)
 
     def next_power_of_2(self, x: int) -> int:
         """Returns the next power of 2 greater than or equal to x."""
         return 1 if x == 0 else 2 ** (x - 1).bit_length()
 
-    def get_lr(self, model: TransformerConfig, tokenizer: TokenizerConfig) -> float:
-        """Returns the learning rate based on the model and tokenizer configurations."""
-        if self.train_type == TrainType.anneal:
-            return 6.1852e-5  # Magic number pulled from OLMo-core examples
+    def get_lr(self, num_params: int) -> float:
+        """
+        Returns the learning rate using Chinchilla formula with halving for stability.
 
-        assert self.sequence_length in {2048, 4096}
-        lr = 0.0047 * (model.num_non_embedding_params / 108000000) ** (-1 / 3)
-        if self.sequence_length == 4096:
-            lr /= 4
-        return lr
+        Formula: 0.0047 * (N / 108M)^(-1/3) / 2
+        """
+        lr = 0.0047 * (num_params / 108_000_000) ** (-1 / 3)
+        return lr / 2.0
 
-    def get_scheduler(self, model: TransformerConfig) -> Scheduler:
-        """Returns the learning rate scheduler based on the model configuration."""
-        if self.train_type == TrainType.anneal:
-            return LinearWithWarmup(warmup_steps=0, t_max=self.max_tokens)
+    def get_duration(self, num_params: int) -> int:
+        """
+        Returns the total training duration in tokens using Chinchilla formula.
 
-        return CosWithWarmupAndLinearDecay(
-            warmup_steps=self.get_warmup_steps(model.num_params),
+        Formula: TOKENS_PER_PARAM * num_params * chinchilla_multiple
+        """
+        return int(TOKENS_PER_PARAM * num_params * self.chinchilla_multiple)
+
+    def get_scheduler(self, num_params: int, batch_size: int) -> Scheduler:
+        """
+        Returns WSDS scheduler with Chinchilla-based periods.
+
+        Periods are generated at 0.5xC, 1xC, 2xC, ... up to chinchilla_multiple.
+        For small chinchilla_multiple (< 0.5), uses a single period for the full duration.
+        """
+        warmup = self.get_warmup_tokens(num_params)
+        max_tokens = self.get_duration(num_params)
+
+        # Generate periods: 0.5xC, 1xC, 2xC, ... up to target
+        periods: list[float] = []
+        p = 0.5
+        while p <= self.chinchilla_multiple:
+            periods.append(p)
+            p *= 2
+
+        # If no periods (chinchilla_multiple < 0.5), use single period for full duration
+        if not periods:
+            # Round to batch boundary
+            period_length = batch_size * max(1, round(max_tokens / batch_size))
+            return WSDS(
+                units=SchedulerUnits.tokens,
+                warmup=warmup,
+                decay_fraction=0.1,
+                period_lengths=[period_length],
+            )
+
+        # Calculate period lengths (tokens between checkpoints)
+        period_lengths: list[int] = []
+        for i, c in enumerate(periods):
+            tokens_at_c = int(TOKENS_PER_PARAM * num_params * c)
+            # Round to nearest batch boundary
+            tokens_at_c = batch_size * round(tokens_at_c / batch_size)
+            if i == 0:
+                period_lengths.append(tokens_at_c)
+            else:
+                prev_c = periods[i - 1]
+                prev_tokens = int(TOKENS_PER_PARAM * num_params * prev_c)
+                prev_tokens = batch_size * round(prev_tokens / batch_size)
+                period_lengths.append(tokens_at_c - prev_tokens)
+
+        return WSDS(
+            units=SchedulerUnits.tokens,
+            warmup=warmup,
+            decay_fraction=0.1,
+            period_lengths=period_lengths,
         )
 
     def build_callbacks(self) -> dict[str, Callback]:
@@ -246,7 +286,7 @@ class TransformerConfigBuilder:
             "profiler": ProfilerCallback(enabled=self.profile),
             "checkpointer": CheckpointerCallback(
                 save_interval=SAVE_INTERVAL,
-                ephemeral_save_interval=100,
+                ephemeral_save_interval=250,
                 save_async=True,
             ),
             "wandb": WandBCallback(
@@ -261,13 +301,17 @@ class TransformerConfigBuilder:
         """Builds and returns the model training configuration."""
         tokenizer = self.tokenizer
         model = self.transformer_config
+        num_params = model.num_non_embedding_params
 
         global_batch_size = (
-            self.global_batch_size
-            if self.global_batch_size is not None
-            else self.get_batch_size(model.num_non_embedding_params)
+            self.global_batch_size if self.global_batch_size is not None else self.get_batch_size(num_params)
         )
-        learning_rate = self.get_lr(model, tokenizer)
+        learning_rate = self.get_lr(num_params)
+        max_tokens = self.get_duration(num_params)
+
+        # Adaptive beta2: use 0.95 for large batches, 0.99 for smaller batches
+        batch_size_in_tokens = global_batch_size * self.sequence_length
+        beta2 = 0.95 if batch_size_in_tokens >= 524_288 else 0.99
 
         # Build source mixture (inlined from MixtureBuilder)
         source_configs = SourceMixtureList(sources=[])
@@ -285,8 +329,8 @@ class TransformerConfigBuilder:
 
         mixture_config = SourceMixtureDatasetConfig(
             source_list=source_configs,
-            requested_tokens=self.max_tokens,
-            global_batch_size=global_batch_size * self.sequence_length,
+            requested_tokens=max_tokens,
+            global_batch_size=batch_size_in_tokens,
             seed=self.seed,
             processes=min(os.cpu_count() or 1, 16),
         )
@@ -299,10 +343,10 @@ class TransformerConfigBuilder:
         )
 
         data_loader_config = NumpyDataLoaderConfig(
-            global_batch_size=global_batch_size * self.sequence_length,
+            global_batch_size=batch_size_in_tokens,
             work_dir=self.work_dir,
             seed=self.seed,
-            num_workers=16,
+            num_workers=4,
         )
 
         train_module_config = tm.TransformerTrainModuleConfig(
@@ -310,8 +354,8 @@ class TransformerConfigBuilder:
             max_sequence_length=self.sequence_length,
             optim=SkipStepAdamWConfig(
                 lr=learning_rate,
-                weight_decay=0.033,
-                betas=(0.9, 0.95),
+                weight_decay=0.1,
+                betas=(0.9, beta2),
                 group_overrides=[OptimGroupOverride(params=["embeddings.weight"], opts=dict(weight_decay=0.0))],
             ),
             compile_model=True,
@@ -321,7 +365,7 @@ class TransformerConfigBuilder:
             float8_config=Float8Config(enabled=False),
             z_loss_multiplier=1e-5,
             max_grad_norm=1.0,
-            scheduler=self.get_scheduler(model),
+            scheduler=self.get_scheduler(num_params, global_batch_size),
         )
 
         trainer_config = TrainerConfig(
@@ -331,7 +375,7 @@ class TransformerConfigBuilder:
             load_path=self.load_path,
             # We fail fast if an existing if we expect a checkpoint for annealing and one is not found.
             load_strategy=(LoadStrategy.always if self.train_type == TrainType.anneal else LoadStrategy.if_available),
-            max_duration=Duration.tokens(self.max_tokens),
+            max_duration=Duration.tokens(max_tokens),
         )
 
         for callback_name, callback in self.build_callbacks().items():

@@ -499,7 +499,7 @@ def mk_mixtures(
         min_topic_strength=min_topic_strength,
         max_topic_strength=max_topic_strength,
         allow_repetition=config.allow_repetition,
-        max_tokens=config.max_tokens,
+        max_tokens=config.get_max_tokens(),
         available_tokens=available_tokens,
         enable_bound=True,
         nonzero_weight=config.nonzero_weight,

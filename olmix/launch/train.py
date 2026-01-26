@@ -36,10 +36,10 @@ def cli():
 
 @cli.command()
 @click.option(
-    "--max-tokens",
-    "-t",
-    type=int,
-    help="Max tokens for the mixture dataset",
+    "--chinchilla-multiple",
+    "-x",
+    type=float,
+    help="Chinchilla multiple (trains for 20 * params * N tokens)",
     required=True,
 )
 @click.option(
@@ -56,12 +56,6 @@ def cli():
     type=str,
     help="Name of the run",
     required=True,
-)
-@click.option(
-    "--sequence-length",
-    "-l",
-    type=int,
-    help="Sequence length for the transformer",
 )
 @click.option(
     "--seed",
@@ -141,9 +135,8 @@ def cli():
 @record
 def train(
     run_name: str,
-    max_tokens: int,
+    chinchilla_multiple: float,
     source: list[tuple[str, list[str], str, str]],
-    sequence_length: int,
     seed: int,
     group_id: str,
     beaker_user: str,
@@ -176,9 +169,8 @@ def train(
         cluster=cluster,
         group_id=group_id.strip(),
         run_name=run_name.strip(),
-        max_tokens=max_tokens,
+        chinchilla_multiple=chinchilla_multiple,
         sources=sources,
-        sequence_length=sequence_length,
         seed=seed,
         dtype=dtype.strip(),
         tokenizer=tokenizer.strip(),

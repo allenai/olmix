@@ -4,15 +4,19 @@
 import pytest
 
 from olmix.aliases import (
+    TOKENS_PER_PARAM,
     ExperimentConfig,
     ExperimentGroup,
     ExperimentInstance,
+    InstanceFilterConfig,
     Priority,
     SourceConfig,
     SourceInstance,
     TopicConfig,
     TrainType,
+    compute_max_tokens,
     config_from_path,
+    get_model_num_params,
 )
 
 
@@ -29,7 +33,6 @@ class TestSourceConfig:
         assert source.name == "wikipedia"
         assert len(source.paths) == 1
         assert source.max_repetition_factor == 1.0
-        assert source.max_source_ratio == 1.0
         assert source.topics is None
 
     def test_source_with_topics(self):
@@ -81,12 +84,11 @@ class TestExperimentConfig:
             "nodes": 1,
             "gpus": 8,
             "variants": 64,
-            "max_tokens": 1000000000,
-            "sequence_length": 2048,
+            "chinchilla_multiple": 1.0,
             "seed": 42,
             "cluster": "ai2/saturn-cirrascale",
             "tokenizer": "gpt_neox",
-            "proxy_model_id": "olmo_30m",
+            "proxy_model_id": "olmo2_30m",
             "sources": [
                 {"name": "wikipedia", "paths": ["s3://bucket/wiki/**/*.npy"]},
                 {"name": "dclm", "paths": ["s3://bucket/dclm/**/*.npy"]},
@@ -100,7 +102,7 @@ class TestExperimentConfig:
         assert config.name == "test-swarm"
         assert config.variants == 64
         assert len(config.sources) == 2
-        assert config.max_tokens == 1000000000
+        assert config.chinchilla_multiple == 1.0
 
     def test_config_defaults(self, sample_config_dict):
         """Test default values are set correctly."""
@@ -180,12 +182,11 @@ class TestExperimentGroup:
             nodes=1,
             gpus=8,
             variants=2,
-            max_tokens=1000000,
-            sequence_length=2048,
+            chinchilla_multiple=1.0,
             seed=42,
             cluster="ai2/saturn-cirrascale",
             tokenizer="gpt_neox",
-            proxy_model_id="olmo_30m",
+            proxy_model_id="olmo2_30m",
             sources=[
                 SourceConfig(name="wiki", paths=["s3://bucket/wiki/*.npy"]),
             ],
@@ -213,3 +214,125 @@ class TestExperimentGroup:
         assert group.group_id == "abc123"
         assert len(group.instances) == 2
         assert group.config.name == "test-swarm"
+
+
+class TestChinchillaScaling:
+    """Test Chinchilla scaling functions."""
+
+    def test_get_model_num_params(self):
+        """Test getting model parameter counts."""
+        assert get_model_num_params("olmo2_30m") == 30_000_000
+        assert get_model_num_params("olmo2_1b") == 1_000_000_000
+
+    def test_get_model_num_params_unknown(self):
+        """Test that unknown model raises ValueError."""
+        with pytest.raises(ValueError, match="Unknown model"):
+            get_model_num_params("unknown_model")
+
+    def test_compute_max_tokens(self):
+        """Test computing max tokens from Chinchilla multiple."""
+        # 1xC with 30M params = 20 * 30M * 1 = 600M tokens
+        assert compute_max_tokens(1.0, 30_000_000) == 600_000_000
+
+        # 5xC with 30M params = 20 * 30M * 5 = 3B tokens
+        assert compute_max_tokens(5.0, 30_000_000) == 3_000_000_000
+
+        # 0.5xC with 1B params = 20 * 1B * 0.5 = 10B tokens
+        assert compute_max_tokens(0.5, 1_000_000_000) == 10_000_000_000
+
+    def test_tokens_per_param_constant(self):
+        """Test that TOKENS_PER_PARAM is 20."""
+        assert TOKENS_PER_PARAM == 20
+
+
+class TestExperimentConfigChinchilla:
+    """Test ExperimentConfig Chinchilla methods."""
+
+    def test_get_max_tokens(self):
+        """Test get_max_tokens method."""
+        config = ExperimentConfig(
+            name="test",
+            budget="test",
+            workspace="test",
+            nodes=1,
+            gpus=1,
+            variants=1,
+            chinchilla_multiple=1.0,
+            seed=42,
+            cluster="test",
+            tokenizer="dolma2",
+            proxy_model_id="olmo2_30m",
+            sources=[SourceConfig(name="wiki", paths=["test.npy"])],
+        )
+
+        # 1xC with 30M params = 600M tokens
+        assert config.get_max_tokens() == 600_000_000
+
+    def test_get_max_tokens_5x(self):
+        """Test get_max_tokens with 5x Chinchilla multiple."""
+        config = ExperimentConfig(
+            name="test",
+            budget="test",
+            workspace="test",
+            nodes=1,
+            gpus=1,
+            variants=1,
+            chinchilla_multiple=5.0,
+            seed=42,
+            cluster="test",
+            tokenizer="dolma2",
+            proxy_model_id="olmo2_30m",
+            sources=[SourceConfig(name="wiki", paths=["test.npy"])],
+        )
+
+        # 5xC with 30M params = 3B tokens
+        assert config.get_max_tokens() == 3_000_000_000
+
+
+class TestInstanceFilterConfig:
+    """Test InstanceFilterConfig model."""
+
+    def test_default_values(self):
+        """Test default values for InstanceFilterConfig."""
+        filter_config = InstanceFilterConfig()
+
+        assert filter_config.repetition_min_period == 1
+        assert filter_config.repetition_max_period == 13
+        assert filter_config.repetition_max_count == 32
+
+    def test_custom_values(self):
+        """Test custom values for InstanceFilterConfig."""
+        filter_config = InstanceFilterConfig(
+            repetition_min_period=2,
+            repetition_max_period=20,
+            repetition_max_count=64,
+        )
+
+        assert filter_config.repetition_min_period == 2
+        assert filter_config.repetition_max_period == 20
+        assert filter_config.repetition_max_count == 64
+
+    def test_experiment_config_with_filter(self):
+        """Test ExperimentConfig with instance filter."""
+        config = ExperimentConfig(
+            name="test",
+            budget="test",
+            workspace="test",
+            nodes=1,
+            gpus=1,
+            variants=1,
+            chinchilla_multiple=1.0,
+            seed=42,
+            cluster="test",
+            tokenizer="dolma2",
+            proxy_model_id="olmo2_30m",
+            sources=[SourceConfig(name="wiki", paths=["test.npy"])],
+            instance_filter=InstanceFilterConfig(
+                repetition_min_period=1,
+                repetition_max_period=13,
+                repetition_max_count=32,
+            ),
+        )
+
+        assert config.instance_filter is not None
+        assert config.instance_filter.repetition_max_period == 13

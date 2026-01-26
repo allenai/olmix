@@ -88,5 +88,4 @@ Each source in `sources` can have:
 |-------|------|---------|-------------|
 | `name` | string | required | Source name |
 | `paths` | list[string] | required | S3/GCS paths to data |
-| `max_source_ratio` | float | `1.0` | Max proportion of this source |
-| `max_repetition_factor` | float | `1.0` | Max data repetition |
+| `max_repetition_factor` | float | `1.0` | Max times data can be repeated (for small sources) |

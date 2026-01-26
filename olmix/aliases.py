@@ -9,6 +9,45 @@ from pydantic import BaseModel
 
 PathType = Union[Path, PathLike[Any], str]
 
+# Constants for Chinchilla scaling
+TOKENS_PER_PARAM = 20  # Chinchilla optimal tokens per parameter
+
+# Approximate non-embedding parameter counts for each model
+# These are used to compute max_tokens from chinchilla_multiple
+MODEL_NUM_PARAMS: dict[str, int] = {
+    "olmo2_1m": 1_000_000,
+    "olmo2_30m": 30_000_000,
+    "olmo2_60m": 60_000_000,
+    "olmo2_190m": 190_000_000,
+    "olmo2_1b": 1_000_000_000,
+    "olmo2_7b": 7_000_000_000,
+}
+
+
+def compute_max_tokens(chinchilla_multiple: float, num_params: int) -> int:
+    """Compute max training tokens from Chinchilla multiple and model parameters.
+
+    Formula: TOKENS_PER_PARAM * num_params * chinchilla_multiple
+    """
+    return int(TOKENS_PER_PARAM * num_params * chinchilla_multiple)
+
+
+def get_model_num_params(proxy_model_id: str) -> int:
+    """Get the approximate number of non-embedding parameters for a model ID.
+
+    Args:
+        proxy_model_id: Model identifier (e.g., 'olmo2_30m')
+
+    Returns:
+        Approximate number of non-embedding parameters
+
+    Raises:
+        ValueError: If the model ID is not recognized
+    """
+    if proxy_model_id not in MODEL_NUM_PARAMS:
+        raise ValueError(f"Unknown model: {proxy_model_id}. Available: {list(MODEL_NUM_PARAMS.keys())}")
+    return MODEL_NUM_PARAMS[proxy_model_id]
+
 
 class Priority(str, Enum):
     """Beaker job priority levels."""
@@ -37,7 +76,6 @@ class SourceConfig(BaseModel):
     paths: list[str] | None = None
     topics: list[TopicConfig] | None = None
     max_repetition_factor: float = 1.0
-    max_source_ratio: float = 1.0
 
 
 class SourceInstance(BaseModel):
@@ -45,6 +83,14 @@ class SourceInstance(BaseModel):
     paths: list[str]
     ratio: float
     repetition_factor: float = 1.0
+
+
+class InstanceFilterConfig(BaseModel):
+    """Config for filtering repetitive sequences at the instance level."""
+
+    repetition_min_period: int = 1
+    repetition_max_period: int = 13
+    repetition_max_count: int = 32
 
 
 class ExperimentConfig(BaseModel):
@@ -55,14 +101,14 @@ class ExperimentConfig(BaseModel):
     variants: int
     nodes: int
     gpus: int
-    max_tokens: int
-    sequence_length: int
+    chinchilla_multiple: float = 1.0  # Trains for N * Chinchilla optimal tokens (20 * params * N)
     seed: int
     cluster: str
     tokenizer: str
     sources: list[SourceConfig]
     proxy_model_id: str
     priority: Priority = Priority.normal
+    instance_filter: InstanceFilterConfig | None = None  # Optional quality filter for repetitive sequences
     minimum_weight: float | None = None
     minimum_source_weight: float | None = None
     minimum_topic_weight: float | None = None
@@ -98,6 +144,15 @@ class ExperimentConfig(BaseModel):
         with open(path) as f:
             data = yaml.safe_load(f)
         return cls(**data)
+
+    def get_max_tokens(self) -> int:
+        """Compute the maximum training tokens from chinchilla_multiple and model size.
+
+        Returns:
+            The total number of tokens to train for.
+        """
+        num_params = get_model_num_params(self.proxy_model_id)
+        return compute_max_tokens(self.chinchilla_multiple, num_params)
 
 
 class ExperimentInstance(BaseModel):

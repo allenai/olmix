@@ -387,7 +387,7 @@ class SimulationProposer(Proposer):
                     data = yaml.safe_load(f)
 
                 final_config = ExperimentConfig(**data)
-                desired_tokens = final_config.max_tokens
+                desired_tokens = final_config.get_max_tokens()
 
                 token_universe = get_token_counts_and_ratios(final_config.sources, final_config.dtype, True)
                 available_tokens_per_source = {
@@ -1987,7 +1987,7 @@ def filter_constrained_swarm(final_cookbook_path: Path, run_ratios: list, run_me
         data = yaml.safe_load(f)
 
     final_config = ExperimentConfig(**data)
-    desired_tokens = final_config.max_tokens
+    desired_tokens = final_config.get_max_tokens()
 
     token_universe = get_token_counts_and_ratios(final_config.sources, final_config.dtype, True)
     available_tokens_per_source = {
