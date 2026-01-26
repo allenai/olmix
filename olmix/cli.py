@@ -274,7 +274,13 @@ def launch_cancel(config: Path, group_id: str):
     required=True,
     help="Path to the experiment configuration file.",
 )
-def launch_validate(config: Path):
+@click.option(
+    "--quick",
+    is_flag=True,
+    default=False,
+    help="Quick validation: skip dataset preparation (much faster, but doesn't verify data accessibility).",
+)
+def launch_validate(config: Path, quick: bool):
     """Validate an experiment configuration."""
     from olmix.aliases import ExperimentConfig
     from olmix.launch.beaker import mk_experiment_group, mk_instance_cmd
@@ -304,8 +310,12 @@ def launch_validate(config: Path):
             weka=experiment_group.config.weka,
             device_batch_size=experiment_group.config.device_batch_size,
         ).build()
-        dataset = transformer.dataset.build()
-        dataset.prepare()
+
+        if quick:
+            logger.info("Quick validation: skipping dataset preparation")
+        else:
+            dataset = transformer.dataset.build()
+            dataset.prepare()
 
 
 # ============================================================================
