@@ -274,48 +274,20 @@ def launch_cancel(config: Path, group_id: str):
     required=True,
     help="Path to the experiment configuration file.",
 )
-@click.option(
-    "--quick",
-    is_flag=True,
-    default=False,
-    help="Quick mode: skip dataset preparation (much faster, but doesn't verify data accessibility).",
-)
-def launch_preview(config: Path, quick: bool):
+def launch_preview(config: Path):
     """Preview sampled mixtures and training commands without launching."""
     from olmix.aliases import ExperimentConfig
     from olmix.launch.beaker import mk_experiment_group, mk_instance_cmd
     from olmix.launch.launch_utils import mk_mixes
-    from olmix.model.transformer import TransformerConfigBuilder
 
     with open(config) as f:
         data = yaml.safe_load(f)
 
     mixes = mk_mixes(config)
     experiment_group = mk_experiment_group(ExperimentConfig(**data), mixes, generate_uuid()[:8])
-    beaker_user = "validate-no-op"
 
     for experiment in experiment_group.instances:
-        logger.info(mk_instance_cmd(experiment, experiment_group.config, experiment_group.group_id, beaker_user))
-        transformer = TransformerConfigBuilder(
-            cluster=experiment_group.config.cluster,
-            beaker_user="validate-no-op",
-            group_id="validate-no-op",
-            run_name="validate-no-op",
-            chinchilla_multiple=experiment_group.config.chinchilla_multiple,
-            sources=experiment.sources,
-            seed=experiment_group.config.seed,
-            tokenizer=experiment_group.config.tokenizer,
-            dtype=experiment_group.config.dtype.value,
-            model_identifier=experiment_group.config.proxy_model_id,
-            weka=experiment_group.config.weka,
-            device_batch_size=experiment_group.config.device_batch_size,
-        ).build()
-
-        if quick:
-            logger.info("Quick validation: skipping dataset preparation")
-        else:
-            dataset = transformer.dataset.build()
-            dataset.prepare()
+        logger.info(mk_instance_cmd(experiment, experiment_group.config, experiment_group.group_id, "preview"))
 
 
 # ============================================================================
