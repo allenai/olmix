@@ -125,7 +125,7 @@ def mk_instance_cmd(
         sources.append(source_str)
 
     cmd_list = [
-        "src/olmix/launch/train.py",
+        "olmix/launch/train.py",
         "train",
         f"-n {instance.name}",
         f"-g {group_id}",
