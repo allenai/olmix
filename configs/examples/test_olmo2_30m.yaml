@@ -18,8 +18,8 @@ tokenizer: dolma2
 
 # Training settings (Chinchilla-based)
 # chinchilla_multiple: N means train for N * 20 * params tokens
-# For 30M model: 0.017 * 20 * 30M = 10M tokens (minimal test)
-chinchilla_multiple: 0.017
+# For 30M model: 0.5 * 20 * 30M = 300M tokens (~100 steps)
+chinchilla_multiple: 0.5
 nodes: 1
 gpus: 1
 variants: 2
