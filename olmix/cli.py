@@ -1,6 +1,5 @@
 """Unified CLI for olmix experiments."""
 
-import concurrent.futures
 import json
 import logging
 from pathlib import Path
@@ -169,15 +168,8 @@ def launch_run(config: Path, mixture_file: Path | None, dry_run: bool, no_cache:
 
             results = []
             torchrun = experiment_config.gpus > 1
-            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-                futures = [executor.submit(lc.launch, torchrun=torchrun) for lc in launch_configs]
-
-                for future in tqdm(
-                    concurrent.futures.as_completed(futures),
-                    total=len(futures),
-                    desc="Launching experiments",
-                ):
-                    results.append(future.result())
+            for lc in tqdm(launch_configs, desc="Launching experiments"):
+                results.append(lc.launch(torchrun=torchrun))
 
             spinner.ok("Done")
             logger.info(results)

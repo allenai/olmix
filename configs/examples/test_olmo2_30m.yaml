@@ -25,7 +25,7 @@ gpus: 1
 # Override batch size for small model test (default Chinchilla formula gives 262144 which is too large)
 # 16 sequences * 8192 tokens = 131k tokens/batch -> ~2200 steps
 global_batch_size: 16
-variants: 1
+variants: 2
 seed: 42
 
 # Data sources for testing (dolma2-tokenized)
