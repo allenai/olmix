@@ -181,6 +181,7 @@ def mk_launch_configs(group: ExperimentGroup, beaker_user: str) -> list[BeakerLa
                 BeakerEnvVar(name="RANK", value="0"),
                 BeakerEnvVar(name="LOCAL_RANK", value="0"),
                 BeakerEnvVar(name="MASTER_ADDR", value="127.0.0.1"),
+                BeakerEnvVar(name="MASTER_PORT", value="29500"),
             ]
         )
 
