@@ -142,7 +142,7 @@ def cli():
     "-r",
     "--regression-type",
     type=str,
-    default="lightgbm",
+    default="log_linear",
     help="Whether to use LightGBM or linear regression for fitting",
     required=False,
 )
@@ -181,7 +181,7 @@ def cli():
     type=str,
     help="Proposer type: simulation, search, or exact (for log linear only)",
     required=False,
-    default="simulation",
+    default="exact",
 )
 @click.option(
     "--neighborhood",
@@ -207,9 +207,9 @@ def cli():
 @click.option(
     "--repetition-factor",
     type=float,
-    help="Adjusts the document repetition constraint; i.e., find an optimal mix when we are allowed to 2x each domain",
+    help="Adjusts the document repetition constraint; i.e., find an optimal mix when we are allowed to 5x each domain",
     required=False,
-    default=1,
+    default=5.0,
 )
 @click.option(
     "--constrain-swarm",
@@ -617,7 +617,7 @@ def fit(
             ratios = pd.read_pickle(f)
         with open(metrics_cache_path, "rb") as f:
             metrics = pd.read_pickle(f)
-        ratios = ratios[ratios["run"].isin(metrics.run)]
+        ratios = ratios[ratios["run"].isin(metrics["run"])]
     else:
         run_ratios = [
             {
@@ -726,7 +726,7 @@ def fit(
         metrics = pd.DataFrame(run_metrics)
         numerical_cols = metrics.columns[3:]
         metrics[numerical_cols] = metrics[numerical_cols].apply(pd.to_numeric, errors="coerce")
-        ratios = ratios[ratios["run"].isin(metrics.run)]
+        ratios = ratios[ratios["run"].isin(metrics["run"])]
 
         if len(support_domains) == 0 and len(train_split) == 1:
             assert np.isclose(ratios[ratios.columns[3:]].sum(axis=1).sum(), len(ratios)), "Ratios do not add up to 1!"
@@ -1099,7 +1099,6 @@ def fit(
                 df_config=ratios,
                 output_dir=output_dir,
                 fixed_weight=fixed_weight_dict if fixed_weight is not None else None,
-                kl_reg=kl_reg,
             )
 
             results.append((metric, weights))

@@ -58,6 +58,10 @@ class WandbMetrics(Enum):
 
 
 class GroupedWandbMetrics(Enum):
+    # Training metrics for testing (no downstream eval required)
+    training_loss = ["train/CE loss"]
+    training_ppl = ["train/PPL"]
+
     hellaswag = [
         WandbMetrics.hellaswag_rc_5shot_bpb.value,
     ]
