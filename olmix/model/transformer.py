@@ -62,12 +62,28 @@ def _get_model_factory(tokenizer: TokenizerConfig) -> dict[str, Callable[[], Tra
     """Get model factories with the given tokenizer's vocab size."""
     vocab_size = tokenizer.padded_vocab_size()
     return {
+        # OLMo2 models
         "olmo2_1m": lambda: TransformerConfig.olmo2_1M(vocab_size=vocab_size),
         "olmo2_30m": lambda: TransformerConfig.olmo2_30M(vocab_size=vocab_size),
         "olmo2_60m": lambda: TransformerConfig.olmo2_60M(vocab_size=vocab_size),
         "olmo2_190m": lambda: TransformerConfig.olmo2_190M(vocab_size=vocab_size),
         "olmo2_1b": lambda: TransformerConfig.olmo2_1B_v2(vocab_size=vocab_size),
         "olmo2_7b": lambda: TransformerConfig.olmo2_7B_v2(vocab_size=vocab_size),
+        # OLMo3 models
+        "olmo3_1m": lambda: TransformerConfig.olmo3_1M(vocab_size=vocab_size),
+        "olmo3_14m": lambda: TransformerConfig.olmo3_14M(vocab_size=vocab_size),
+        "olmo3_30m": lambda: TransformerConfig.olmo3_30M(vocab_size=vocab_size),
+        "olmo3_60m": lambda: TransformerConfig.olmo3_60M(vocab_size=vocab_size),
+        "olmo3_100m": lambda: TransformerConfig.olmo3_100M(vocab_size=vocab_size),
+        "olmo3_190m": lambda: TransformerConfig.olmo3_190M(vocab_size=vocab_size),
+        "olmo3_370m": lambda: TransformerConfig.olmo3_370M(vocab_size=vocab_size),
+        "olmo3_600m": lambda: TransformerConfig.olmo3_600M(vocab_size=vocab_size),
+        "olmo3_760m": lambda: TransformerConfig.olmo3_760M(vocab_size=vocab_size),
+        "olmo3_1b": lambda: TransformerConfig.olmo3_1B(vocab_size=vocab_size),
+        "olmo3_3b": lambda: TransformerConfig.olmo3_3B(vocab_size=vocab_size),
+        "olmo3_7b": lambda: TransformerConfig.olmo3_7B(vocab_size=vocab_size),
+        "olmo3_13b": lambda: TransformerConfig.olmo3_13B(vocab_size=vocab_size),
+        "olmo3_32b": lambda: TransformerConfig.olmo3_32B(vocab_size=vocab_size),
     }
 
 
