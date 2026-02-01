@@ -9,7 +9,6 @@ import subprocess
 import warnings
 from copy import deepcopy
 from io import StringIO
-from pathlib import Path
 
 import click
 import matplotlib.pyplot as plt
@@ -25,7 +24,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 from tqdm import tqdm
 
-from olmix.fit.constants import GroupedWandbMetrics, ObjectiveWeights
+from olmix.fit.constants import ALL_WANDB_METRICS
 from olmix.fit.utils import (
     PROPOSER_TYPES,
     LogLinearRegressor,
@@ -33,7 +32,6 @@ from olmix.fit.utils import (
     build_regression,
     calculate_priors_with_manual,
     compute_mixture_neighborhood,
-    filter_constrained_swarm,
     get_output_dir,
     get_runs_from_api,
     mk_run_from_json,
@@ -82,21 +80,6 @@ def cli():
     default=1.0,
     help="Alpha to apply to simulated distributions",
     required=False,
-)
-@click.option(
-    "-A",
-    "--group-average",
-    type=str,
-    help="The metric group to average for the regression task (regression will be fit against the average)",
-    required=False,
-    default=None,
-)
-@click.option(
-    "-G",
-    "--group-metrics",
-    type=str,
-    help="The metric group to fit regressions against (each metric will be fit separately)",
-    default=None,
 )
 @click.option(
     "-s",
@@ -191,46 +174,11 @@ def cli():
     default=None,
 )
 @click.option(
-    "--final-cookbook-path",
-    type=click.Path(exists=True),
-    help="Path to cookbook config containing information about the full run for which the proposed mix is used (number of tokens, dataset being used)",
-    required=False,
-    default=None,
-)
-@click.option(
-    "--manual-token-constraint-path",
-    type=click.Path(exists=True),
-    help="Rather than using the requested and available tokens specified by a cookbook config, use a manually specified config",
-    required=False,
-    default=None,
-)
-@click.option(
-    "--repetition-factor",
-    type=float,
-    help="Adjusts the document repetition constraint; i.e., find an optimal mix when we are allowed to 5x each domain",
-    required=False,
-    default=5.0,
-)
-@click.option(
-    "--constrain-swarm",
-    is_flag=True,
-    help="If set, we only use swarm runs that are unconstrained according to the final cookbook config.",
-    required=False,
-    default=False,
-)
-@click.option(
     "--constrain-objective",
     is_flag=True,
     help="If set, we produce a proposed mix that is unconstrained according to the final cookbook config.",
     required=False,
     default=False,
-)
-@click.option(
-    "--obj-weights",
-    type=str,
-    help="The non-uniform weights used to average BPB over all tasks. If not set, uniform weights are used.",
-    required=False,
-    default=None,
 )
 @click.option(
     "--temperature",
@@ -381,8 +329,6 @@ def fit(
     alpha: float,
     num_samples: int,
     simulation_samples: int,
-    group_average: str | None,
-    group_metrics: str | None,
     workspace: str,
     no_cache: bool,
     use_entropy: bool,
@@ -393,12 +339,7 @@ def fit(
     opt_avg_metric: bool,
     proposer_type: str,
     neighborhood: str | None,
-    final_cookbook_path: Path | None,
-    manual_token_constraint_path: Path | None,
-    repetition_factor: float,
-    constrain_swarm: bool,
     constrain_objective: bool,
-    obj_weights: str | None,
     temperature: float | None,
     keep_sources: list[str] | None,
     dashboard: list[str],
@@ -428,9 +369,6 @@ def fit(
     pathlib.Path(output_dir).mkdir(parents=True, exist_ok=True)
     pathlib.Path(BASE_CACHE_DIR).mkdir(parents=True, exist_ok=True)
 
-    if group_average and group_metrics:
-        raise ValueError("Cannot provide both group-average and group-metrics")
-
     if proposer_type == "search" and regression_type != "search":
         raise ValueError("Proposer type search only works with regression type search")
 
@@ -438,13 +376,14 @@ def fit(
         workspace = "ai2-llm/olmo-cookbook"
         assert pull_from_dashboard, "If using olmo-cookbook, pull_from_dashboard must be set to True"
 
+    # Load configs early so we can use them for constraint settings
+    launch_configs = [swarm_config_from_path(c, use_cookbook) for c in config]
+
     eval_config = {
         "config": config[0] if len(config) == 1 else config,
         "alpha": alpha,
         "num_samples": num_samples,
         "simulation_samples": simulation_samples,
-        "group_average": group_average,
-        "group_metrics": group_metrics,
         "workspace": workspace,
         "regression_type": regression_type,
         "train_split": train_split[0] if len(train_split) == 1 else train_split,
@@ -456,20 +395,17 @@ def fit(
         eval_config["proposer_type"] = proposer_type
     if neighborhood is not None:
         eval_config["neighborhood"] = neighborhood
-    if constrain_swarm:
-        eval_config["constrain_swarm"] = True
-        eval_config["final_cookbook_path"] = final_cookbook_path
     if constrain_objective:
         eval_config["constrain_objective"] = True
-        if final_cookbook_path is not None:
-            eval_config["final_cookbook_path"] = final_cookbook_path
-        elif manual_token_constraint_path is not None:
-            eval_config["manual_token_constraint_path"] = manual_token_constraint_path
-
-        if repetition_factor != 1:
-            eval_config["repetition_factor"] = repetition_factor
-    if obj_weights is not None:
-        eval_config["obj_weights"] = obj_weights
+        # Constraints now come from the config's target_tokens/target_chinchilla_multiple
+        swarm_config = launch_configs[0]
+        target_tokens = swarm_config.get_target_tokens()
+        if target_tokens is None:
+            raise click.UsageError(
+                "For --constrain-objective, set target_tokens or target_chinchilla_multiple in config"
+            )
+        eval_config["target_tokens"] = target_tokens
+        eval_config["repetition_factor"] = swarm_config.repetition_factor
     if temperature is not None:
         eval_config["temperature"] = temperature
     if len(keep_sources) != 0:
@@ -511,14 +447,11 @@ def fit(
 
     # used for caching regression model
     regression_config = {
-        "group_average": group_average,
-        "group_metrics": group_metrics,
         "regression_type": regression_type,
         "train_split": train_split[0] if len(train_split) == 1 else train_split,
         "n_test": n_test,
         "seed": seed,
         "neighborhood": neighborhood,
-        "constrain_swarm": constrain_swarm,
         "keep_sources": keep_sources,
         "early_stopping": early_stopping,
     }
@@ -539,28 +472,20 @@ def fit(
 
     api = wandb.Api()
 
-    eval_metric_group = GroupedWandbMetrics.all_metrics
-    eval_metric_group_name = eval_metric_group.name
-
-    if group_average:
-        eval_metric_group = GroupedWandbMetrics[group_average]
-        eval_metric_group_name = f"avg_{group_average}"
-
-    if group_metrics:
-        eval_metric_group = GroupedWandbMetrics[group_metrics]
-        eval_metric_group_name = group_metrics
+    # Use all WandB metrics
+    eval_metrics = ALL_WANDB_METRICS
+    eval_metric_group_name = "all_wandb_metrics"
 
     cache_path = (
         pathlib.Path(BASE_CACHE_DIR) / f"{'_'.join(experiment_groups)}_{eval_metric_group_name}_runs_cache.json"
     )
-    launch_configs = [swarm_config_from_path(c, use_cookbook) for c in config]
     full_group_names = [
         f"{launch_config.name}-{group}" for group, launch_config in zip(experiment_groups, launch_configs)
     ]
     if no_cache:
         logger.info("Cache disabled, will not use cache for run samples...")
         run_instances = get_runs_from_api(
-            api, workspace, full_group_names, cache_path, no_cache, num_samples, eval_metric_group
+            api, workspace, full_group_names, cache_path, no_cache, num_samples, eval_metrics
         )
     else:
         try:
@@ -573,7 +498,7 @@ def fit(
         except FileNotFoundError:
             logger.warning(f"Failed to load cache from {cache_path}, fetching runs from API...")
             run_instances = get_runs_from_api(
-                api, workspace, full_group_names, cache_path, no_cache, num_samples, eval_metric_group
+                api, workspace, full_group_names, cache_path, no_cache, num_samples, eval_metrics
             )
 
     # Filter out failed runs or runs without evals
@@ -638,7 +563,7 @@ def fit(
                     "--dashboard",
                     f"{d}",
                 ]
-                for task in eval_metric_group.value:
+                for task in eval_metrics:
                     command.append("--tasks")
                     command.append(task)
                 command.extend(["--format", "csv", "--skip-on-fail"])
@@ -664,7 +589,7 @@ def fit(
                     continue
 
                 try:
-                    metrics = {k: next(iter(v.values())) for k, v in matched[eval_metric_group.value].to_dict().items()}
+                    metrics = {k: next(iter(v.values())) for k, v in matched[eval_metrics].to_dict().items()}
                 except StopIteration:
                     logger.warning(f"Empty values found when parsing metrics for {run.display_name}")
                     continue
@@ -687,40 +612,18 @@ def fit(
                     **mk_run_metrics(
                         history=run.samples,
                         samples=num_samples,
-                        metrics=(eval_metric_group_name, eval_metric_group.value),
+                        metrics=(eval_metric_group_name, eval_metrics),
                         display_name=run.display_name
                         if experiment_groups[0] != "ee22e17f"
                         else run.display_name.replace("all-dressed", "dclmv2"),
-                        average=group_average is not None,
                         pull_from_dashboard=pull_from_dashboard,
                         dashboard=dashboard,
                         metric_type=metric_type,
                     ),
                 }
                 for idx, run in tqdm(enumerate(run_instances))
-                if eval_metric_group_name
-                in [
-                    "superswarm_offline",
-                    "olmo3_offline_tasks",
-                    "pdf_tasks",
-                    "code_tasks_offline",
-                    "code_tasks_offline_fixed",
-                    "olmo3_offline_tasks_0630",
-                    "midtraining_aggregate_evals",
-                    "midtraining_finegrained_evals",
-                    "pretraining_tasks_for_paper",
-                    "math_tasks",
-                    "code_tasks_new",
-                    "qa_tasks",
-                ]
-                or len(run.samples) > 0
+                if len(run.samples) > 0
             ]
-
-        if constrain_swarm:
-            raise NotImplementedError(
-                "Constrained swarm is implemented but out of date. We concluded that this is not the right way to enforce token repetition constraints."
-            )
-            run_ratios, run_metrics = filter_constrained_swarm(final_cookbook_path, run_ratios, run_metrics)
 
         ratios = pd.DataFrame(run_ratios)
         metrics = pd.DataFrame(run_metrics)
@@ -739,7 +642,7 @@ def fit(
         pd.to_pickle(metrics, metrics_cache_path)
         logger.info(f"Saved ratios to {ratios_cache_path} and metrics to {metrics_cache_path}")
 
-    metrics_to_index = eval_metric_group.value
+    metrics_to_index = eval_metrics
     if len(support_domains) != 0:
         # only keep ratios/
         keep_idxs = np.where(np.isclose(ratios[list(support_domains)].sum(axis=1), 1))[0]
@@ -755,9 +658,6 @@ def fit(
         priors_list = list(priors)
         priors_list[0] = new_priors
         priors = tuple(priors_list)
-
-    if group_average:
-        metrics_to_index = [eval_metric_group_name]
 
     if all("mmlu_stem" not in s for s in metrics.columns) and any("mmlu" in s for s in metrics.columns):
         metrics, metrics_to_index = aggregate_mmlu(metrics, metrics_to_index)
@@ -881,10 +781,8 @@ def fit(
     logger.info(f"Fitting {regression_type} regression for metrics:")
     logger.info(indexed_metrics)
 
-    if obj_weights:
-        obj_weights = ObjectiveWeights[obj_weights]
-        obj_weights = [obj_weights.value.get(metric, 1) for idx, metric in indexed_metrics]
-        logger.info(f"Minimizing weighted average: {obj_weights}")
+    # Objective weights are now fixed at uniform weighting
+    obj_weights = None
 
     """ if regression_type=="lightgbm":
         # debugging - just fit on first metric
@@ -1008,7 +906,7 @@ def fit(
 
         else:
             reference_model_run_instance = get_runs_from_api(
-                api, workspace, [dro_reference_model_id], cache_path, True, num_samples, eval_metric_group
+                api, workspace, [dro_reference_model_id], cache_path, True, num_samples, eval_metrics
             )[0]
 
             if use_reference_model_predicted_scores:
@@ -1032,9 +930,8 @@ def fit(
                     **mk_run_metrics(
                         history=reference_model_run_instance.samples,
                         samples=num_samples,
-                        metrics=(eval_metric_group_name, eval_metric_group.value),
+                        metrics=(eval_metric_group_name, eval_metrics),
                         display_name=reference_model_run_instance.display_name,
-                        average=group_average is not None,
                     ),
                 }
                 reference_scores = []
@@ -1069,9 +966,7 @@ def fit(
                 num_samples=simulation_samples,
                 opt_avg_metric=opt_avg_metric,
                 constrain_objective=constrain_objective,
-                final_cookbook_path=final_cookbook_path,
-                manual_token_constraint_path=manual_token_constraint_path,
-                repetition_factor=repetition_factor,
+                swarm_config=launch_configs[0] if constrain_objective else None,
                 obj_weights=obj_weights,
                 temperature=temperature,
                 reference_scores=reference_scores if dro_reference_model_id is not None else None,
@@ -1108,8 +1003,6 @@ def fit(
         return
 
     if opt_avg_metric and n_test == 0:
-        assert group_metrics is not None and group_average is None  # need to have this set
-
         if experiment_groups[0] in ["5c712b3b", "daf37f03", "f5a3ff58"] and use_hardcoded_reference_ratio:
             logger.info("Using hardcoded reference ratio for s2pdf + web one node swarms...")
             reference_ratio = np.array(
@@ -1147,9 +1040,7 @@ def fit(
             num_samples=simulation_samples,
             opt_avg_metric=opt_avg_metric,
             constrain_objective=constrain_objective,
-            final_cookbook_path=final_cookbook_path,
-            manual_token_constraint_path=manual_token_constraint_path,
-            repetition_factor=repetition_factor,
+            swarm_config=launch_configs[0] if constrain_objective else None,
             obj_weights=obj_weights,
             temperature=temperature,
             reference_scores=reference_scores if dro_reference_model_id is not None else None,
@@ -1169,7 +1060,7 @@ def fit(
             prior=priors[0],
             original_prior=original_priors[0],
             prediction=weights,
-            metric_name=group_metrics,
+            metric_name="opt_avg_all_metrics",
             regression_type=regression_type,
             train_split=train_split,
             n_test=n_test,
@@ -1181,9 +1072,9 @@ def fit(
             fixed_weight=fixed_weight_dict if fixed_weight is not None else None,
         )
 
-        results.append((group_metrics, weights))
+        results.append(("opt_avg_all_metrics", weights))
 
-    elif not group_average and n_test == 0:
+    elif not opt_avg_metric and n_test == 0:
         # If we're not optimizing for the average of the metric group, then we average the reweighted distributions after fitting
         avg_name = f"avg_{eval_metric_group_name}"
         average = np.mean([result[1] for result in results], axis=0)

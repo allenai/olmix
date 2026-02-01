@@ -1,6 +1,6 @@
 """Fit module for regression fitting and mixture optimization."""
 
-from olmix.fit.constants import GroupedWandbMetrics, ObjectiveWeights, WandbMetrics
+from olmix.fit.constants import ALL_OLMO_EVAL_METRICS, ALL_WANDB_METRICS, OlmoEvalMetrics, WandbMetrics
 from olmix.fit.law import ScalingLaw
 from olmix.fit.utils import (
     LightGBMRegressor,
@@ -15,11 +15,12 @@ from olmix.fit.utils import (
 )
 
 __all__ = [
-    "GroupedWandbMetrics",
+    "ALL_OLMO_EVAL_METRICS",
+    "ALL_WANDB_METRICS",
     "LightGBMRegressor",
     "LinearRegressor",
     "LogLinearRegressor",
-    "ObjectiveWeights",
+    "OlmoEvalMetrics",
     "Regressor",
     "ScalingLaw",
     "WandbMetrics",
