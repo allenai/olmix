@@ -39,7 +39,7 @@ class TestPackageImports:
 
     def test_fit_module_imports(self):
         """Test fit module imports."""
-        from olmix.fit.constants import GroupedWandbMetrics, ObjectiveWeights, WandbMetrics
+        from olmix.fit.constants import ALL_OLMO_EVAL_METRICS, ALL_WANDB_METRICS, OlmoEvalMetrics, WandbMetrics
         from olmix.fit.law import ScalingLaw
         from olmix.fit.utils import (
             LightGBMRegressor,
@@ -47,8 +47,9 @@ class TestPackageImports:
             Regressor,
         )
 
-        assert GroupedWandbMetrics is not None
-        assert ObjectiveWeights is not None
+        assert ALL_WANDB_METRICS is not None
+        assert ALL_OLMO_EVAL_METRICS is not None
+        assert OlmoEvalMetrics is not None
         assert WandbMetrics is not None
         assert ScalingLaw is not None
         assert LightGBMRegressor is not None

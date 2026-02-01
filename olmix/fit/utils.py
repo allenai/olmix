@@ -7,7 +7,6 @@ import random
 import re
 import subprocess
 import warnings
-from collections import defaultdict
 from copy import deepcopy
 from dataclasses import dataclass
 from io import StringIO
@@ -30,7 +29,6 @@ from tqdm import tqdm
 from wandb.apis.public import Run
 
 from olmix.aliases import ExperimentConfig, SourceConfig
-from olmix.fit.constants import GroupedWandbMetrics
 from olmix.fit.law import ScalingLaw
 from olmix.launch.synthesize_mixture import calculate_priors
 
@@ -68,6 +66,33 @@ def get_token_counts_and_ratios(
     """
     priors, total_tokens, _ = calculate_priors(source_configs, dtype, use_cache)
     return priors, total_tokens
+
+
+def compute_constraints_from_config(
+    config: ExperimentConfig,
+    use_cache: bool = True,
+) -> tuple[int, dict[str, float], float]:
+    """Compute constraints from config's sources and target settings.
+
+    Args:
+        config: ExperimentConfig with target_tokens or target_chinchilla_multiple set
+        use_cache: Whether to use cached token counts
+
+    Returns:
+        Tuple of (target_tokens, available_tokens_per_source, repetition_factor)
+
+    Raises:
+        ValueError: If config doesn't have target_tokens or target_chinchilla_multiple
+    """
+    target_tokens = config.get_target_tokens()
+    if target_tokens is None:
+        raise ValueError("Config must have target_tokens or target_chinchilla_multiple")
+
+    token_universe = get_token_counts_and_ratios(config.sources, config.dtype, use_cache)
+    available_tokens_per_source = {
+        path: relative_size * token_universe[1] for path, relative_size in token_universe[0].items()
+    }
+    return target_tokens, available_tokens_per_source, config.repetition_factor
 
 
 # Match regmix setup: https://github.com/sail-sg/regmix/blob/main/regression_fitting/regression.ipynb
@@ -332,9 +357,7 @@ class SimulationProposer(Proposer):
         search_iterations: int = 10,
         opt_avg_metric: bool = False,
         constrain_objective: bool = False,
-        final_cookbook_path: Path | None = None,
-        manual_token_constraint_path: Path | None = None,
-        repetition_factor: float = 1.0,
+        swarm_config: ExperimentConfig | None = None,
         obj_weights: list | None = None,
         temperature: float | None = None,
         reference_scores: np.ndarray | None = None,
@@ -380,57 +403,15 @@ class SimulationProposer(Proposer):
         best_weights = np.zeros(len(prior_distributions))
 
         if constrain_objective:
-            # just need a desired token count and available token count
-            assert final_cookbook_path is not None or manual_token_constraint_path is not None
-            if final_cookbook_path is not None:
-                with open(final_cookbook_path) as f:
-                    data = yaml.safe_load(f)
-
-                final_config = ExperimentConfig(**data)
-                desired_tokens = final_config.get_max_tokens()
-
-                token_universe = get_token_counts_and_ratios(final_config.sources, final_config.dtype, True)
-                available_tokens_per_source = {
-                    path: relative_size * token_universe[1] for path, relative_size in token_universe[0].items()
-                }
-                # ensures that order of sources in simulations and in the constraint dictionary are aligned
-                available_tokens_per_source = {
-                    source: available_tokens_per_source[source] for source, _ in prior_distributions.items()
-                }
-            elif manual_token_constraint_path is not None:
-                with open(manual_token_constraint_path) as f:
-                    data = yaml.safe_load(f)
-                desired_tokens = data["requested_tokens"]
-                group_ids = data.get("group_ids", None)
-
-                leaf_level_constraints = data["leaf_level_constraints"]
-                granular_constraints = data.get("granular_constraints", False)
-                if leaf_level_constraints and not granular_constraints:
-                    # if the manual constraints are at the same granularity as the prior distributions, we can use them directly
-                    available_tokens_per_source = {
-                        source: data["available_tokens"][source] for source, _ in prior_distributions.items()
-                    }
-
-                    if group_ids is not None:
-                        group_ids = {
-                            source: group_ids[source] for source in prior_distributions
-                        }  # order the group ids dict
-                        groups = np.array(list(group_ids.values()))
-                        desired_tokens = np.array([desired_tokens[idx] for idx in groups])
-
-                elif leaf_level_constraints and granular_constraints:
-                    # if the manual constraints are at a finer granularity, we need to aggregate them
-                    available_tokens_per_source = {
-                        source: data["available_tokens"][source] for source, _ in original_prior.items()
-                    }
-
-                    if group_ids is not None:
-                        group_ids = {source: group_ids[source] for source in original_prior}  # order the group ids dict
-                        groups = np.array(list(group_ids.values()))
-                        desired_tokens_per_source = np.array([desired_tokens[idx] for idx in groups])
-                else:
-                    # otherwise, our constraints are at the source level while prior_distribution is at the leaf level
-                    available_tokens_per_source = data["available_tokens"]
+            if swarm_config is None:
+                raise ValueError("swarm_config required for constrain_objective")
+            desired_tokens, available_tokens_per_source, repetition_factor = compute_constraints_from_config(
+                swarm_config
+            )
+            # Ensure order of sources in simulations matches constraint dictionary
+            available_tokens_per_source = {
+                source: available_tokens_per_source[source] for source, _ in prior_distributions.items()
+            }
 
         # Multi-step search leveraging iterative prior results
         for search_step in tqdm(range(search_iterations), desc=f"Searching in {num_samples} candidate samples"):
@@ -453,153 +434,24 @@ class SimulationProposer(Proposer):
                 idx = np.array(list(fixed_indices.keys()))
                 vals = np.array(list(fixed_indices.values()))
                 simulations[:, idx] = vals  # broadcasts across rows
-            elif constrain_objective and isinstance(desired_tokens, list):
-                total = sum(desired_tokens)
-                simulations = np.zeros((num_samples, len(search_prior)))
-
-                if granular_constraints:
-                    coarse_groups = np.array(
-                        [
-                            group_ids[k]
-                            if k in group_ids
-                            else np.unique([stuff for g, stuff in group_ids.items() if g.startswith(k)])[0]
-                            for k, v in prior_distributions.items()
-                        ]
-                    )
-                else:
-                    coarse_groups = groups
-                for g in np.unique(coarse_groups):
-                    cols = np.where(coarse_groups == g)[0]
-
-                    # deterministic mass for the whole group
-                    w_g = desired_tokens[g] / total  # scalar
-
-                    # fold desired & prior to shape within-group
-                    base_norm = search_prior[cols] / search_prior[cols].sum()  # simplex over group
-                    conc = alphas[:, None] * base_norm[None, :]  # (n_samples, |cols|)
-
-                    # sample a simplex for the group, then scale the whole group by w_g
-                    samp = torch.distributions.Dirichlet(torch.from_numpy(conc)).sample().numpy()  # (n_samples, |cols|)
-                    simulations[:, cols] = samp * w_g
             else:
                 simulations = (
                     torch.distributions.Dirichlet(torch.from_numpy(alphas[:, None] * search_prior)).sample().numpy()
                 )
 
-            # Filter out invalid simulations from the population
-            if False:  # temperature is None:
-                # keep this for reproducibility...
-                simulations = simulations[
-                    np.all(simulations <= 6.5 * np.array(list(prior_distributions.values())), axis=1)
-                ]
-
-            # only search over mixes that are within bounds of the swarm ratios. We don't want the regression model to extrapolate.
-            """ratios_max = ratios[ratios.columns[3:]].max().values
-            simulations = simulations[
-                np.all(
-                    simulations < ratios_max,
-                    axis=1,
-                )
-            ]"""
-
             if constrain_objective:
                 original_simulation_size = len(simulations)
 
-                if leaf_level_constraints and not granular_constraints:
-                    # we can just directly do elementwise comparisons
-                    # Check which simulations will be filtered out
+                # Simple elementwise constraint checking: weight[source] * target_tokens <= available[source] * repetition_factor
+                token_usage = simulations * desired_tokens
+                token_limits = np.array(list(available_tokens_per_source.values())) * repetition_factor
+                valid_mask = (token_usage <= token_limits).all(axis=1)
 
-                    if isinstance(desired_tokens, list):
-                        # group_ids = {source: group_ids[source] for source in prior_distributions} # order the group ids dict
-                        # groups = np.array(list(group_ids.values()))
-                        # desired_tokens = np.array([desired_tokens[idx] for idx in groups])
+                filtered_count = np.sum(~valid_mask)
+                if filtered_count > 0:
+                    logger.info(f"Filtering out {filtered_count} simulations that exceed token constraints")
 
-                        group_normalized_simulations = np.zeros_like(simulations)
-                        for g in np.unique(groups):
-                            cols = np.where(groups == g)[0]
-                            block = simulations[:, cols]  # (n_samples, n_cols_in_group)
-                            denom = block.sum(axis=1, keepdims=True)  # row sums within group
-                            # Safe division: leave rows with denom==0 as zeros
-                            np.divide(block, denom, out=block, where=(denom != 0))
-                            group_normalized_simulations[:, cols] = block
-
-                        token_usage = group_normalized_simulations * desired_tokens_per_source
-                    else:
-                        token_usage = simulations * desired_tokens
-
-                    token_limits = np.array(list(available_tokens_per_source.values())) * repetition_factor
-                    valid_mask = (token_usage <= token_limits).all(axis=1)
-
-                    filtered_count = np.sum(~valid_mask)
-                    if filtered_count > 0:
-                        logger.info(f"Filtering out {filtered_count} simulations that exceed token constraints")
-
-                    simulations = simulations[valid_mask]
-                elif leaf_level_constraints and granular_constraints:
-                    constrained_domains = list(original_prior.keys())
-                    original_prior_mix = np.array(list(original_prior.values()))
-
-                    source_to_indices = defaultdict(list)
-                    for i, domain in enumerate(constrained_domains):
-                        source = domain.split(":", 1)[0]
-                        source_to_indices[source].append(i)
-
-                    per_source_weights = {}
-                    for source, indices in source_to_indices.items():
-                        topic_mix = original_prior_mix[indices]
-                        total = topic_mix.sum()
-                        per_source_weights[source] = (np.array(indices), topic_mix / total)
-
-                    expanded_simulations = np.zeros((len(simulations), len(constrained_domains)))
-                    for j, source in enumerate(prior_distributions):
-                        indices, weights = per_source_weights[source]
-                        expanded_simulations[:, indices] = simulations[:, [j]] * weights
-
-                    if isinstance(desired_tokens, list):
-                        # group_ids = {source: group_ids[source] for source in original_prior} # order the group ids dict
-                        # groups = np.array(list(group_ids.values()))
-                        # desired_tokens = np.array([desired_tokens[idx] for idx in groups])
-
-                        group_normalized_simulations = np.zeros_like(expanded_simulations)
-                        for g in np.unique(groups):
-                            cols = np.where(groups == g)[0]
-                            block = expanded_simulations[:, cols]  # (n_samples, n_cols_in_group)
-                            denom = block.sum(axis=1, keepdims=True)  # row sums within group
-                            # Safe division: leave rows with denom==0 as zeros
-                            np.divide(block, denom, out=block, where=(denom != 0))
-                            group_normalized_simulations[:, cols] = block
-
-                        token_usage = group_normalized_simulations * desired_tokens_per_source
-                    else:
-                        token_usage = expanded_simulations * desired_tokens
-
-                    token_limits = np.array(list(available_tokens_per_source.values())) * repetition_factor
-
-                    valid_mask = (token_usage <= token_limits).all(axis=1)
-
-                    filtered_count = np.sum(~valid_mask)
-                    if filtered_count > 0:
-                        logger.info(f"Filtering out {filtered_count} simulations that exceed token constraints")
-
-                    simulations = simulations[valid_mask]
-                else:
-                    raise NotImplementedError("Code is out of date.")
-                    # the constraints are at the source level, so we need to aggregate the simulation vectors by source
-                    # we map from source to their indices in the probability vector
-                    source_to_indices = defaultdict(list)
-                    for idx, domain in enumerate(prior_distributions):
-                        source = domain.split(":", 1)[0]
-                        source_to_indices[source].append(idx)
-
-                    def passes_constraints(sim):
-                        # compute source weights
-                        for source, indices in source_to_indices.items():
-                            source_weight = sim[indices].sum()
-                            if source_weight * desired_tokens > available_tokens_per_source[source] * repetition_factor:
-                                return False
-                        return True
-
-                    simulations = np.array([sim for sim in simulations if passes_constraints(sim)])
+                simulations = simulations[valid_mask]
 
                 logger.info(
                     f"Removed {original_simulation_size - len(simulations)} out of {original_simulation_size} simulations that would repeat tokens at the final run scale."
@@ -684,41 +536,11 @@ class SimulationProposer(Proposer):
             )
 
         if constrain_objective:
-            if leaf_level_constraints and not granular_constraints:
-                # we can just directly do elementwise comparisons
-                if not all(
-                    best_weights * desired_tokens
-                    <= np.array(list(available_tokens_per_source.values())) * repetition_factor
-                ):
-                    raise ValueError("Best weights are out of bounds!")
-            elif leaf_level_constraints and granular_constraints:
-                expanded_best_weights = np.zeros(len(constrained_domains))
-                for j, source in enumerate(prior_distributions):
-                    indices, weights = per_source_weights[source]
-                    expanded_best_weights[indices] = best_weights[j] * weights
-
-                if False:  # isinstance(desired_tokens, list):
-                    # group_ids = {source: group_ids[source] for source in original_prior} # order the group ids dict
-                    # groups = np.array(list(group_ids.values()))
-                    # desired_tokens = np.array([desired_tokens[idx] for idx in groups])
-
-                    group_normalized_best_weights = np.zeros_like(expanded_best_weights)
-                    for g in np.unique(groups):
-                        cols = np.where(groups == g)[0]
-                        block = expanded_best_weights[:, cols]  # (n_samples, n_cols_in_group)
-                        denom = block.sum(axis=1, keepdims=True)  # row sums within group
-                        # Safe division: leave rows with denom==0 as zeros
-                        np.divide(block, denom, out=block, where=(denom != 0))
-                        group_normalized_best_weights[:, cols] = block
-
-                    token_usage = group_normalized_best_weights * desired_tokens_per_source
-                    assert all(token_usage <= np.array(list(available_tokens_per_source.values())) * repetition_factor)
-
-            else:
-                if not passes_constraints(best_weights):
-                    raise ValueError("Best weights are out of bounds!")
-
-        # if best_weights was collapsed (because of conditioning on a topic-level p* mix), we need to expand it to the full prior distribution
+            # Verify best weights satisfy constraints
+            token_usage = best_weights * desired_tokens
+            token_limits = np.array(list(available_tokens_per_source.values())) * repetition_factor
+            if not all(token_usage <= token_limits):
+                raise ValueError("Best weights are out of bounds!")
 
         return best_weights
 
@@ -731,22 +553,19 @@ class SearchProposer(Proposer):
         prior_distributions: dict,
         opt_avg_metric: bool = False,
         constrain_objective: bool = False,
-        manual_token_constraint_path: Path | None = None,
-        repetition_factor: float = 1.0,
+        swarm_config: ExperimentConfig | None = None,
         **kwargs,
     ):
         if constrain_objective:
-            # just need a desired token count and available token count
-            if manual_token_constraint_path is not None:
-                with open(manual_token_constraint_path) as f:
-                    data = yaml.safe_load(f)
-                desired_tokens = data["requested_tokens"]
-
-                # if the manual constraints are at the same granularity as the prior distributions, we can use them directly
-                available_tokens_per_source = {
-                    source: data["available_tokens"][source] for source, _ in prior_distributions.items()
-                }
-                logger.info(f"Using manual token constraints from {manual_token_constraint_path}")
+            if swarm_config is None:
+                raise ValueError("swarm_config required for constrain_objective")
+            desired_tokens, available_tokens_per_source, repetition_factor = compute_constraints_from_config(
+                swarm_config
+            )
+            # Ensure order matches prior_distributions
+            available_tokens_per_source = {
+                source: available_tokens_per_source[source] for source, _ in prior_distributions.items()
+            }
 
         searched_weights = predictor[0].get_searched_weights()
         best_performance = np.inf
@@ -779,8 +598,7 @@ class LogLinearExactProposer(Proposer):
         prior_distributions: dict,
         opt_avg_metric: bool = False,
         constrain_objective: bool = False,
-        manual_token_constraint_path: Path | None = None,
-        repetition_factor: float = 1.0,
+        swarm_config: ExperimentConfig | None = None,
         kl_reg: float | None = 0.1,
         obj_weights: list | None = None,
         **kwargs,
@@ -789,20 +607,18 @@ class LogLinearExactProposer(Proposer):
         if kl_reg is None:
             raise ValueError("kl_reg must be provided for LogLinearExactProposer")
 
+        caps = None
         if constrain_objective:
-            # just need a desired token count and available token count
-            if manual_token_constraint_path is not None:
-                with open(manual_token_constraint_path) as f:
-                    data = yaml.safe_load(f)
-                desired_tokens = data["requested_tokens"]
-
-                # if the manual constraints are at the same granularity as the prior distributions, we can use them directly
-                available_tokens_per_source = {
-                    source: data["available_tokens"][source] for source, _ in prior_distributions.items()
-                }
-                logger.info(f"Using manual token constraints from {manual_token_constraint_path}")
-
-                caps = np.array(list(available_tokens_per_source.values())) * repetition_factor / desired_tokens
+            if swarm_config is None:
+                raise ValueError("swarm_config required for constrain_objective")
+            desired_tokens, available_tokens_per_source, repetition_factor = compute_constraints_from_config(
+                swarm_config
+            )
+            # Ensure order matches prior_distributions
+            available_tokens_per_source = {
+                source: available_tokens_per_source[source] for source, _ in prior_distributions.items()
+            }
+            caps = np.array(list(available_tokens_per_source.values())) * repetition_factor / desired_tokens
 
         np.array([p.model[0] for p in predictor])  # (n,)
         A = np.array([p.model[1:] for p in predictor])  # (n, d)
@@ -912,7 +728,7 @@ def get_runs_from_api(
     cache_path: Path,
     no_cache: bool,
     num_samples: int,
-    eval_metric_group: GroupedWandbMetrics,
+    eval_metrics: list[str],
 ) -> list[RunInstance]:
     wandb_runs = []
     for group in groups:
@@ -938,7 +754,7 @@ def get_runs_from_api(
             logger.warning(f"Run {run.display_name} is still running; NOT skipping though")
 
         if run is not None:
-            all_runs.append(mk_run_history(run, num_samples, eval_metric_group))
+            all_runs.append(mk_run_history(run, num_samples, eval_metrics))
 
     all_runs = sorted(all_runs, key=lambda run: run.display_name.lower())
     if not no_cache:
@@ -948,16 +764,16 @@ def get_runs_from_api(
     return all_runs
 
 
-def mk_run_history(run: Run, samples: int, eval_metric_group: GroupedWandbMetrics) -> Any:
+def mk_run_history(run: Run, samples: int, eval_metrics: list[str]) -> Any:
     if samples == 1:
         try:
-            summary = [{metric: run.summary[metric] for metric in eval_metric_group.value if metric in run.summary}]
+            summary = [{metric: run.summary[metric] for metric in eval_metrics if metric in run.summary}]
         except KeyError:
             print(run.id)
             print(run.summary.keys())
         return mk_run_instance(run, summary, samples)
     else:
-        return mk_run_instance(run, run.scan_history(keys=eval_metric_group.value), samples)
+        return mk_run_instance(run, run.scan_history(keys=eval_metrics), samples)
 
 
 def mk_run_from_json(run: dict) -> RunInstance:
