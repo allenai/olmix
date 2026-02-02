@@ -1,0 +1,51 @@
+# Training Duration Experiment: 0.5x Chinchilla
+# Uses 14M model with 0.5 chinchilla_multiple
+# Expected tokens: 0.5 * 20 * 14M = 140M tokens
+# Estimated runtime: ~8 min (1 GPU on Jupiter)
+#
+# Usage:
+#   olmix launch run --config configs/experiments/training_duration/duration_0.5x.yaml
+
+name: duration-0.5x
+description: Training duration experiment - 0.5x Chinchilla (140M tokens)
+budget: ai2/oe-base
+workspace: ai2/oe-data
+cluster: ai2/jupiter
+priority: normal
+
+# Model settings - use 14M model for fast tests
+proxy_model_id: olmo3_14m
+tokenizer: dolma2
+
+# Training settings
+chinchilla_multiple: 0.5  # 0.5 * 20 * 14M = 140M tokens
+nodes: 1
+gpus: 1
+global_batch_size: 16
+variants: 1
+seed: 42
+
+# Data sources - balanced mix across 5 domains
+sources:
+  - name: dclm
+    max_repetition_factor: 1.0
+    topics:
+      - name: science_math_and_technology
+        paths:
+          - "s3://ai2-llm/preprocessed/dclm/baseline_topic_ft_lr05_ng2_n3M6_ova_20pct/allenai/dolma2-tokenizer/science_math_and_technology/**/*.npy"
+      - name: software_development
+        paths:
+          - "s3://ai2-llm/preprocessed/dclm/baseline_topic_ft_lr05_ng2_n3M6_ova_20pct/allenai/dolma2-tokenizer/software_development/**/*.npy"
+      - name: education_and_jobs
+        paths:
+          - "s3://ai2-llm/preprocessed/dclm/baseline_topic_ft_lr05_ng2_n3M6_ova_20pct/allenai/dolma2-tokenizer/education_and_jobs/**/*.npy"
+
+  - name: wikipedia
+    paths:
+      - "s3://ai2-llm/preprocessed/wikipedia-dolma-0823/allenai/dolma2-tokenizer/*.npy"
+    max_repetition_factor: 2.0
+
+  - name: arxiv
+    paths:
+      - "s3://ai2-llm/preprocessed/proof-pile-2/v0_decontaminated-0625_tokenized/arxiv/train/allenai/dolma2-tokenizer/*.npy"
+    max_repetition_factor: 1.5

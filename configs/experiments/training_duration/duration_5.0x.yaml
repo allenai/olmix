@@ -1,13 +1,13 @@
-# Verification config: 1.4B tokens
+# Training Duration Experiment: 5.0x Chinchilla
 # Uses 14M model with 5.0 chinchilla_multiple
 # Expected tokens: 5.0 * 20 * 14M = 1.4B tokens
 # Estimated runtime: ~70 min (1 GPU on Jupiter)
 #
 # Usage:
-#   olmix launch run --config configs/test/verify_tokens_1400m.yaml
+#   olmix launch run --config configs/experiments/training_duration/duration_5.0x.yaml
 
-name: verify-tokens-1400m
-description: Verify token counting with 1.4B tokens
+name: duration-5.0x
+description: Training duration experiment - 5.0x Chinchilla (1.4B tokens)
 budget: ai2/oe-base
 workspace: ai2/oe-data
 cluster: ai2/jupiter
@@ -25,7 +25,7 @@ global_batch_size: 16
 variants: 1
 seed: 42
 
-# Data sources (same as test_olmo2_30m.yaml)
+# Data sources - balanced mix across 5 domains
 sources:
   - name: dclm
     max_repetition_factor: 1.0
