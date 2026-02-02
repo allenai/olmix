@@ -2,9 +2,12 @@
 
 from enum import Enum
 
-# Default task list matching WandbMetrics (39 BPB tasks for regression fitting)
+# Default task list for in-loop evaluation (27 tasks that are verified to work)
+# NOTE: Gen tasks (coqa, drop, etc.) and science/medical tasks are disabled due to
+# package data loading issues when installing olmo_eval from git. Re-enable once
+# olmo_eval is published to PyPI or the data loading issue is resolved.
 DEFAULT_EVAL_TASKS: list[str] = [
-    # Core QA BPB (7)
+    # Core QA RC (7)
     "arc_challenge_test_rc_5shot",
     "arc_easy_test_rc_5shot",
     "csqa_val_rc_5shot",
@@ -12,7 +15,7 @@ DEFAULT_EVAL_TASKS: list[str] = [
     "piqa_val_rc_5shot",
     "socialiqa_val_rc_5shot",
     "winogrande_val_rc_5shot",
-    # MMLU BPB (4)
+    # MMLU RC (4)
     "mmlu_humanities_test_rc_5shot",
     "mmlu_other_test_rc_5shot",
     "mmlu_social_sciences_test_rc_5shot",
@@ -30,27 +33,13 @@ DEFAULT_EVAL_TASKS: list[str] = [
     # Code BPB (2)
     "codex_humaneval_gold_bpb_0shot",
     "codex_mbpp_gold_bpb_0shot",
-    # Basic skills BPB (6) - NEW
+    # Basic skills BPB (6)
     "basic_skills_arithmetic_bpb_5shot",
     "basic_skills_coding_bpb_5shot",
     "basic_skills_common_knowledge_bpb_5shot",
     "basic_skills_logical_reasoning_bpb_5shot",
     "basic_skills_pattern_bpb_5shot",
     "basic_skills_string_operations_bpb_5shot",
-    # Gen tasks BPB (5) - NEW
-    "coqa_bpb_5shot",
-    "drop_bpb_5shot",
-    "jeopardy_bpb_5shot",
-    "naturalqs_bpb_5shot",
-    "squad_bpb_5shot",
-    # Science/medical BPB (7) - NEW
-    "lab_bench_dbqa_bpb",
-    "lab_bench_protocolqa_bpb",
-    "lambada_bpb",
-    "medmcqa_bpb",
-    "medqa_en_bpb",
-    "qasper_yesno_bpb",
-    "sciriff_yesno_bpb",
 ]
 
 
