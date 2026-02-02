@@ -28,6 +28,13 @@ global_batch_size: 16
 variants: 2
 seed: 42
 
+# Final run constraint settings (for olmix fit --constrain-objective)
+# target_tokens = target_chinchilla_multiple * 20 * target_model_params
+# For 7B model with 20x Chinchilla: 20 * 20 * 7B = 2.8T tokens
+target_model_id: olmo2_7b
+target_chinchilla_multiple: 20.0
+repetition_factor: 5.0
+
 # Data sources for testing (dolma2-tokenized)
 sources:
   - name: dclm
