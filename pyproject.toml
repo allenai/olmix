@@ -23,7 +23,7 @@ requires-python = ">=3.11"
 dependencies = [
     # Core dependencies
     # Pin to main branch for reproducibility
-    "ai2-olmo-core @ git+https://github.com/allenai/OLMo-core.git@main",
+    "ai2-olmo-core[eval] @ git+https://github.com/allenai/OLMo-core.git@add-inloop-evals",
     "boto3",
     "click",
     "cvxpy",

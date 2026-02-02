@@ -1,7 +1,7 @@
 """Constants for olmix fit module.
 
 This module defines:
-1. WandbMetrics - In-loop BPB metrics logged to WandB during training (21 metrics)
+1. WandbMetrics - In-loop BPB metrics logged to WandB during training (39 metrics)
 2. OlmoEvalMetrics - Offline BPB metrics for olmo-cookbook-eval (109 tasks)
 """
 
@@ -13,8 +13,8 @@ BASE_METRICS_PATH = "ai2-llm/regmixer"
 class WandbMetrics(Enum):
     """In-loop BPB metrics logged to WandB during training.
 
-    These are the 21 v2 metrics used for regression fitting during
-    proxy model training.
+    These are the 39 v2 metrics used for regression fitting during
+    proxy model training (21 original + 18 new BPB tasks).
     """
 
     # Core QA (7)
@@ -47,6 +47,30 @@ class WandbMetrics(Enum):
     # Code (2)
     codex_humaneval_bpb = "eval/downstream/codex_humaneval_gold_bpb_0shot (BPB v2)"
     codex_mbpp_bpb = "eval/downstream/codex_mbpp_gold_bpb_0shot (BPB v2)"
+
+    # Basic skills BPB (6)
+    basic_skills_arithmetic_bpb = "eval/downstream/basic_skills_arithmetic_bpb_5shot (BPB v2)"
+    basic_skills_coding_bpb = "eval/downstream/basic_skills_coding_bpb_5shot (BPB v2)"
+    basic_skills_common_knowledge_bpb = "eval/downstream/basic_skills_common_knowledge_bpb_5shot (BPB v2)"
+    basic_skills_logical_reasoning_bpb = "eval/downstream/basic_skills_logical_reasoning_bpb_5shot (BPB v2)"
+    basic_skills_pattern_bpb = "eval/downstream/basic_skills_pattern_bpb_5shot (BPB v2)"
+    basic_skills_string_operations_bpb = "eval/downstream/basic_skills_string_operations_bpb_5shot (BPB v2)"
+
+    # Gen tasks BPB (5)
+    coqa_bpb = "eval/downstream/coqa_bpb_5shot (BPB v2)"
+    drop_bpb = "eval/downstream/drop_bpb_5shot (BPB v2)"
+    jeopardy_bpb = "eval/downstream/jeopardy_bpb_5shot (BPB v2)"
+    naturalqs_bpb = "eval/downstream/naturalqs_bpb_5shot (BPB v2)"
+    squad_bpb = "eval/downstream/squad_bpb_5shot (BPB v2)"
+
+    # Science/medical BPB (7)
+    lab_bench_dbqa_bpb = "eval/downstream/lab_bench_dbqa_bpb (BPB v2)"
+    lab_bench_protocolqa_bpb = "eval/downstream/lab_bench_protocolqa_bpb (BPB v2)"
+    lambada_bpb = "eval/downstream/lambada_bpb (BPB v2)"
+    medmcqa_bpb = "eval/downstream/medmcqa_bpb (BPB v2)"
+    medqa_en_bpb = "eval/downstream/medqa_en_bpb (BPB v2)"
+    qasper_yesno_bpb = "eval/downstream/qasper_yesno_bpb (BPB v2)"
+    sciriff_yesno_bpb = "eval/downstream/sciriff_yesno_bpb (BPB v2)"
 
 
 # List of all WandB metric values for convenience
