@@ -147,6 +147,15 @@ def mk_instance_cmd(
     if config.checkpoint_path:
         cmd_list.append(f"-C {config.checkpoint_path}")
 
+    # In-loop evaluation settings
+    if config.no_eval:
+        cmd_list.append("--no-eval")
+    else:
+        cmd_list.append(f"-E {config.eval_interval}")
+        if config.eval_tasks:
+            for task in config.eval_tasks:
+                cmd_list.append(f'-e "{task}"')
+
     cmd_list.extend(sources)
 
     return cmd_list

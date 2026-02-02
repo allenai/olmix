@@ -15,12 +15,28 @@ TOKENS_PER_PARAM = 20  # Chinchilla optimal tokens per parameter
 # Approximate non-embedding parameter counts for each model
 # These are used to compute max_tokens from chinchilla_multiple
 MODEL_NUM_PARAMS: dict[str, int] = {
+    # OLMo2 models
     "olmo2_1m": 1_000_000,
     "olmo2_30m": 30_000_000,
     "olmo2_60m": 60_000_000,
     "olmo2_190m": 190_000_000,
     "olmo2_1b": 1_000_000_000,
     "olmo2_7b": 7_000_000_000,
+    # OLMo3 models (from OLMo-core)
+    "olmo3_1m": 1_000_000,
+    "olmo3_14m": 14_000_000,
+    "olmo3_30m": 30_000_000,
+    "olmo3_60m": 60_000_000,
+    "olmo3_100m": 100_000_000,
+    "olmo3_190m": 190_000_000,
+    "olmo3_370m": 370_000_000,
+    "olmo3_600m": 600_000_000,
+    "olmo3_760m": 760_000_000,
+    "olmo3_1b": 1_000_000_000,
+    "olmo3_3b": 3_000_000_000,
+    "olmo3_7b": 7_000_000_000,
+    "olmo3_13b": 13_000_000_000,
+    "olmo3_32b": 32_000_000_000,
 }
 
 
@@ -138,6 +154,17 @@ class ExperimentConfig(BaseModel):
     wandb_debug: bool = False
     existing_mix_file: str | None = None
 
+    # In-loop evaluation settings
+    eval_interval: int = 1000  # Steps between evaluations
+    eval_tasks: list[str] | None = None  # Custom eval tasks (None uses DEFAULT_EVAL_TASKS)
+    no_eval: bool = False  # Disable downstream evaluations
+
+    # Constraint optimization settings (for olmix fit)
+    target_tokens: int | None = None
+    target_chinchilla_multiple: float | None = None
+    target_model_id: str | None = None
+    repetition_factor: float = 5.0
+
     @classmethod
     def from_yaml(cls, path: PathType) -> "ExperimentConfig":
         """Load an ExperimentConfig from a YAML file."""
@@ -153,6 +180,27 @@ class ExperimentConfig(BaseModel):
         """
         num_params = get_model_num_params(self.proxy_model_id)
         return compute_max_tokens(self.chinchilla_multiple, num_params)
+
+    def get_target_tokens(self) -> int | None:
+        """Compute target tokens for the final run.
+
+        Uses target_tokens directly if set, otherwise computes from
+        target_chinchilla_multiple and target_model_id.
+
+        Returns:
+            Target token count for constraint optimization, or None if not configured.
+
+        Raises:
+            ValueError: If target_chinchilla_multiple is set but target_model_id is not.
+        """
+        if self.target_tokens is not None:
+            return self.target_tokens
+        if self.target_chinchilla_multiple is not None:
+            if self.target_model_id is None:
+                raise ValueError("target_model_id required when using target_chinchilla_multiple")
+            num_params = get_model_num_params(self.target_model_id)
+            return compute_max_tokens(self.target_chinchilla_multiple, num_params)
+        return None
 
 
 class ExperimentInstance(BaseModel):

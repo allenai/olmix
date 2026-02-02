@@ -2,6 +2,57 @@
 
 from enum import Enum
 
+# Default task list matching WandbMetrics (39 BPB tasks for regression fitting)
+DEFAULT_EVAL_TASKS: list[str] = [
+    # Core QA BPB (7)
+    "arc_challenge_test_rc_5shot",
+    "arc_easy_test_rc_5shot",
+    "csqa_val_rc_5shot",
+    "hellaswag_rc_5shot",
+    "piqa_val_rc_5shot",
+    "socialiqa_val_rc_5shot",
+    "winogrande_val_rc_5shot",
+    # MMLU BPB (4)
+    "mmlu_humanities_test_rc_5shot",
+    "mmlu_other_test_rc_5shot",
+    "mmlu_social_sciences_test_rc_5shot",
+    "mmlu_stem_test_rc_5shot",
+    # Math - Minerva BPB (7)
+    "minerva_math_algebra_gold_bpb_0shot",
+    "minerva_math_counting_and_probability_gold_bpb_0shot",
+    "minerva_math_geometry_gold_bpb_0shot",
+    "minerva_math_intermediate_algebra_gold_bpb_0shot",
+    "minerva_math_number_theory_gold_bpb_0shot",
+    "minerva_math_prealgebra_gold_bpb_0shot",
+    "minerva_math_precalculus_gold_bpb_0shot",
+    # GSM8K BPB (1)
+    "gsm8k_gold_bpb_5shot",
+    # Code BPB (2)
+    "codex_humaneval_gold_bpb_0shot",
+    "codex_mbpp_gold_bpb_0shot",
+    # Basic skills BPB (6) - NEW
+    "basic_skills_arithmetic_bpb_5shot",
+    "basic_skills_coding_bpb_5shot",
+    "basic_skills_common_knowledge_bpb_5shot",
+    "basic_skills_logical_reasoning_bpb_5shot",
+    "basic_skills_pattern_bpb_5shot",
+    "basic_skills_string_operations_bpb_5shot",
+    # Gen tasks BPB (5) - NEW
+    "coqa_bpb_5shot",
+    "drop_bpb_5shot",
+    "jeopardy_bpb_5shot",
+    "naturalqs_bpb_5shot",
+    "squad_bpb_5shot",
+    # Science/medical BPB (7) - NEW
+    "lab_bench_dbqa_bpb",
+    "lab_bench_protocolqa_bpb",
+    "lambada_bpb",
+    "medmcqa_bpb",
+    "medqa_en_bpb",
+    "qasper_yesno_bpb",
+    "sciriff_yesno_bpb",
+]
+
 
 class CodeTasks(Enum):
     """Enum of code-related evaluation tasks."""

@@ -33,6 +33,7 @@ from olmo_core.train.callbacks import (
     Callback,
     CheckpointerCallback,
     ConfigSaverCallback,
+    DownstreamEvaluatorCallbackConfig,
     GPUMemoryMonitorCallback,
     ProfilerCallback,
     WandBCallback,
@@ -41,6 +42,7 @@ from olmo_core.train.common import LoadStrategy
 
 from olmix.aliases import SourceInstance, TrainType
 from olmix.model.aliases import ModelTrainConfig
+from olmix.model.evaluators import DEFAULT_EVAL_TASKS
 from olmix.utils.cloud import expand_cloud_globs
 
 logger = logging.getLogger(__name__)
@@ -129,6 +131,8 @@ class TransformerConfigBuilder:
     load_path: str | None = None
     profile: bool = False
     train_type: TrainType = TrainType.pretrain
+    eval_tasks: list[str] | None = None
+    eval_interval: int = 1000
 
     def __init__(
         self,
@@ -149,6 +153,8 @@ class TransformerConfigBuilder:
         s3: bool = True,
         profile: bool = False,
         global_batch_size: int | None = None,
+        eval_tasks: list[str] | None = None,
+        eval_interval: int = 1000,
     ):
         self.run_name = run_name
         self.sources = sources
@@ -163,6 +169,8 @@ class TransformerConfigBuilder:
         self.load_path = load_path
         self.device_batch_size = device_batch_size
         self.global_batch_size = global_batch_size
+        self.eval_tasks = eval_tasks if eval_tasks is not None else DEFAULT_EVAL_TASKS
+        self.eval_interval = eval_interval
 
         # Use olmo-core directly for tokenizer
         if tokenizer not in TOKENIZERS:
@@ -296,7 +304,7 @@ class TransformerConfigBuilder:
 
     def build_callbacks(self) -> dict[str, Callback]:
         """Builds and returns a dictionary of callbacks for the trainer."""
-        return {
+        callbacks: dict[str, Callback] = {
             "gpu_monitor": GPUMemoryMonitorCallback(),
             "config_saver": ConfigSaverCallback(),
             "profiler": ProfilerCallback(enabled=self.profile),
@@ -312,6 +320,17 @@ class TransformerConfigBuilder:
                 enabled=True,
             ),
         }
+
+        # Add downstream evaluator if tasks specified
+        if self.eval_tasks:
+            logger.info(f"Configuring {len(self.eval_tasks)} eval tasks with interval={self.eval_interval}")
+            callbacks["downstream_evaluator"] = DownstreamEvaluatorCallbackConfig(
+                tasks=self.eval_tasks,
+                tokenizer=self.tokenizer,
+                eval_interval=self.eval_interval,
+            )
+
+        return callbacks
 
     def build(self) -> ModelTrainConfig:
         """Builds and returns the model training configuration."""

@@ -132,6 +132,27 @@ def cli():
     required=False,
     default=None,
 )
+@click.option(
+    "-e",
+    "--eval-task",
+    "eval_tasks",
+    multiple=True,
+    type=str,
+    help="Eval task names (can be specified multiple times). If not provided, uses DEFAULT_EVAL_TASKS.",
+)
+@click.option(
+    "-E",
+    "--eval-interval",
+    type=int,
+    default=1000,
+    help="Steps between evaluations (default: 1000)",
+)
+@click.option(
+    "--no-eval",
+    is_flag=True,
+    default=False,
+    help="Disable downstream evaluations",
+)
 @record
 def train(
     run_name: str,
@@ -149,6 +170,9 @@ def train(
     device_batch_size: int,
     checkpoint_path: str | None = None,
     global_batch_size: int | None = None,
+    eval_tasks: tuple[str, ...] = (),
+    eval_interval: int = 1000,
+    no_eval: bool = False,
 ):
     """Launch a training run with the given parameters."""
 
@@ -163,6 +187,18 @@ def train(
 
         if not os.path.exists(checkpoint_path):
             raise FileNotFoundError(f"Checkpoint path {checkpoint_path} does not exist.")
+
+    # Determine eval tasks:
+    # - no_eval=True -> empty list disables eval
+    # - eval_tasks provided -> use those
+    # - neither -> None uses DEFAULT_EVAL_TASKS in TransformerConfigBuilder
+    resolved_eval_tasks: list[str] | None
+    if no_eval:
+        resolved_eval_tasks = []  # Empty list disables eval
+    elif eval_tasks:
+        resolved_eval_tasks = list(eval_tasks)  # Use provided tasks
+    else:
+        resolved_eval_tasks = None  # None uses DEFAULT_EVAL_TASKS
 
     config = TransformerConfigBuilder(
         beaker_user=beaker_user.strip(),
@@ -180,6 +216,8 @@ def train(
         train_type=TrainType[train_type.strip()],
         device_batch_size=device_batch_size,
         global_batch_size=global_batch_size,
+        eval_tasks=resolved_eval_tasks,
+        eval_interval=eval_interval,
     ).build()
     dataset = config.dataset.build()
 
