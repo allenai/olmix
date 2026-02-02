@@ -302,8 +302,12 @@ class TransformerConfigBuilder:
             period_lengths=period_lengths,
         )
 
-    def build_callbacks(self) -> dict[str, Callback]:
-        """Builds and returns a dictionary of callbacks for the trainer."""
+    def build_callbacks(self, final_step: int | None = None) -> dict[str, Callback]:
+        """Builds and returns a dictionary of callbacks for the trainer.
+
+        Args:
+            final_step: The final training step, used to ensure evaluation at end of training.
+        """
         callbacks: dict[str, Callback] = {
             "gpu_monitor": GPUMemoryMonitorCallback(),
             "config_saver": ConfigSaverCallback(),
@@ -323,11 +327,23 @@ class TransformerConfigBuilder:
 
         # Add downstream evaluator if tasks specified
         if self.eval_tasks:
-            logger.info(f"Configuring {len(self.eval_tasks)} eval tasks with interval={self.eval_interval}")
+            # Determine fixed_steps for end-of-training eval
+            # Only add final_step if it's not already on an eval_interval boundary
+            fixed_steps: list[int] | None = None
+            if final_step is not None and final_step % self.eval_interval != 0:
+                fixed_steps = [final_step]
+                logger.info(
+                    f"Configuring {len(self.eval_tasks)} eval tasks with interval={self.eval_interval}, "
+                    f"plus final eval at step {final_step}"
+                )
+            else:
+                logger.info(f"Configuring {len(self.eval_tasks)} eval tasks with interval={self.eval_interval}")
+
             callbacks["downstream_evaluator"] = DownstreamEvaluatorCallbackConfig(
                 tasks=self.eval_tasks,
                 tokenizer=self.tokenizer,
                 eval_interval=self.eval_interval,
+                fixed_steps=fixed_steps,
             )
 
         return callbacks
@@ -413,7 +429,10 @@ class TransformerConfigBuilder:
             max_duration=Duration.tokens(max_tokens),
         )
 
-        for callback_name, callback in self.build_callbacks().items():
+        # Calculate final step for end-of-training evaluation
+        final_step = max_tokens // batch_size_in_tokens
+
+        for callback_name, callback in self.build_callbacks(final_step=final_step).items():
             trainer_config.callbacks[callback_name] = callback
 
         return ModelTrainConfig(
