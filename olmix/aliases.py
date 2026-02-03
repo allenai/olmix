@@ -79,19 +79,45 @@ class TrainType(Enum):
     anneal = "anneal"
 
 
+class QualityConfig(BaseModel):
+    """Configuration for a quality level within a topic or source.
+
+    Name can be any string like "vigintile_0001", "high", "medium", "low", etc.
+    """
+
+    name: str  # e.g., "vigintile_0001", "high", "low"
+    paths: list[str]
+    max_repetition_factor: float = 1.0
+
+
 class TopicConfig(BaseModel):
     name: str
-    paths: list[str]
+    paths: list[str] | None = None
+    quality: list[QualityConfig] | None = None
     max_repetition_factor: float = 1.0
     max_topic_ratio: float = 1.0
     weight: float | None = None
+
+    def model_post_init(self, __context) -> None:
+        """Validate that exactly one of paths or quality is provided."""
+        if self.paths is not None and self.quality is not None:
+            raise ValueError("TopicConfig cannot have both 'paths' and 'quality' - use exactly one")
+        if self.paths is None and self.quality is None:
+            raise ValueError("TopicConfig must have either 'paths' or 'quality'")
 
 
 class SourceConfig(BaseModel):
     name: str
     paths: list[str] | None = None
     topics: list[TopicConfig] | None = None
+    quality: list[QualityConfig] | None = None
     max_repetition_factor: float = 1.0
+
+    def model_post_init(self, __context) -> None:
+        """Validate that exactly one of paths, topics, or quality is provided."""
+        options = [self.paths is not None, self.topics is not None, self.quality is not None]
+        if sum(options) != 1:
+            raise ValueError("SourceConfig must have exactly one of 'paths', 'topics', or 'quality'")
 
 
 class SourceInstance(BaseModel):
