@@ -33,13 +33,13 @@ DEFAULT_EVAL_TASKS: list[str] = [
     # Code BPB (2)
     "codex_humaneval_gold_bpb_0shot",
     "codex_mbpp_gold_bpb_0shot",
-    # Basic skills BPB (6)
-    "basic_skills_arithmetic_bpb_5shot",
-    "basic_skills_coding_bpb_5shot",
-    "basic_skills_common_knowledge_bpb_5shot",
-    "basic_skills_logical_reasoning_bpb_5shot",
-    "basic_skills_pattern_bpb_5shot",
-    "basic_skills_string_operations_bpb_5shot",
+    # Basic skills RC (6) - RC tasks compute gold BPB automatically
+    "basic_skills_arithmetic_rc_5shot",
+    "basic_skills_coding_rc_5shot",
+    "basic_skills_common_knowledge_rc_5shot",
+    "basic_skills_logical_reasoning_rc_5shot",
+    "basic_skills_pattern_rc_5shot",
+    "basic_skills_string_operations_rc_5shot",
 ]
 
 

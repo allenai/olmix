@@ -48,13 +48,13 @@ class WandbMetrics(Enum):
     codex_humaneval_bpb = "eval/downstream/codex_humaneval_gold_bpb_0shot (BPB v2)"
     codex_mbpp_bpb = "eval/downstream/codex_mbpp_gold_bpb_0shot (BPB v2)"
 
-    # Basic skills BPB (6)
-    basic_skills_arithmetic_bpb = "eval/downstream/basic_skills_arithmetic_bpb_5shot (BPB v2)"
-    basic_skills_coding_bpb = "eval/downstream/basic_skills_coding_bpb_5shot (BPB v2)"
-    basic_skills_common_knowledge_bpb = "eval/downstream/basic_skills_common_knowledge_bpb_5shot (BPB v2)"
-    basic_skills_logical_reasoning_bpb = "eval/downstream/basic_skills_logical_reasoning_bpb_5shot (BPB v2)"
-    basic_skills_pattern_bpb = "eval/downstream/basic_skills_pattern_bpb_5shot (BPB v2)"
-    basic_skills_string_operations_bpb = "eval/downstream/basic_skills_string_operations_bpb_5shot (BPB v2)"
+    # Basic skills RC (6) - RC tasks compute gold BPB automatically
+    basic_skills_arithmetic_bpb = "eval/downstream/basic_skills_arithmetic_rc_5shot (BPB v2)"
+    basic_skills_coding_bpb = "eval/downstream/basic_skills_coding_rc_5shot (BPB v2)"
+    basic_skills_common_knowledge_bpb = "eval/downstream/basic_skills_common_knowledge_rc_5shot (BPB v2)"
+    basic_skills_logical_reasoning_bpb = "eval/downstream/basic_skills_logical_reasoning_rc_5shot (BPB v2)"
+    basic_skills_pattern_bpb = "eval/downstream/basic_skills_pattern_rc_5shot (BPB v2)"
+    basic_skills_string_operations_bpb = "eval/downstream/basic_skills_string_operations_rc_5shot (BPB v2)"
 
     # Gen tasks BPB (5)
     coqa_bpb = "eval/downstream/coqa_bpb_5shot (BPB v2)"
@@ -63,14 +63,14 @@ class WandbMetrics(Enum):
     naturalqs_bpb = "eval/downstream/naturalqs_bpb_5shot (BPB v2)"
     squad_bpb = "eval/downstream/squad_bpb_5shot (BPB v2)"
 
-    # Science/medical BPB (7)
-    lab_bench_dbqa_bpb = "eval/downstream/lab_bench_dbqa_bpb (BPB v2)"
-    lab_bench_protocolqa_bpb = "eval/downstream/lab_bench_protocolqa_bpb (BPB v2)"
+    # Science/medical RC (7) - 6 converted to RC with compute_gold_bpb, lambada stays BPB
+    lab_bench_dbqa_bpb = "eval/downstream/lab_bench_dbqa_rc (BPB v2)"
+    lab_bench_protocolqa_bpb = "eval/downstream/lab_bench_protocolqa_rc (BPB v2)"
     lambada_bpb = "eval/downstream/lambada_bpb (BPB v2)"
-    medmcqa_bpb = "eval/downstream/medmcqa_bpb (BPB v2)"
-    medqa_en_bpb = "eval/downstream/medqa_en_bpb (BPB v2)"
-    qasper_yesno_bpb = "eval/downstream/qasper_yesno_bpb (BPB v2)"
-    sciriff_yesno_bpb = "eval/downstream/sciriff_yesno_bpb (BPB v2)"
+    medmcqa_bpb = "eval/downstream/medmcqa_rc (BPB v2)"
+    medqa_en_bpb = "eval/downstream/medqa_en_rc (BPB v2)"
+    qasper_yesno_bpb = "eval/downstream/qasper_yesno_rc (BPB v2)"
+    sciriff_yesno_bpb = "eval/downstream/sciriff_yesno_rc (BPB v2)"
 
 
 # List of all WandB metric values for convenience
