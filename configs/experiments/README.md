@@ -43,13 +43,13 @@ Tests how BPB metrics improve with longer training, holding data proportions con
 | **Code** |||||
 | codex_humaneval_gold_bpb_0shot | 3.220 | 2.717 | **2.679** | -16.8% |
 | codex_mbpp_gold_bpb_0shot | 4.308 | 3.749 | **3.681** | -14.6% |
-| basic_skills_coding_bpb_5shot | 4.490 | **3.804** | 3.889 | -15.3% |
+| basic_skills_coding_rc_5shot | 4.490 | **3.804** | 3.889 | -15.3% |
 | **Basic Skills** |||||
-| basic_skills_arithmetic_bpb_5shot | 2.804 | **2.728** | 2.733 | -2.7% |
-| basic_skills_common_knowledge | 2.181 | 2.104 | **2.054** | -5.8% |
-| basic_skills_logical_reasoning | 1.706 | 1.312 | **1.296** | -24.0% |
-| basic_skills_pattern_bpb_5shot | 3.531 | 2.238 | **2.109** | -40.3% |
-| basic_skills_string_operations | 4.244 | 3.941 | **3.849** | -9.3% |
+| basic_skills_arithmetic_rc_5shot | 2.804 | **2.728** | 2.733 | -2.7% |
+| basic_skills_common_knowledge_rc_5shot | 2.181 | 2.104 | **2.054** | -5.8% |
+| basic_skills_logical_reasoning_rc_5shot | 1.706 | 1.312 | **1.296** | -24.0% |
+| basic_skills_pattern_rc_5shot | 3.531 | 2.238 | **2.109** | -40.3% |
+| basic_skills_string_operations_rc_5shot | 4.244 | 3.941 | **3.849** | -9.3% |
 
 **Key Findings:**
 
@@ -113,13 +113,13 @@ Tests how different data mixes affect BPB metrics, holding training duration con
 | **Code** ||||||
 | codex_humaneval_gold | 3.112 | **2.165** | 2.359 | 2.175 | Code |
 | codex_mbpp_gold | 4.257 | **3.184** | 3.515 | 3.279 | Code |
-| basic_skills_coding | 4.469 | **3.015** | 3.377 | 3.041 | Code |
+| basic_skills_coding_rc_5shot | 4.469 | **3.015** | 3.377 | 3.041 | Code |
 | **Basic Skills** ||||||
-| basic_skills_arithmetic | 2.920 | 2.855 | **2.782** | 2.807 | Sci |
-| basic_skills_common_knowledge | 2.211 | 2.170 | **2.062** | 2.100 | Sci |
-| basic_skills_logical_reasoning | 1.646 | 1.677 | **1.609** | 1.619 | Sci |
-| basic_skills_pattern | 3.554 | 3.382 | 3.237 | **3.062** | Wiki |
-| basic_skills_string_operations | 4.052 | 4.031 | 4.081 | **3.907** | Wiki |
+| basic_skills_arithmetic_rc_5shot | 2.920 | 2.855 | **2.782** | 2.807 | Sci |
+| basic_skills_common_knowledge_rc_5shot | 2.211 | 2.170 | **2.062** | 2.100 | Sci |
+| basic_skills_logical_reasoning_rc_5shot | 1.646 | 1.677 | **1.609** | 1.619 | Sci |
+| basic_skills_pattern_rc_5shot | 3.554 | 3.382 | 3.237 | **3.062** | Wiki |
+| basic_skills_string_operations_rc_5shot | 4.052 | 4.031 | 4.081 | **3.907** | Wiki |
 
 **Key Findings:**
 
