@@ -29,7 +29,7 @@ dependencies = [
     "yaspin",
     "gcsfs",
     "pyarrow<21",
-    "datasets>=3,<4"
+    "datasets>=3,<4",
     "lightgbm",
     "pandas",
     "scipy",
