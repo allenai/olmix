@@ -198,17 +198,35 @@ def generate_weights_dirichlet(
         logger.info(grouped_bounds)
 
     # split prior distribution into source and topic distributions and tweak it according to the manual prior
+    # Note: "topic" here refers to any leaf-level unit (could be topic, quality bucket, or topic:quality)
     topic_distributions = {}
     source_distribution = []
     for source_config in sorted(sources, key=lambda x: x.name):
         if source_config.topics:
-            # this source has topics
-            weights = np.array(
-                [
-                    leaf_dist[f"{source_config.name}:{topic.name}"]
-                    for topic in sorted(source_config.topics, key=lambda x: x.name)
-                ]
-            )
+            # this source has topics - collect all leaf-level units
+            unit_weights = []
+            for topic in sorted(source_config.topics, key=lambda x: x.name):
+                if topic.quality:
+                    # Each quality bucket is a separate unit
+                    for q in sorted(topic.quality, key=lambda x: x.name):
+                        unit_weights.append(leaf_dist[f"{source_config.name}:{topic.name}:{q.name}"])
+                else:
+                    # Topic is the unit
+                    unit_weights.append(leaf_dist[f"{source_config.name}:{topic.name}"])
+            weights = np.array(unit_weights)
+            normalized_weights = weights / weights.sum()
+            topic_distributions[source_config.name] = normalized_weights
+
+            if manual_prior is not None and source_config.name in manual_prior:
+                source_distribution.append(manual_prior[source_config.name])
+            else:
+                source_distribution.append(weights.sum())
+        elif source_config.quality:
+            # Source-level quality buckets (no topics)
+            unit_weights = [
+                leaf_dist[f"{source_config.name}:{q.name}"] for q in sorted(source_config.quality, key=lambda x: x.name)
+            ]
+            weights = np.array(unit_weights)
             normalized_weights = weights / weights.sum()
             topic_distributions[source_config.name] = normalized_weights
 
@@ -217,7 +235,7 @@ def generate_weights_dirichlet(
             else:
                 source_distribution.append(weights.sum())
         else:
-            # this source does not have topics
+            # this source does not have topics or quality
             topic_distributions[source_config.name] = np.array([1.0])
             if manual_prior is not None and source_config.name in manual_prior:
                 source_distribution.append(manual_prior[source_config.name])
@@ -254,7 +272,23 @@ def generate_weights_dirichlet(
         if source.topics:
             if source.topics[0].weight is not None:
                 # this source has topics with a fixed weight, so we use that weight as the prior
-                conditional_weight = np.array([[topic.weight for topic in sorted(source.topics, key=lambda x: x.name)]])
+                # Need to expand to leaf-level units if topics have quality buckets
+                unit_weights = []
+                for topic in sorted(source.topics, key=lambda x: x.name):
+                    if topic.quality:
+                        # Distribute topic weight proportionally across quality buckets
+                        quality_tokens = [
+                            leaf_dist[f"{source.name}:{topic.name}:{q.name}"]
+                            for q in sorted(topic.quality, key=lambda x: x.name)
+                        ]
+                        total_quality_tokens = sum(quality_tokens)
+                        for qt in quality_tokens:
+                            unit_weights.append(
+                                topic.weight * (qt / total_quality_tokens) if total_quality_tokens > 0 else 0
+                            )
+                    else:
+                        unit_weights.append(topic.weight)
+                conditional_weight = np.array([unit_weights])
                 logger.info(f"Using fixed topic weights for source '{source.name}': {conditional_weight[0]}")
                 fixed_topic_weights[source.name] = conditional_weight
 
@@ -560,11 +594,34 @@ def count_tokens(paths: list[str], dtype: NumpyDatasetDType, fs) -> int:
 
 
 def get_leaf_configs(source_config):
-    """Return a list of (name, paths) tuples representing the leaf nodes."""
+    """Return a list of (name, paths) tuples representing the leaf nodes.
+
+    Handles three nesting levels:
+    - source.paths -> (source, paths)
+    - source.quality[].paths -> (source:quality_name, paths)
+    - source.topics[].paths -> (source:topic, paths)
+    - source.topics[].quality[].paths -> (source:topic:quality_name, paths)
+    """
+    results = []
+
     if source_config.topics:
-        return [(f"{source_config.name}:{topic.name}", topic.paths) for topic in source_config.topics]
+        for topic in source_config.topics:
+            if topic.quality:
+                # Topics with quality buckets
+                for q in topic.quality:
+                    results.append((f"{source_config.name}:{topic.name}:{q.name}", q.paths))
+            else:
+                # Topics with direct paths
+                results.append((f"{source_config.name}:{topic.name}", topic.paths))
+    elif source_config.quality:
+        # Source-level quality buckets (no topics)
+        for q in source_config.quality:
+            results.append((f"{source_config.name}:{q.name}", q.paths))
     else:
-        return [(source_config.name, source_config.paths)]
+        # Direct paths on source
+        results.append((source_config.name, source_config.paths))
+
+    return results
 
 
 def calculate_priors(
