@@ -61,7 +61,11 @@ def prettify_mixes(mixes: list[dict[str, tuple[float, float]]]):
 
 
 def mk_mixes(
-    config_file: Path, output: Path | None = None, use_cache: bool = True, group_uuid: str | None = None
+    config_file: Path,
+    output: Path | None = None,
+    use_cache: bool = True,
+    group_uuid: str | None = None,
+    save: bool = True,
 ) -> list[dict[str, tuple[float, float]]]:
     import uuid
 
@@ -74,16 +78,17 @@ def mk_mixes(
     mixes = mk_mixtures(config, group_uuid, use_cache=use_cache)
     mix_string = prettify_mixes(mixes)
 
-    if not output:
-        output = Path(f"output/mixes/{config.name}_{group_uuid}.json")
+    if save:
+        if not output:
+            output = Path(f"output/mixes/{config.name}_{group_uuid}.json")
 
-    if output:
-        os.makedirs(os.path.dirname(output), exist_ok=True)
+        if output:
+            os.makedirs(os.path.dirname(output), exist_ok=True)
 
-        with open(output, "w") as f:
-            f.write(mix_string)
+            with open(output, "w") as f:
+                f.write(mix_string)
 
-        logger.info(f"Mixes saved to {output}:")
+            logger.info(f"Mixes saved to {output}:")
 
     from copy import deepcopy
 

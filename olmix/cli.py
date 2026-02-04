@@ -2,6 +2,8 @@
 
 import json
 import logging
+import subprocess
+from datetime import UTC, datetime
 from pathlib import Path
 
 import click
@@ -11,6 +13,62 @@ from tqdm import tqdm
 from yaspin import yaspin
 
 logger = logging.getLogger(__name__)
+
+
+def _get_git_info() -> dict[str, str]:
+    """Get current git commit and branch info."""
+    try:
+        commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()[:8]
+        branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], text=True).strip()
+        return {"git_commit": commit, "git_branch": branch}
+    except Exception:
+        return {"git_commit": "unknown", "git_branch": "unknown"}
+
+
+def _save_launch_metadata(
+    config_path: Path,
+    group_uuid: str,
+    beaker_user: str,
+    mixes: list[dict],
+    results: list,
+    experiment_name: str,
+) -> None:
+    """Save launch metadata to the mix file for reproducibility tracking."""
+    output_path = Path(f"output/mixes/{experiment_name}_{group_uuid}.json")
+
+    # Build experiment info from launch results
+    experiments = []
+    for i, result in enumerate(results):
+        exp = result.experiment
+        experiments.append(
+            {
+                "variant": i,
+                "beaker_id": exp.id,
+                "beaker_name": exp.name,
+                "beaker_url": f"https://beaker.org/ex/{exp.id}",
+            }
+        )
+
+    # Build full metadata
+    metadata = {
+        "metadata": {
+            "timestamp": datetime.now(UTC).isoformat(),
+            "config_path": str(config_path),
+            "beaker_user": beaker_user,
+            "group_id": group_uuid,
+            "wandb_url": f"https://wandb.ai/ai2-llm/olmix?group={group_uuid}",
+            **_get_git_info(),
+        },
+        "experiments": experiments,
+        "mixes": mixes,
+    }
+
+    # Write to file
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w") as f:
+        json.dump(metadata, f, indent=2)
+
+    logger.info(f"Launch metadata saved to {output_path}")
 
 
 @click.group()
@@ -122,25 +180,27 @@ def launch_run(config: Path, mixture_file: Path | None, dry_run: bool, no_cache:
         return
 
     launch_configs = None
+    mixes = None
 
     if mixture_file:
         with open(mixture_file) as f:
             predefined_mixes = json.load(f)
 
+        mixes = predefined_mixes["mixes"]
         logger.info(predefined_mixes)
         if click.confirm(f"Launch experiment {group_uuid} with this set of mixtures?", default=False):
             with yaspin(text="Building experiment group...", color="yellow") as spinner:
                 launch_configs = mk_launch_configs(
                     group=mk_experiment_group(
                         config=experiment_config,
-                        mixes=predefined_mixes["mixes"],
+                        mixes=mixes,
                         group_uuid=group_uuid,
                     ),
                     beaker_user=beaker_user,
                 )
                 spinner.ok("Done")
     else:
-        mixes = mk_mixes(config, use_cache=(no_cache is False), group_uuid=group_uuid)
+        mixes = mk_mixes(config, use_cache=(no_cache is False), group_uuid=group_uuid, save=False)
         if click.confirm(f"Launch experiment {group_uuid} with this set of mixtures?", default=False):
             with yaspin(text="Building experiment group...", color="yellow") as spinner:
                 launch_configs = mk_launch_configs(
@@ -172,6 +232,17 @@ def launch_run(config: Path, mixture_file: Path | None, dry_run: bool, no_cache:
                 results.append(lc.launch(torchrun=torchrun))
 
             spinner.ok("Done")
+
+            # Save launch metadata for reproducibility tracking
+            _save_launch_metadata(
+                config_path=config,
+                group_uuid=group_uuid,
+                beaker_user=beaker_user,
+                mixes=mixes,
+                results=results,
+                experiment_name=experiment_config.name,
+            )
+
             logger.info(results)
             logger.info(f"Experiment group '{group_uuid}' launched successfully!")
         except KeyboardInterrupt:
