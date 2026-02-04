@@ -2,53 +2,18 @@
 
 from enum import Enum
 
-# Default task list for in-loop evaluation (27 tasks that are verified to work)
-# NOTE: Gen tasks (coqa, drop, etc.) and science/medical tasks are disabled due to
-# package data loading issues when installing olmo_eval from git. Re-enable once
-# olmo_eval is published to PyPI or the data loading issue is resolved.
-DEFAULT_EVAL_TASKS: list[str] = [
-    # Core QA RC (7)
-    "arc_challenge_test_rc_5shot",
-    "arc_easy_test_rc_5shot",
-    "csqa_val_rc_5shot",
-    "hellaswag_rc_5shot",
-    "piqa_val_rc_5shot",
-    "socialiqa_val_rc_5shot",
-    "winogrande_val_rc_5shot",
-    # MMLU RC (4)
-    "mmlu_humanities_test_rc_5shot",
-    "mmlu_other_test_rc_5shot",
-    "mmlu_social_sciences_test_rc_5shot",
-    "mmlu_stem_test_rc_5shot",
-    # Math - Minerva BPB (7)
-    "minerva_math_algebra_gold_bpb_0shot",
-    "minerva_math_counting_and_probability_gold_bpb_0shot",
-    "minerva_math_geometry_gold_bpb_0shot",
-    "minerva_math_intermediate_algebra_gold_bpb_0shot",
-    "minerva_math_number_theory_gold_bpb_0shot",
-    "minerva_math_prealgebra_gold_bpb_0shot",
-    "minerva_math_precalculus_gold_bpb_0shot",
-    # GSM8K BPB (1)
-    "gsm8k_gold_bpb_5shot",
-    # Code BPB (2)
-    "codex_humaneval_gold_bpb_0shot",
-    "codex_mbpp_gold_bpb_0shot",
-    # Basic skills RC (6) - RC tasks compute gold BPB automatically
-    "basic_skills_arithmetic_rc_5shot",
-    "basic_skills_coding_rc_5shot",
-    "basic_skills_common_knowledge_rc_5shot",
-    "basic_skills_logical_reasoning_rc_5shot",
-    "basic_skills_pattern_rc_5shot",
-    "basic_skills_string_operations_rc_5shot",
-]
+from olmo_core.eval.task_groups import FULL_TASKS_SMALL_COMPUTE
+
+# Use olmo-core's task list, excluding copycolors sanity check (60 tasks)
+DEFAULT_EVAL_TASKS: list[str] = [t for t in FULL_TASKS_SMALL_COMPUTE if "copycolors" not in t]
 
 
 class CodeTasks(Enum):
     """Enum of code-related evaluation tasks."""
 
     BASIC_SKILLS_CODING_RC_5SHOT = "basic_skills_coding_rc_5shot"
-    CODEX_HUMANEVAL = "codex_humaneval_gold_bpb_0shot"
-    CODEX_MBPP = "codex_mbpp_gold_bpb_0shot"
+    CODEX_HUMANEVAL = "codex_humaneval_gold_bpb_3shot"  # Changed from 0shot
+    CODEX_MBPP = "codex_mbpp_gold_bpb_3shot"  # Changed from 0shot
 
 
 class DownstreamEvaluatorsSmall(Enum):
@@ -93,11 +58,11 @@ class DownstreamEvaluatorsSmall(Enum):
     MINERVA_NUMBER = "minerva_math_number_theory_gold_bpb_0shot"
     MINERVA_PREALGEBRA = "minerva_math_prealgebra_gold_bpb_0shot"
     MINERVA_PRECALCULUS = "minerva_math_precalculus_gold_bpb_0shot"
-    CODEX_HUMANEVAL = "codex_humaneval_gold_bpb_0shot"
-    CODEX_MBPP = "codex_mbpp_gold_bpb_0shot"
+    CODEX_HUMANEVAL = "codex_humaneval_gold_bpb_3shot"  # Changed from 0shot
+    CODEX_MBPP = "codex_mbpp_gold_bpb_3shot"  # Changed from 0shot
 
     # Sanity check for MCQA ability
-    COPYCOLORS = "copycolors_10way"
+    COPYCOLORS = "copycolors_10way_fast"
 
 
 class DownstreamEvaluators(Enum):

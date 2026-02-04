@@ -1,7 +1,7 @@
 """Constants for olmix fit module.
 
 This module defines:
-1. WandbMetrics - In-loop BPB metrics logged to WandB during training (39 metrics)
+1. WandbMetrics - In-loop BPB metrics logged to WandB during training (60 metrics)
 2. OlmoEvalMetrics - Offline BPB metrics for olmo-cookbook-eval (109 tasks)
 """
 
@@ -13,24 +13,32 @@ BASE_METRICS_PATH = "ai2-llm/regmixer"
 class WandbMetrics(Enum):
     """In-loop BPB metrics logged to WandB during training.
 
-    These are the 39 v2 metrics used for regression fitting during
-    proxy model training (21 original + 18 new BPB tasks).
+    Maps to olmo-core's FULL_TASKS_SMALL_COMPUTE (60 tasks, excluding copycolors).
     """
 
-    # Core QA (7)
+    # Core QA RC (7)
     arc_challenge_bpb = "eval/downstream/arc_challenge_test_rc_5shot (BPB v2)"
     arc_easy_bpb = "eval/downstream/arc_easy_test_rc_5shot (BPB v2)"
-    csqa_bpb = "eval/downstream/csqa_val_rc_5shot (BPB v2)"
     hellaswag_bpb = "eval/downstream/hellaswag_rc_5shot (BPB v2)"
+    winogrande_bpb = "eval/downstream/winogrande_val_rc_5shot (BPB v2)"
+    csqa_bpb = "eval/downstream/csqa_val_rc_5shot (BPB v2)"
     piqa_bpb = "eval/downstream/piqa_val_rc_5shot (BPB v2)"
     socialiqa_bpb = "eval/downstream/socialiqa_val_rc_5shot (BPB v2)"
-    winogrande_bpb = "eval/downstream/winogrande_val_rc_5shot (BPB v2)"
 
-    # MMLU (4)
-    mmlu_humanities_bpb = "eval/downstream/mmlu_humanities_test_rc_5shot (BPB v2)"
-    mmlu_other_bpb = "eval/downstream/mmlu_other_test_rc_5shot (BPB v2)"
-    mmlu_social_sciences_bpb = "eval/downstream/mmlu_social_sciences_test_rc_5shot (BPB v2)"
+    # MMLU Val RC (4)
+    mmlu_stem_val_bpb = "eval/downstream/mmlu_stem_val_rc_5shot (BPB v2)"
+    mmlu_humanities_val_bpb = "eval/downstream/mmlu_humanities_val_rc_5shot (BPB v2)"
+    mmlu_social_sciences_val_bpb = "eval/downstream/mmlu_social_sciences_val_rc_5shot (BPB v2)"
+    mmlu_other_val_bpb = "eval/downstream/mmlu_other_val_rc_5shot (BPB v2)"
+
+    # MMLU Test RC (4)
     mmlu_stem_bpb = "eval/downstream/mmlu_stem_test_rc_5shot (BPB v2)"
+    mmlu_humanities_bpb = "eval/downstream/mmlu_humanities_test_rc_5shot (BPB v2)"
+    mmlu_social_sciences_bpb = "eval/downstream/mmlu_social_sciences_test_rc_5shot (BPB v2)"
+    mmlu_other_bpb = "eval/downstream/mmlu_other_test_rc_5shot (BPB v2)"
+
+    # Math - GSM8K (1)
+    gsm8k_bpb = "eval/downstream/gsm8k_gold_bpb_5shot (BPB v2)"
 
     # Math - Minerva (7)
     minerva_algebra_bpb = "eval/downstream/minerva_math_algebra_gold_bpb_0shot (BPB v2)"
@@ -41,14 +49,38 @@ class WandbMetrics(Enum):
     minerva_prealgebra_bpb = "eval/downstream/minerva_math_prealgebra_gold_bpb_0shot (BPB v2)"
     minerva_precalculus_bpb = "eval/downstream/minerva_math_precalculus_gold_bpb_0shot (BPB v2)"
 
-    # Math - GSM8K (1)
-    gsm8k_bpb = "eval/downstream/gsm8k_gold_bpb_5shot (BPB v2)"
+    # Code (2) - NOTE: 3shot not 0shot
+    codex_humaneval_bpb = "eval/downstream/codex_humaneval_gold_bpb_3shot (BPB v2)"
+    codex_mbpp_bpb = "eval/downstream/codex_mbpp_gold_bpb_3shot (BPB v2)"
 
-    # Code (2)
-    codex_humaneval_bpb = "eval/downstream/codex_humaneval_gold_bpb_0shot (BPB v2)"
-    codex_mbpp_bpb = "eval/downstream/codex_mbpp_gold_bpb_0shot (BPB v2)"
+    # Generative QA BPB (6)
+    coqa_bpb = "eval/downstream/coqa_bpb_0shot (BPB v2)"
+    drop_bpb = "eval/downstream/drop_bpb_5shot (BPB v2)"
+    jeopardy_bpb = "eval/downstream/jeopardy_bpb_5shot (BPB v2)"
+    lambada_bpb = "eval/downstream/lambada_bpb_0shot (BPB v2)"
+    naturalqs_bpb = "eval/downstream/naturalqs_bpb_5shot (BPB v2)"
+    squad_bpb = "eval/downstream/squad_bpb_5shot (BPB v2)"
 
-    # Basic skills RC (6) - RC tasks compute gold BPB automatically
+    # MT MBPP - All 17 languages (17)
+    mt_mbpp_bash_bpb = "eval/downstream/mt_mbpp_bash_gold_bpb_3shot (BPB v2)"
+    mt_mbpp_c_bpb = "eval/downstream/mt_mbpp_c_gold_bpb_3shot (BPB v2)"
+    mt_mbpp_cpp_bpb = "eval/downstream/mt_mbpp_cpp_gold_bpb_3shot (BPB v2)"
+    mt_mbpp_csharp_bpb = "eval/downstream/mt_mbpp_csharp_gold_bpb_3shot (BPB v2)"
+    mt_mbpp_go_bpb = "eval/downstream/mt_mbpp_go_gold_bpb_3shot (BPB v2)"
+    mt_mbpp_haskell_bpb = "eval/downstream/mt_mbpp_haskell_gold_bpb_3shot (BPB v2)"
+    mt_mbpp_java_bpb = "eval/downstream/mt_mbpp_java_gold_bpb_3shot (BPB v2)"
+    mt_mbpp_javascript_bpb = "eval/downstream/mt_mbpp_javascript_gold_bpb_3shot (BPB v2)"
+    mt_mbpp_matlab_bpb = "eval/downstream/mt_mbpp_matlab_gold_bpb_3shot (BPB v2)"
+    mt_mbpp_php_bpb = "eval/downstream/mt_mbpp_php_gold_bpb_3shot (BPB v2)"
+    mt_mbpp_python_bpb = "eval/downstream/mt_mbpp_python_gold_bpb_3shot (BPB v2)"
+    mt_mbpp_r_bpb = "eval/downstream/mt_mbpp_r_gold_bpb_3shot (BPB v2)"
+    mt_mbpp_ruby_bpb = "eval/downstream/mt_mbpp_ruby_gold_bpb_3shot (BPB v2)"
+    mt_mbpp_rust_bpb = "eval/downstream/mt_mbpp_rust_gold_bpb_3shot (BPB v2)"
+    mt_mbpp_scala_bpb = "eval/downstream/mt_mbpp_scala_gold_bpb_3shot (BPB v2)"
+    mt_mbpp_swift_bpb = "eval/downstream/mt_mbpp_swift_gold_bpb_3shot (BPB v2)"
+    mt_mbpp_typescript_bpb = "eval/downstream/mt_mbpp_typescript_gold_bpb_3shot (BPB v2)"
+
+    # Basic Skills RC (6)
     basic_skills_arithmetic_bpb = "eval/downstream/basic_skills_arithmetic_rc_5shot (BPB v2)"
     basic_skills_coding_bpb = "eval/downstream/basic_skills_coding_rc_5shot (BPB v2)"
     basic_skills_common_knowledge_bpb = "eval/downstream/basic_skills_common_knowledge_rc_5shot (BPB v2)"
@@ -56,21 +88,13 @@ class WandbMetrics(Enum):
     basic_skills_pattern_bpb = "eval/downstream/basic_skills_pattern_rc_5shot (BPB v2)"
     basic_skills_string_operations_bpb = "eval/downstream/basic_skills_string_operations_rc_5shot (BPB v2)"
 
-    # Gen tasks BPB (5)
-    coqa_bpb = "eval/downstream/coqa_bpb_5shot (BPB v2)"
-    drop_bpb = "eval/downstream/drop_bpb_5shot (BPB v2)"
-    jeopardy_bpb = "eval/downstream/jeopardy_bpb_5shot (BPB v2)"
-    naturalqs_bpb = "eval/downstream/naturalqs_bpb_5shot (BPB v2)"
-    squad_bpb = "eval/downstream/squad_bpb_5shot (BPB v2)"
-
-    # Science/medical RC (7) - 6 converted to RC with compute_gold_bpb, lambada stays BPB
-    lab_bench_dbqa_bpb = "eval/downstream/lab_bench_dbqa_rc (BPB v2)"
-    lab_bench_protocolqa_bpb = "eval/downstream/lab_bench_protocolqa_rc (BPB v2)"
-    lambada_bpb = "eval/downstream/lambada_bpb (BPB v2)"
-    medmcqa_bpb = "eval/downstream/medmcqa_rc (BPB v2)"
-    medqa_en_bpb = "eval/downstream/medqa_en_rc (BPB v2)"
-    qasper_yesno_bpb = "eval/downstream/qasper_yesno_rc (BPB v2)"
-    sciriff_yesno_bpb = "eval/downstream/sciriff_yesno_rc (BPB v2)"
+    # Science/Medical RC (6)
+    lab_bench_dbqa_bpb = "eval/downstream/lab_bench_dbqa_rc_3shot (BPB v2)"
+    lab_bench_protocolqa_bpb = "eval/downstream/lab_bench_protocolqa_rc_3shot (BPB v2)"
+    medmcqa_bpb = "eval/downstream/medmcqa_rc_5shot (BPB v2)"
+    medqa_en_bpb = "eval/downstream/medqa_en_rc_5shot (BPB v2)"
+    qasper_yesno_bpb = "eval/downstream/qasper_yesno_rc_5shot (BPB v2)"
+    sciriff_yesno_bpb = "eval/downstream/sciriff_yesno_rc_5shot (BPB v2)"
 
 
 # List of all WandB metric values for convenience
