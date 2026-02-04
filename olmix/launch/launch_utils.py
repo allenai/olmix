@@ -4,23 +4,14 @@ import os
 from collections import defaultdict
 from pathlib import Path
 
-import yaml
-
 from olmix.aliases import (
-    ExperimentConfig,
     SourceConfig,
     SourceInstance,
+    config_from_path,  # Re-export from aliases for backwards compatibility
 )
 from olmix.launch.synthesize_mixture import mk_mixtures
 
 logger = logging.getLogger(__name__)
-
-
-def config_from_path(config: Path) -> ExperimentConfig:
-    with open(config) as f:
-        data = yaml.safe_load(f)
-
-    return ExperimentConfig(**data)
 
 
 def mk_source_instances(sources: list[SourceConfig], mix_map: dict[str, tuple[float, float]]) -> list[SourceInstance]:
@@ -113,10 +104,7 @@ def mk_mixes(
 ) -> list[dict[str, tuple[float, float]]]:
     import uuid
 
-    with open(config_file) as f:
-        data = yaml.safe_load(f)
-
-    config = ExperimentConfig(**data)
+    config = config_from_path(config_file)
     if group_uuid is None:
         group_uuid = str(uuid.uuid4())[:8]
     mixes = mk_mixtures(config, group_uuid, use_cache=use_cache)

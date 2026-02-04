@@ -359,39 +359,12 @@ def launch_preview(config: Path):
 # Fit subcommand (from existing fit CLI)
 # ============================================================================
 
-
-@cli.command("fit")
-@click.pass_context
-def fit(ctx):
-    """Run regression fitting and mixture optimization.
-
-    This command delegates to the fit module CLI.
-    """
-    from olmix.fit.cli import cli as fit_cli
-
-    ctx.invoke(fit_cli)
-
-
-# Add the fit subcommands directly
-def register_fit_commands():
-    """Register fit commands from the fit module."""
-    try:
-        from olmix.fit.cli import cli as fit_cli
-
-        # Get all commands from fit_cli and add them under 'fit' group
-        for name, cmd in fit_cli.commands.items():
-            cli.add_command(cmd, name=f"fit-{name}" if name != "fit" else "fit")
-    except ImportError:
-        pass
-
-
-# Try to register fit commands
 try:
     from olmix.fit import cli as fit_module
 
     cli.add_command(fit_module.cli, name="fit")
-except (ImportError, AttributeError):
-    # fit module may have different structure, just add as subgroup
+except ImportError:
+    # fit module not available (missing optional dependencies)
     pass
 
 
