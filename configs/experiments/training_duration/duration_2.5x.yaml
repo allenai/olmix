@@ -11,7 +11,7 @@ description: Training duration experiment - 2.5x Chinchilla (700M tokens)
 budget: ai2/oe-base
 workspace: ai2/oe-data
 cluster: ai2/jupiter
-priority: urgent
+priority: high
 
 # Model settings - use 14M model for fast tests
 proxy_model_id: olmo3_14m
