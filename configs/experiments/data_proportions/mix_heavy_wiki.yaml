@@ -18,7 +18,7 @@ description: Data proportions experiment - 50% wikipedia emphasis
 budget: ai2/oe-base
 workspace: ai2/oe-data
 cluster: ai2/jupiter
-priority: normal
+priority: urgent
 
 # Model settings - use 14M model for fast tests
 proxy_model_id: olmo3_14m
