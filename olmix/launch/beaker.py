@@ -22,7 +22,8 @@ def mk_source_instances(sources: list[SourceConfig], mix_map: dict[str, tuple[fl
 
     Args:
         sources: List of source configurations
-        mix_map: Dictionary mapping source names to (weight, repetition_factor) tuples
+        mix_map: Dictionary mapping source names to (weight, repetition_factor) tuples.
+                 Keys can be: "source", "source:topic", or "source:topic:quality"
 
     Returns:
         List of SourceInstance objects with non-zero weights
@@ -32,20 +33,53 @@ def mk_source_instances(sources: list[SourceConfig], mix_map: dict[str, tuple[fl
     for source in sources:
         if source.topics:
             for topic in source.topics:
-                full_name = f"{source.name}:{topic.name}"
+                if topic.quality:
+                    # Handle quality buckets: source:topic:quality
+                    for quality in topic.quality:
+                        full_name = f"{source.name}:{topic.name}:{quality.name}"
+                        if full_name not in mix_map or mix_map[full_name][0] == 0:
+                            continue
+                        instances.append(
+                            SourceInstance(
+                                name=full_name,
+                                paths=quality.paths,
+                                ratio=mix_map[full_name][0],
+                                repetition_factor=mix_map[full_name][1],
+                            )
+                        )
+                else:
+                    # Handle topics without quality: source:topic
+                    full_name = f"{source.name}:{topic.name}"
+                    if full_name not in mix_map or mix_map[full_name][0] == 0:
+                        continue
+                    assert topic.paths is not None, f"Topic {full_name} has no paths defined"
+                    instances.append(
+                        SourceInstance(
+                            name=full_name,
+                            paths=topic.paths,
+                            ratio=mix_map[full_name][0],
+                            repetition_factor=mix_map[full_name][1],
+                        )
+                    )
+        elif source.quality:
+            # Handle source-level quality buckets: source:quality
+            for quality in source.quality:
+                full_name = f"{source.name}:{quality.name}"
                 if full_name not in mix_map or mix_map[full_name][0] == 0:
                     continue
                 instances.append(
                     SourceInstance(
                         name=full_name,
-                        paths=topic.paths,
+                        paths=quality.paths,
                         ratio=mix_map[full_name][0],
                         repetition_factor=mix_map[full_name][1],
                     )
                 )
         else:
+            # Handle simple sources: source
             if source.name not in mix_map or mix_map[source.name][0] == 0:
                 continue
+            assert source.paths is not None, f"Source {source.name} has no paths defined"
             instances.append(
                 SourceInstance(
                     name=source.name,
