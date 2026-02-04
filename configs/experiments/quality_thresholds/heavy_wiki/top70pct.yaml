@@ -1,28 +1,27 @@
-# Quality Threshold Experiment: Top 70% Quality
+# Quality Threshold Experiment: heavy_wiki mix with top70pct quality
 # Uses 14M model with 0.5 chinchilla_multiple
 # Expected tokens: 0.5 * 20 * 14M = 140M tokens
 # Estimated runtime: ~8 min (1 GPU on Jupiter)
 #
-# This config includes the top ~70% quality data (vigintile_0007-0018, vigintile_0020).
-# Note: vigintile_0019 doesn't exist in the data, and vigintile_0001-0006 don't exist either.
-# This is effectively all available data.
+# Mix: heavy_wiki (science_math_and_technology=25%, software_development=20%, education_and_jobs=15%, politics=3%, adult_content=1%, art_and_design=5%)
+# Quality: top70pct (vigintiles: 0007, 0008, 0009, 0010, 0011, 0012, 0013, 0014, 0015, 0016, 0017, 0018, 0020)
 #
 # Usage:
-#   olmix launch run --config configs/experiments/quality_thresholds/quality_top70pct.yaml
+#   olmix launch run --config configs/experiments/quality_thresholds/heavy_wiki/top70pct.yaml
 
-name: quality-top70pct
-description: Quality threshold experiment - top 70% quality data
+name: quality-top70pct-heavy-wiki
+description: Quality experiment - top70pct with heavy wiki mix
 budget: ai2/oe-base
 workspace: ai2/oe-data
 cluster: ai2/jupiter
-priority: normal
+priority: high
 
-# Model settings - use 14M model for fast tests
+# Model settings
 proxy_model_id: olmo3_14m
 tokenizer: dolma2
 
-# Training settings - fixed at 0.5x Chinchilla for all quality experiments
-chinchilla_multiple: 0.5  # 0.5 * 20 * 14M = 140M tokens
+# Training settings
+chinchilla_multiple: 0.5
 nodes: 1
 gpus: 1
 global_batch_size: 16
@@ -32,12 +31,13 @@ seed: 42
 # Lower minimum weight to prevent quality buckets from being clipped
 minimum_weight: 0.0001
 
-# Data sources
+# Data sources with fixed topic weights
 sources:
-  # Source with topics and quality levels (top ~70% = vigintile_0007-0018, 0020)
   - name: all_dressed
+    weight: 69
     topics:
       - name: science_math_and_technology
+        weight: 25
         quality:
           - name: vigintile_0007
             paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/science_math_and_technology/vigintile_0007/*.npy"]
@@ -66,6 +66,7 @@ sources:
           - name: vigintile_0020
             paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/science_math_and_technology/vigintile_0020/*.npy"]
       - name: software_development
+        weight: 20
         quality:
           - name: vigintile_0007
             paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/software_development/vigintile_0007/*.npy"]
@@ -94,6 +95,7 @@ sources:
           - name: vigintile_0020
             paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/software_development/vigintile_0020/*.npy"]
       - name: education_and_jobs
+        weight: 15
         quality:
           - name: vigintile_0007
             paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/education_and_jobs/vigintile_0007/*.npy"]
@@ -122,6 +124,7 @@ sources:
           - name: vigintile_0020
             paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/education_and_jobs/vigintile_0020/*.npy"]
       - name: politics
+        weight: 3
         quality:
           - name: vigintile_0007
             paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/politics/vigintile_0007/*.npy"]
@@ -150,6 +153,7 @@ sources:
           - name: vigintile_0020
             paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/politics/vigintile_0020/*.npy"]
       - name: adult_content
+        weight: 1
         quality:
           - name: vigintile_0007
             paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/adult_content/vigintile_0007/*.npy"]
@@ -178,6 +182,7 @@ sources:
           - name: vigintile_0020
             paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/adult_content/vigintile_0020/*.npy"]
       - name: art_and_design
+        weight: 5
         quality:
           - name: vigintile_0007
             paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/art_and_design/vigintile_0007/*.npy"]
@@ -206,13 +211,14 @@ sources:
           - name: vigintile_0020
             paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/art_and_design/vigintile_0020/*.npy"]
 
-  # Sources without quality (backward compatibility)
   - name: arxiv
+    weight: 1
     paths:
       - "s3://ai2-llm/preprocessed/proof-pile-2/v0_decontaminated-0625_tokenized/arxiv/train/allenai/dolma2-tokenizer/*.npy"
     max_repetition_factor: 1.5
 
   - name: wikipedia
+    weight: 30
     paths:
       - "s3://ai2-llm/preprocessed/wikipedia-dolma-0823/allenai/dolma2-tokenizer/*.npy"
     max_repetition_factor: 2.0
