@@ -2,6 +2,7 @@ import json
 import logging
 import os
 from collections import defaultdict
+from datetime import UTC, datetime
 from pathlib import Path
 
 from olmix.aliases import (
@@ -12,6 +13,38 @@ from olmix.aliases import (
 from olmix.launch.synthesize_mixture import mk_mixtures
 
 logger = logging.getLogger(__name__)
+
+
+def _get_output_path_from_config(config_path: Path, group_uuid: str, timestamp: str | None = None) -> Path:
+    """Derive output path from config path, mirroring the config hierarchy.
+
+    Example:
+        configs/experiments/quality_thresholds/heavy_code/top10pct.yaml
+        -> output/mixes/quality_thresholds/heavy_code/top10pct/20260204_143025-<uuid>.json
+    """
+    config_path = Path(config_path).resolve()
+
+    # Generate timestamp if not provided
+    if timestamp is None:
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+
+    # Find the experiments/ directory in the path
+    parts = config_path.parts
+    try:
+        experiments_idx = parts.index("experiments")
+    except ValueError:
+        # Fallback: use just the filename stem if not in experiments/
+        return Path(f"output/mixes/{config_path.stem}/{timestamp}-{group_uuid}.json")
+
+    # Get the relative path after experiments/
+    # Config name becomes a directory, timestamp-uuid becomes the filename
+    relative_parts = parts[experiments_idx + 1 :]
+    relative_path = Path(*relative_parts)
+    output_name = f"{timestamp}-{group_uuid}.json"
+    # Include the config stem as a subdirectory
+    output_dir = relative_path.parent / relative_path.stem
+
+    return Path("output/mixes") / output_dir / output_name
 
 
 def mk_source_instances(sources: list[SourceConfig], mix_map: dict[str, tuple[float, float]]) -> list[SourceInstance]:
@@ -112,7 +145,7 @@ def mk_mixes(
 
     if save:
         if not output:
-            output = Path(f"output/mixes/{config.name}_{group_uuid}.json")
+            output = _get_output_path_from_config(config_file, group_uuid)
 
         if output:
             os.makedirs(os.path.dirname(output), exist_ok=True)
