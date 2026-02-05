@@ -321,8 +321,15 @@ All experiments use:
 
 ## Experiment Tracking
 
-Launch metadata is saved to `output/mixes/{name}_{group_id}.json` with:
+Launch metadata is saved to `output/mixes/<experiment_path>/<config_name>/<timestamp>-<group_id>.json`, mirroring the config hierarchy with config-based grouping. For example:
+- Config: `configs/experiments/quality_thresholds/heavy_code/top10pct.yaml`
+- Output: `output/mixes/quality_thresholds/heavy_code/top10pct/20260204_143025-abc123.json`
+
+This structure groups all runs of the same config together, with each run uniquely identified by its timestamp (`YYYYMMDD_HHMMSS` UTC) and group ID.
+
+The metadata includes:
+- Full config contents (for reproducibility even if the YAML file changes)
 - Beaker experiment IDs and URLs
 - WandB group URL
 - Git commit and branch
-- Mix configurations
+- Generated mix configurations
