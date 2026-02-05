@@ -276,16 +276,30 @@ def generate_weights_dirichlet(
                 unit_weights = []
                 for topic in sorted(source.topics, key=lambda x: x.name):
                     if topic.quality:
-                        # Distribute topic weight proportionally across quality buckets
-                        quality_tokens = [
-                            leaf_dist[f"{source.name}:{topic.name}:{q.name}"]
-                            for q in sorted(topic.quality, key=lambda x: x.name)
-                        ]
-                        total_quality_tokens = sum(quality_tokens)
-                        for qt in quality_tokens:
-                            unit_weights.append(
-                                topic.weight * (qt / total_quality_tokens) if total_quality_tokens > 0 else 0
-                            )
+                        # Check if quality buckets have explicit weights
+                        has_quality_weights = any(q.weight is not None for q in topic.quality)
+                        if has_quality_weights:
+                            # Use explicit quality weights (normalize to sum to 1)
+                            quality_weights = [
+                                q.weight if q.weight is not None else 0.0
+                                for q in sorted(topic.quality, key=lambda x: x.name)
+                            ]
+                            total_quality_weight = sum(quality_weights)
+                            for qw in quality_weights:
+                                unit_weights.append(
+                                    topic.weight * (qw / total_quality_weight) if total_quality_weight > 0 else 0
+                                )
+                        else:
+                            # Distribute topic weight proportionally across quality buckets by token count
+                            quality_tokens = [
+                                leaf_dist[f"{source.name}:{topic.name}:{q.name}"]
+                                for q in sorted(topic.quality, key=lambda x: x.name)
+                            ]
+                            total_quality_tokens = sum(quality_tokens)
+                            for qt in quality_tokens:
+                                unit_weights.append(
+                                    topic.weight * (qt / total_quality_tokens) if total_quality_tokens > 0 else 0
+                                )
                     else:
                         unit_weights.append(topic.weight)
                 conditional_weight = np.array([unit_weights])

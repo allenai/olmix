@@ -87,6 +87,7 @@ class QualityConfig(BaseModel):
 
     name: str  # e.g., "vigintile_0001", "high", "low"
     paths: list[str]
+    weight: float | None = None  # Optional weight for quality bucket (used in upsampling experiments)
     max_repetition_factor: float = 1.0
 
 
