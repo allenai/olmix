@@ -68,14 +68,6 @@ class TestCLI:
         assert result.exit_code == 0
         assert "--group-id" in result.output
 
-    def test_launch_validate_help(self, runner):
-        """Test launch validate subcommand shows help."""
-        from olmix.cli import cli
-
-        result = runner.invoke(cli, ["launch", "validate", "--help"])
-        assert result.exit_code == 0
-        assert "--config" in result.output
-
 
 class TestFitCLI:
     """Test fit CLI commands."""

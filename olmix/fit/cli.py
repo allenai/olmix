@@ -28,21 +28,25 @@ from olmix.fit.constants import ALL_WANDB_METRICS
 from olmix.fit.utils import (
     PROPOSER_TYPES,
     LogLinearRegressor,
+    add_back_in_fixed_source_weights,
     aggregate_mmlu,
     build_regression,
     calculate_priors_with_manual,
     compute_mixture_neighborhood,
+    expand_collapsed_weights,
     get_output_dir,
     get_runs_from_api,
     mk_run_from_json,
     mk_run_metrics,
     mk_weights_from_config,
+    save_eval_config,
+    swarm_config_from_path,
+)
+from olmix.plots import (
     plot_and_log_weights,
     plot_correlation,
     plot_interaction_matrix,
     plot_interaction_matrix_signed_evidence,
-    save_eval_config,
-    swarm_config_from_path,
 )
 
 logger = logging.getLogger(__name__)
@@ -994,6 +998,8 @@ def fit(
                 df_config=ratios,
                 output_dir=output_dir,
                 fixed_weight=fixed_weight_dict if fixed_weight is not None else None,
+                expand_collapsed_weights_fn=expand_collapsed_weights,
+                add_back_in_fixed_source_weights_fn=add_back_in_fixed_source_weights,
             )
 
             results.append((metric, weights))
@@ -1070,6 +1076,8 @@ def fit(
             df_config=ratios,
             output_dir=output_dir,
             fixed_weight=fixed_weight_dict if fixed_weight is not None else None,
+            expand_collapsed_weights_fn=expand_collapsed_weights,
+            add_back_in_fixed_source_weights_fn=add_back_in_fixed_source_weights,
         )
 
         results.append(("opt_avg_all_metrics", weights))
@@ -1092,6 +1100,8 @@ def fit(
             df_config=ratios,
             output_dir=output_dir,
             fixed_weight=fixed_weight_dict if fixed_weight is not None else None,
+            expand_collapsed_weights_fn=expand_collapsed_weights,
+            add_back_in_fixed_source_weights_fn=add_back_in_fixed_source_weights,
         )
 
         results.append((avg_name, average))
