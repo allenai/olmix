@@ -1,0 +1,176 @@
+# Quality Threshold Experiment: heavy_science mix with top50pct quality
+# Uses 14M model with 0.5 chinchilla_multiple
+# Expected tokens: 0.5 * 20 * 14M = 140M tokens
+# Estimated runtime: ~8 min (1 GPU on Jupiter)
+#
+# Mix: heavy_science (science_math_and_technology=50%, software_development=20%, education_and_jobs=15%, politics=5%, adult_content=3%, art_and_design=5%)
+# Quality: top50pct (vigintiles: 0011, 0012, 0013, 0014, 0015, 0016, 0017, 0018, 0020)
+#
+# Usage:
+#   olmix launch run --config configs/experiments/quality_thresholds/heavy_science/top50pct.yaml
+
+name: quality-top50pct-heavy-science
+description: Quality experiment - top50pct with heavy science mix
+budget: ai2/oe-base
+workspace: ai2/oe-data
+cluster: ai2/jupiter
+priority: high
+
+# Model settings
+proxy_model_id: olmo3_14m
+tokenizer: dolma2
+
+# Training settings
+chinchilla_multiple: 0.5
+nodes: 1
+gpus: 1
+global_batch_size: 16
+variants: 1
+seed: 42
+
+# Lower minimum weight to prevent quality buckets from being clipped
+minimum_weight: 0.0001
+
+# Data sources with fixed topic weights
+sources:
+  - name: all_dressed
+    weight: 98
+    topics:
+      - name: science_math_and_technology
+        weight: 50
+        quality:
+          - name: vigintile_0011
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/science_math_and_technology/vigintile_0011/*.npy"]
+          - name: vigintile_0012
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/science_math_and_technology/vigintile_0012/*.npy"]
+          - name: vigintile_0013
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/science_math_and_technology/vigintile_0013/*.npy"]
+          - name: vigintile_0014
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/science_math_and_technology/vigintile_0014/*.npy"]
+          - name: vigintile_0015
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/science_math_and_technology/vigintile_0015/*.npy"]
+          - name: vigintile_0016
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/science_math_and_technology/vigintile_0016/*.npy"]
+          - name: vigintile_0017
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/science_math_and_technology/vigintile_0017/*.npy"]
+          - name: vigintile_0018
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/science_math_and_technology/vigintile_0018/*.npy"]
+          - name: vigintile_0020
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/science_math_and_technology/vigintile_0020/*.npy"]
+      - name: software_development
+        weight: 20
+        quality:
+          - name: vigintile_0011
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/software_development/vigintile_0011/*.npy"]
+          - name: vigintile_0012
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/software_development/vigintile_0012/*.npy"]
+          - name: vigintile_0013
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/software_development/vigintile_0013/*.npy"]
+          - name: vigintile_0014
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/software_development/vigintile_0014/*.npy"]
+          - name: vigintile_0015
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/software_development/vigintile_0015/*.npy"]
+          - name: vigintile_0016
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/software_development/vigintile_0016/*.npy"]
+          - name: vigintile_0017
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/software_development/vigintile_0017/*.npy"]
+          - name: vigintile_0018
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/software_development/vigintile_0018/*.npy"]
+          - name: vigintile_0020
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/software_development/vigintile_0020/*.npy"]
+      - name: education_and_jobs
+        weight: 15
+        quality:
+          - name: vigintile_0011
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/education_and_jobs/vigintile_0011/*.npy"]
+          - name: vigintile_0012
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/education_and_jobs/vigintile_0012/*.npy"]
+          - name: vigintile_0013
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/education_and_jobs/vigintile_0013/*.npy"]
+          - name: vigintile_0014
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/education_and_jobs/vigintile_0014/*.npy"]
+          - name: vigintile_0015
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/education_and_jobs/vigintile_0015/*.npy"]
+          - name: vigintile_0016
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/education_and_jobs/vigintile_0016/*.npy"]
+          - name: vigintile_0017
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/education_and_jobs/vigintile_0017/*.npy"]
+          - name: vigintile_0018
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/education_and_jobs/vigintile_0018/*.npy"]
+          - name: vigintile_0020
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/education_and_jobs/vigintile_0020/*.npy"]
+      - name: politics
+        weight: 5
+        quality:
+          - name: vigintile_0011
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/politics/vigintile_0011/*.npy"]
+          - name: vigintile_0012
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/politics/vigintile_0012/*.npy"]
+          - name: vigintile_0013
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/politics/vigintile_0013/*.npy"]
+          - name: vigintile_0014
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/politics/vigintile_0014/*.npy"]
+          - name: vigintile_0015
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/politics/vigintile_0015/*.npy"]
+          - name: vigintile_0016
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/politics/vigintile_0016/*.npy"]
+          - name: vigintile_0017
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/politics/vigintile_0017/*.npy"]
+          - name: vigintile_0018
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/politics/vigintile_0018/*.npy"]
+          - name: vigintile_0020
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/politics/vigintile_0020/*.npy"]
+      - name: adult_content
+        weight: 3
+        quality:
+          - name: vigintile_0011
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/adult_content/vigintile_0011/*.npy"]
+          - name: vigintile_0012
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/adult_content/vigintile_0012/*.npy"]
+          - name: vigintile_0013
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/adult_content/vigintile_0013/*.npy"]
+          - name: vigintile_0014
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/adult_content/vigintile_0014/*.npy"]
+          - name: vigintile_0015
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/adult_content/vigintile_0015/*.npy"]
+          - name: vigintile_0016
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/adult_content/vigintile_0016/*.npy"]
+          - name: vigintile_0017
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/adult_content/vigintile_0017/*.npy"]
+          - name: vigintile_0018
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/adult_content/vigintile_0018/*.npy"]
+          - name: vigintile_0020
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/adult_content/vigintile_0020/*.npy"]
+      - name: art_and_design
+        weight: 5
+        quality:
+          - name: vigintile_0011
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/art_and_design/vigintile_0011/*.npy"]
+          - name: vigintile_0012
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/art_and_design/vigintile_0012/*.npy"]
+          - name: vigintile_0013
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/art_and_design/vigintile_0013/*.npy"]
+          - name: vigintile_0014
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/art_and_design/vigintile_0014/*.npy"]
+          - name: vigintile_0015
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/art_and_design/vigintile_0015/*.npy"]
+          - name: vigintile_0016
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/art_and_design/vigintile_0016/*.npy"]
+          - name: vigintile_0017
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/art_and_design/vigintile_0017/*.npy"]
+          - name: vigintile_0018
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/art_and_design/vigintile_0018/*.npy"]
+          - name: vigintile_0020
+            paths: ["s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/art_and_design/vigintile_0020/*.npy"]
+
+  - name: arxiv
+    weight: 1
+    paths:
+      - "s3://ai2-llm/preprocessed/proof-pile-2/v0_decontaminated-0625_tokenized/arxiv/train/allenai/dolma2-tokenizer/*.npy"
+    max_repetition_factor: 1.5
+
+  - name: wikipedia
+    weight: 1
+    paths:
+      - "s3://ai2-llm/preprocessed/wikipedia-dolma-0823/allenai/dolma2-tokenizer/*.npy"
+    max_repetition_factor: 2.0

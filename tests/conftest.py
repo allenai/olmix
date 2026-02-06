@@ -76,6 +76,60 @@ def mock_config():
     }
 
 
+@pytest.fixture
+def sample_experiment_config_dict():
+    """Return a sample experiment config dictionary for olmix."""
+    return {
+        "name": "test-swarm",
+        "description": "Test experiment",
+        "budget": "ai2/oe-data",
+        "workspace": "ai2/dolma2",
+        "nodes": 1,
+        "gpus": 1,
+        "variants": 5,
+        "max_tokens": 1000000,
+        "sequence_length": 2048,
+        "seed": 42,
+        "cluster": "ai2/saturn-cirrascale",
+        "tokenizer": "dolma2",
+        "proxy_model_id": "olmo2_30m",
+        "sources": [
+            {"name": "wikipedia", "paths": ["s3://bucket/wiki/**/*.npy"]},
+            {"name": "dclm", "paths": ["s3://bucket/dclm/**/*.npy"]},
+        ],
+    }
+
+
+@pytest.fixture
+def sample_experiment_config(sample_experiment_config_dict):
+    """Return a sample ExperimentConfig for olmix."""
+    from olmix.aliases import ExperimentConfig
+
+    return ExperimentConfig(**sample_experiment_config_dict)
+
+
+@pytest.fixture
+def sample_experiment_config_file(sample_experiment_config_dict, tmp_path):
+    """Create a sample config YAML file for olmix."""
+    import yaml
+
+    config_file = tmp_path / "config.yaml"
+    with open(config_file, "w") as f:
+        yaml.dump(sample_experiment_config_dict, f)
+
+    return config_file
+
+
+@pytest.fixture
+def sample_mixtures():
+    """Return sample mixture weights."""
+    return [
+        {"wikipedia": (0.5, 1.0), "dclm": (0.5, 1.0)},
+        {"wikipedia": (0.3, 1.5), "dclm": (0.7, 1.0)},
+        {"wikipedia": (0.7, 1.0), "dclm": (0.3, 2.0)},
+    ]
+
+
 # ============================================================================
 # Utility Functions for Tests
 # ============================================================================

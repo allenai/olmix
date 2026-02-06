@@ -31,6 +31,8 @@ wheels/
 # miscellaneous
 
 .cache/
+cache/
+output/
 doc/_build/
 *.swp
 .DS_Store
