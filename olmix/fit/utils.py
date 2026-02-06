@@ -105,6 +105,8 @@ LGBM_HPS = {
 
 
 class Regressor:
+    model: Any
+
     def fit(self, x, y, idx, **kwargs):
         raise NotImplementedError("Subclasses must implement this method")
 
@@ -1130,7 +1132,7 @@ def solve_log_linear(
             weights.data = project(weights.data)
 
         if (i + 1) % 100 == 0:
-            print(f"Iteration {i+1}/{n_iterations}, Loss: {loss.item():.4f}")
+            print(f"Iteration {i + 1}/{n_iterations}, Loss: {loss.item():.4f}")
 
     best_weights = weights.detach().cpu().numpy()
 
@@ -1276,7 +1278,7 @@ def calculate_priors_with_manual(
     use_cache: bool,
     manual_prior: dict[str, float] | None = None,
     fixed_source_weights: dict[str, float] | None = None,
-):
+) -> tuple[tuple[dict[str, float], int, dict[str, int]], tuple[dict[str, float], int, dict[str, int]]]:
     priors = calculate_priors(
         source_configs=source_configs,
         dtype=dtype,
@@ -1445,9 +1447,7 @@ def swarm_config_from_path(config: Path, use_cookbook: bool = False) -> Experime
         ExperimentConfig loaded from the file
     """
     if use_cookbook:
-        logger.warning(
-            "use_cookbook parameter is deprecated. " "Please migrate to using olmix ExperimentConfig directly."
-        )
+        logger.warning("use_cookbook parameter is deprecated. Please migrate to using olmix ExperimentConfig directly.")
     with open(config) as f:
         data = yaml.safe_load(f)
     return ExperimentConfig(**data)

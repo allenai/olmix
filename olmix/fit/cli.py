@@ -412,7 +412,7 @@ def fit(
         eval_config["repetition_factor"] = swarm_config.repetition_factor
     if temperature is not None:
         eval_config["temperature"] = temperature
-    if len(keep_sources) != 0:
+    if keep_sources:
         eval_config["keep_sources"] = keep_sources
     if early_stopping > 0.0:
         eval_config["early_stopping"] = early_stopping
@@ -526,10 +526,8 @@ def fit(
         new_priors = {k: v for k, v in priors[0].items() if k not in fixed_weight_dict}
         total = sum(list(new_priors.values()))
         new_priors = {k: v / total for k, v in new_priors.items()}  # normalize the weights
-        # hack to update the tuple
-        priors_list = list(priors)
-        priors_list[0] = new_priors
-        priors = tuple(priors_list)
+        priors[0].clear()
+        priors[0].update(new_priors)
 
     logger.info("Source weights:")
     logger.info(priors[0])
@@ -658,10 +656,8 @@ def fit(
         new_priors = {k: v for k, v in priors[0].items() if k in list(support_domains)}
         total = sum(list(new_priors.values()))
         new_priors = {k: v / total for k, v in new_priors.items()}
-        # hack to update prior tuple
-        priors_list = list(priors)
-        priors_list[0] = new_priors
-        priors = tuple(priors_list)
+        priors[0].clear()
+        priors[0].update(new_priors)
 
     if all("mmlu_stem" not in s for s in metrics.columns) and any("mmlu" in s for s in metrics.columns):
         metrics, metrics_to_index = aggregate_mmlu(metrics, metrics_to_index)
@@ -669,7 +665,7 @@ def fit(
     if len(ratios[ratios.columns[3:]]) > len(ratios):
         raise ValueError("The number of swarm runs is fewer than the number of mixing sources.")
 
-    if len(keep_sources) != 0:
+    if keep_sources:
         old_len = len(ratios)
         other_columns = list(set(ratios.columns[3:]).difference(set(keep_sources)))
         ratios = ratios[
@@ -739,7 +735,7 @@ def fit(
         # If we also want to subsample the training_data to study the effect of number of proxy runs
         logger.info(f"Subsampling training data to {train_split} of original size")
 
-        train_split = [int(t) if t > 1 else t for t in train_split]
+        train_split = tuple(int(t) if t > 1 else t for t in train_split)
 
         if neighborhood is None:
             # we IID subselect training data
@@ -838,7 +834,11 @@ def fit(
     else:
         logger.info(f"Will save regression model to {regression_model_cache_path}")
         for idx, metric in indexed_metrics:
-            predictors.append(build_regression(idx, Y_train, X_train, regression_type, early_stopping, interactions))
+            predictors.append(
+                build_regression(
+                    idx, Y_train, X_train, regression_type, early_stopping, list(interactions) if interactions else None
+                )
+            )
             # save intermediate progress after each regression model
             if regression_type == "log_linear":
                 parameters = {indexed_metrics[i][-1]: predictors[i].model for i in range(len(predictors))}
@@ -919,7 +919,9 @@ def fit(
                     "run": reference_model_run_instance.id,
                     "name": reference_model_run_instance.display_name,
                     "index": 0,
-                    **mk_weights_from_config(reference_model_run_instance.config, priors),
+                    **mk_weights_from_config(
+                        reference_model_run_instance.config, priors, reference_model_run_instance.display_name
+                    ),
                 }
                 reference_ratio_df = pd.DataFrame([reference_run_ratio])
                 reference_ratio = reference_ratio_df[reference_ratio_df.columns[3:]].values
