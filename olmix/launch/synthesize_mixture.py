@@ -873,6 +873,7 @@ def _expand_remote(pattern: str, fs: s3fs.S3FileSystem | gcsfs.GCSFileSystem | N
 
     parsed = urlparse(pattern)
     logger.info(f"Expanding remote glob '{pattern}'...")
+    assert fs is not None
 
     if parsed.scheme == "s3":
         return [f"s3://{obj}" for obj in fs.glob(pattern)]

@@ -1,6 +1,5 @@
 """Tests for ExperimentConfig and related configuration classes."""
 
-
 import pytest
 
 from olmix.aliases import (

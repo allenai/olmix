@@ -19,6 +19,7 @@ def expand_cloud_globs(paths: list[str], fs: s3fs.S3FileSystem | None = None) ->
     if fs is None:
         fs = s3fs.S3FileSystem()
 
+    assert fs is not None
     results = []
     for path in paths:
         if "*" not in path:
