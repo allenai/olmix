@@ -838,9 +838,9 @@ def mk_run_metrics(
         results[group_name] = result
     else:
         if pull_from_dashboard:
-            assert (
-                metric_type == "primary_score"
-            ), "Only primary_score metric type is supported for dashboard evaluation"
+            assert metric_type == "primary_score", (
+                "Only primary_score metric type is supported for dashboard evaluation"
+            )
             for d in dashboard:
                 offline_results = get_offline_evals_from_dashboard(display_name, offline_tasks, dashboard=d)
                 results.update(offline_results)
@@ -1234,9 +1234,9 @@ def save_eval_config(eval_config: dict, output_dir: str, custom_name: str | None
 
 
 def filter_constrained_swarm(final_cookbook_path: Path, run_ratios: list, run_metrics: list) -> tuple[list, list]:
-    assert (
-        final_cookbook_path is not None
-    ), "final_cookbook_path must be set to determine how to construct swarm to be unconstrained."
+    assert final_cookbook_path is not None, (
+        "final_cookbook_path must be set to determine how to construct swarm to be unconstrained."
+    )
 
     with open(final_cookbook_path) as f:
         data = yaml.safe_load(f)
