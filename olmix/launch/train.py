@@ -1,0 +1,245 @@
+#!/usr/bin/env python
+"""Training entry point for olmix experiments on Beaker."""
+
+import ast
+import logging
+import os
+from typing import cast
+
+import click
+from olmo_core.train import prepare_training_environment, teardown_training_environment
+from olmo_core.train.callbacks import ConfigSaverCallback, WandBCallback
+from olmo_core.utils import seed_all
+from torch.distributed.elastic.multiprocessing.errors import record
+
+from olmix.aliases import SourceInstance, TrainType
+from olmix.model.transformer import TransformerConfigBuilder
+
+logger = logging.getLogger(__name__)
+
+
+class PythonLiteralOption(click.Option):
+    """Custom click option to parse python literals."""
+
+    def type_cast_value(self, ctx, value):
+        try:
+            parsed = [item.replace(" ", "").replace("'", "") for item in value]
+            return [ast.literal_eval(item) for item in parsed]
+        except Exception:
+            raise click.BadParameter(value)
+
+
+@click.group()
+def cli():
+    pass
+
+
+@cli.command()
+@click.option(
+    "--chinchilla-multiple",
+    "-x",
+    type=float,
+    help="Chinchilla multiple (trains for 20 * params * N tokens)",
+    required=True,
+)
+@click.option(
+    "--source",
+    "-s",
+    multiple=True,
+    type=str,
+    help="Source datasets in the form of `Tuple[str, List[str], float]`",
+    cls=PythonLiteralOption,
+)
+@click.option(
+    "--run-name",
+    "-n",
+    type=str,
+    help="Name of the run",
+    required=True,
+)
+@click.option(
+    "--seed",
+    "-S",
+    type=int,
+    help="Seed for the experiment",
+)
+@click.option(
+    "--group-id",
+    "-g",
+    type=str,
+    help="Group ID for the experiment",
+)
+@click.option(
+    "--beaker-user",
+    "-u",
+    type=str,
+    help="Beaker user",
+)
+@click.option(
+    "--cluster",
+    "-c",
+    type=str,
+    help="Cluster running the experiment",
+)
+@click.option(
+    "--dtype",
+    "-d",
+    type=str,
+    help="Data type for the dataset",
+)
+@click.option(
+    "--tokenizer",
+    "-T",
+    type=str,
+    help="Tokenizer for the dataset",
+)
+@click.option(
+    "--model-identifier",
+    "-m",
+    type=str,
+    help="Model identifier",
+)
+@click.option(
+    "-w",
+    "--weka",
+    type=bool,
+    default=False,
+    help="Use Weka as root dir",
+)
+@click.option(
+    "-C",
+    "--checkpoint-path",
+    type=str,
+    help="Path to checkpoint",
+)
+@click.option(
+    "-y",
+    "--train-type",
+    type=str,
+    help="Type of training",
+)
+@click.option(
+    "-b",
+    "--device-batch-size",
+    type=int,
+    help="Device batch size",
+)
+@click.option(
+    "-B",
+    "--global-batch-size",
+    type=int,
+    help="Global batch size (includes multiplying by sequence length)",
+    required=False,
+    default=None,
+)
+@click.option(
+    "-e",
+    "--eval-task",
+    "eval_tasks",
+    multiple=True,
+    type=str,
+    help="Eval task names (can be specified multiple times). If not provided, uses DEFAULT_EVAL_TASKS.",
+)
+@click.option(
+    "-E",
+    "--eval-interval",
+    type=int,
+    default=1000,
+    help="Steps between evaluations (default: 1000)",
+)
+@click.option(
+    "--no-eval",
+    is_flag=True,
+    default=False,
+    help="Disable downstream evaluations",
+)
+@record
+def train(
+    run_name: str,
+    chinchilla_multiple: float,
+    source: list[tuple[str, list[str], str, str]],
+    seed: int,
+    group_id: str,
+    beaker_user: str,
+    cluster: str,
+    dtype: str,
+    tokenizer: str,
+    model_identifier: str,
+    weka: bool,
+    train_type: str,
+    device_batch_size: int,
+    checkpoint_path: str | None = None,
+    global_batch_size: int | None = None,
+    eval_tasks: tuple[str, ...] = (),
+    eval_interval: int = 1000,
+    no_eval: bool = False,
+):
+    """Launch a training run with the given parameters."""
+
+    # Rebuild the source instances from the parsed tuples
+    sources: list[SourceInstance] = []
+    for item in source:
+        name, paths, ratio, repetition = item
+        sources.append(SourceInstance(name=name, paths=paths, ratio=float(ratio), repetition_factor=float(repetition)))
+
+    if checkpoint_path:
+        checkpoint_path = checkpoint_path.strip()
+
+        if not os.path.exists(checkpoint_path):
+            raise FileNotFoundError(f"Checkpoint path {checkpoint_path} does not exist.")
+
+    # Determine eval tasks:
+    # - no_eval=True -> empty list disables eval
+    # - eval_tasks provided -> use those
+    # - neither -> None uses DEFAULT_EVAL_TASKS in TransformerConfigBuilder
+    resolved_eval_tasks: list[str] | None
+    if no_eval:
+        resolved_eval_tasks = []  # Empty list disables eval
+    elif eval_tasks:
+        resolved_eval_tasks = list(eval_tasks)  # Use provided tasks
+    else:
+        resolved_eval_tasks = None  # None uses DEFAULT_EVAL_TASKS
+
+    config = TransformerConfigBuilder(
+        beaker_user=beaker_user.strip(),
+        cluster=cluster,
+        group_id=group_id.strip(),
+        run_name=run_name.strip(),
+        chinchilla_multiple=chinchilla_multiple,
+        sources=sources,
+        seed=seed,
+        dtype=dtype.strip(),
+        tokenizer=tokenizer.strip(),
+        model_identifier=model_identifier.strip(),
+        weka=weka,
+        load_path=checkpoint_path,
+        train_type=TrainType[train_type.strip()],
+        device_batch_size=device_batch_size,
+        global_batch_size=global_batch_size,
+        eval_tasks=resolved_eval_tasks,
+        eval_interval=eval_interval,
+    ).build()
+    dataset = config.dataset.build()
+
+    seed_all(config.init_seed)
+    model = config.model.build(init_device="meta")
+    train_module = config.train_module.build(model)
+    data_loader = config.data_loader.build(dataset, dp_process_group=train_module.dp_process_group)
+    trainer = config.trainer.build(train_module, data_loader)
+    config_dict = config.as_config_dict()
+    cast(WandBCallback, trainer.callbacks["wandb"]).config = config_dict
+    cast(ConfigSaverCallback, trainer.callbacks["config_saver"]).config = config_dict
+
+    logger.info(f"Trainer max steps: {trainer.max_steps}")
+    logger.info(f"Trainer max duration: {trainer.max_duration}")
+    logger.info(f"Trainer max tokens: {trainer.max_tokens}")
+
+    trainer.fit()
+
+
+if __name__ == "__main__":
+    try:
+        prepare_training_environment()
+        cli()
+    finally:
+        teardown_training_environment()

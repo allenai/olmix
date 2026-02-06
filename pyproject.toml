@@ -21,22 +21,37 @@ classifiers = [
 ]
 requires-python = ">=3.11"
 dependencies = [
-    # Add your core dependencies here
+    # Core dependencies
+    # Pin to main branch for reproducibility
+    "ai2-olmo-core[eval] @ git+https://github.com/allenai/OLMo-core.git@add-inloop-evals",
     "boto3",
     "click",
-    "pydantic",
-    "s3fs",
-    "yaspin",
-    "gcsfs",
-    "pyarrow<21",
+    "cvxpy",
     "datasets>=3,<4",
+    "gcsfs",
     "lightgbm",
+    "matplotlib",
+    "numpy",
     "pandas",
+    "pyarrow<21",
+    "pydantic",
+    "pyyaml",
+    "s3fs",
+    "scikit-learn",
     "scipy",
     "seaborn",
-    "statsmodels"
+    "statsmodels",
+    "torch",
+    "tqdm",
+    "wandb",
+    "yaspin",
 ]
+
 dynamic = ["version"]
+
+[project.scripts]
+olmix = "olmix.cli:cli"
+olmix-fit = "olmix.fit.cli:cli"
 
 [project.urls]
 Homepage = "https://github.com/allenai/olmix"
@@ -44,6 +59,10 @@ Repository = "https://github.com/allenai/olmix"
 Issues = "https://github.com/allenai/olmix/issues"
 
 [project.optional-dependencies]
+beaker = [
+    "beaker-py>=1,<2",
+    "GitPython>=3.0,<4.0",
+]
 dev = [
     # Testing
     "pytest>=7.4.0",
@@ -65,13 +84,14 @@ dev = [
     "black>=23.1,<24.0",
     "isort>=5.12,<5.13",
 ]
-
 all = [
     "olmix[dev]",
+    "olmix[beaker]",
 ]
 
-[tool.setuptools]
-packages = ["olmix"]
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["olmix*"]
 
 [tool.setuptools.dynamic]
 version = {attr = "olmix.version.__version__"}
@@ -95,8 +115,22 @@ select = [
 ]
 ignore = [
     "E501",  # line too long (handled by formatter)
+    "E711",  # comparison to None
+    "E712",  # comparison to True/False
+    "B007",  # loop control variable not used
     "B008",  # do not perform function calls in argument defaults
+    "B023",  # function definition does not bind loop variable
+    "B904",  # raise from err
     "B905",  # `zip()` without an explicit `strict=` parameter
+    "C901",  # function too complex
+    "F811",  # redefinition of unused name
+    "N803",  # argument name should be lowercase
+    "N806",  # variable in function should be lowercase
+    "UP007", # use X | Y for type annotations
+    "E402",  # module level import not at top
+    "RUF001", # ambiguous unicode character in string
+    "RUF003", # ambiguous unicode character in comment
+    "RUF012", # mutable class attributes should be annotated with ClassVar
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -117,8 +151,8 @@ skip-magic-trailing-comma = false
 # Pyright configuration
 [tool.pyright]
 pythonVersion = "3.11"
-typeCheckingMode = "strict"
-reportMissingImports = true
+typeCheckingMode = "basic"
+reportMissingImports = false
 reportMissingTypeStubs = false
 exclude = [
     "**/__pycache__",

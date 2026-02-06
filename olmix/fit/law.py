@@ -3,15 +3,16 @@ Code adapted from https://github.com/yegcjs/mixinglaws.
 """
 
 # import multiprocessing as mp
-import multiprocessing as mp
-import torch
-from functools import partial
 import logging
+import multiprocessing as mp
+from functools import partial
+
 import numpy as np
+import torch
 from tqdm import tqdm
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
-import time
 
 try:
     mp.set_start_method("fork")
@@ -41,6 +42,7 @@ def fit_scaling_laws(func, valid_split, x, y, max_step, eps, delta, init_param, 
             train_x, eval_x = x[:-valid_split], x[-valid_split:]
             train_y, eval_y = y[:-valid_split], y[-valid_split:]
         optimizer = torch.optim.LBFGS([param], lr=0.01, history_size=10, max_iter=20, line_search_fn="strong_wolfe")
+
         # optimizer = torch.optim.AdamW([param], lr=1e-3)
         def closure():
             optimizer.zero_grad()
@@ -48,17 +50,17 @@ def fit_scaling_laws(func, valid_split, x, y, max_step, eps, delta, init_param, 
             loss = torch.nn.functional.huber_loss(train_y, prediction, delta=delta, reduction="sum")
             loss.backward()
             return loss
-        
+
         min_loss, best_param = 1e10, None
         best_step = 0
         for i in range(max_step):
-            loss = float(optimizer.step(closure))
-            # prediction = func(train_x, param) 
+            float(optimizer.step(closure))
+            # prediction = func(train_x, param)
             # train_r2 = calculate_r_squared(train_y, prediction)
             with torch.no_grad():
-                if len(eval_x) > 1:   
+                if len(eval_x) > 1:
                     eval_prediction = func(eval_x, param, B_mask=B_mask)
-                    eval_loss = torch.nn.functional.huber_loss(eval_prediction, eval_y, delta=delta).item() 
+                    eval_loss = torch.nn.functional.huber_loss(eval_prediction, eval_y, delta=delta).item()
                     # eval_r2 = calculate_r_squared(eval_y, eval_prediction)
                     # eval_loss = -eval_r2
                 elif len(eval_x) == 1:
@@ -66,7 +68,7 @@ def fit_scaling_laws(func, valid_split, x, y, max_step, eps, delta, init_param, 
                     eval_loss = torch.nn.functional.mse_loss(eval_prediction, eval_y).item()
                 else:
                     eval_prediction = func(train_x, param, B_mask=B_mask)
-                    eval_loss = torch.nn.functional.huber_loss(eval_prediction, train_y, delta=delta).item() 
+                    eval_loss = torch.nn.functional.huber_loss(eval_prediction, train_y, delta=delta).item()
                     # eval_loss = -calculate_r_squared(train_y, eval_prediction)
                     # eval_loss = -eval_r2
             improvement = abs(eval_loss - min_loss)
@@ -75,7 +77,7 @@ def fit_scaling_laws(func, valid_split, x, y, max_step, eps, delta, init_param, 
                 best_param = param.detach().clone()
                 best_step = i
             if improvement < eps:
-                #logger.info(f"step: {i}, eval_loss = {eval_loss}, diff = {improvement}")
+                # logger.info(f"step: {i}, eval_loss = {eval_loss}, diff = {improvement}")
                 break
 
         if best_param is None:
@@ -87,20 +89,17 @@ def fit_scaling_laws(func, valid_split, x, y, max_step, eps, delta, init_param, 
 
     except Exception as e:
         import traceback
+
         print("Exception in fit_scaling_laws:", flush=True)
         traceback.print_exc()
         raise e  # Reraise to crash cleanly
-
-
-
-
 
 
 class ScalingLaw:
     def __init__(self, func):
         self.func = func
         self.params = None
-        
+
     def fit(self, x, y, init_params, B_mask=None, max_step=20, eps=0.0, workers=-1, valid_split=0, delta=0.01):
         if workers == -1:
             workers = min(4, mp.cpu_count())
@@ -108,36 +107,37 @@ class ScalingLaw:
         minloss, optimal_param = 1e10, None
         _fit = partial(fit_scaling_laws, self.func, valid_split, x, y, max_step, eps, delta, B_mask=B_mask)
         if workers != 1:
-            best_step = 0
             with mp.Pool(workers, maxtasksperchild=20) as p:
-                for loss, param, step in tqdm(p.imap_unordered(_fit, init_params, chunksize=2), total=len(init_params)):
+                for loss, param, _step in tqdm(
+                    p.imap_unordered(_fit, init_params, chunksize=2), total=len(init_params)
+                ):
                     if loss < minloss:
                         minloss = loss
                         optimal_param = param
-                        best_step = step
         else:
             for init_param in tqdm(init_params):
-                loss, param, step = _fit(init_param)
+                loss, param, _step = _fit(init_param)
                 # print(param)
                 if loss < minloss:
                     minloss = loss
-                    optimal_param = param 
+                    optimal_param = param
         self.params = optimal_param.tolist()
         print(f"min loss: {minloss}")
         return self.params
-    
+
 
 def fit_multi_obj_scaling_laws(funcs, valid_split, x, ys, max_step, eps, delta, loss_type, init_param):
     # requirements: each function in funcs must take in the same init_param. This may mean that some init_params are not used in all funcs.
     param = torch.nn.Parameter(init_param)
     x, ys = torch.tensor(x).to(param), torch.tensor(ys).to(param)
     if valid_split == 0:
-        train_x, eval_x = x, x[:0]
-        train_y, eval_y = ys, ys[:0]
+        train_x, _eval_x = x, x[:0]
+        train_y, _eval_y = ys, ys[:0]
     else:
-        train_x, eval_x = x[:-valid_split], x[-valid_split:]
-        train_y, eval_y = ys[:-valid_split], ys[-valid_split:]
+        train_x, _eval_x = x[:-valid_split], x[-valid_split:]
+        train_y, _eval_y = ys[:-valid_split], ys[-valid_split:]
     optimizer = torch.optim.LBFGS([param], lr=0.01, history_size=10, max_iter=20, line_search_fn="strong_wolfe")
+
     # optimizer = torch.optim.AdamW([param], lr=1e-3)
     def closure():
         optimizer.zero_grad()
@@ -151,12 +151,12 @@ def fit_multi_obj_scaling_laws(funcs, valid_split, x, ys, max_step, eps, delta, 
                 loss += torch.nn.functional.mse_loss(y, prediction, reduction="sum")
         loss.backward()
         return loss
-    
+
     min_loss, best_param = 1e10, None
     best_step = 0
     for _ in range(max_step):
-        loss = optimizer.step(closure).item()
-        # prediction = func(train_x, param) 
+        optimizer.step(closure).item()
+        # prediction = func(train_x, param)
         # train_r2 = calculate_r_squared(train_y, prediction)
         with torch.no_grad():
             eval_loss = 0
@@ -167,18 +167,18 @@ def fit_multi_obj_scaling_laws(funcs, valid_split, x, ys, max_step, eps, delta, 
                 elif loss_type == "mse":
                     eval_loss += torch.nn.functional.mse_loss(y, eval_prediction, reduction="sum").item()
 
-                #eval_loss += torch.nn.functional.huber_loss(eval_prediction, y, delta=delta).item() 
+                # eval_loss += torch.nn.functional.huber_loss(eval_prediction, y, delta=delta).item()
                 # eval_loss = -calculate_r_squared(train_y, eval_prediction)
                 # eval_loss = -eval_r2
-        if eval_loss <= min_loss: # FIXME
+        if eval_loss <= min_loss:  # FIXME
             min_loss = eval_loss
             best_param = param.detach().clone()
             best_step = _
         # print(loss)
         if np.abs(min_loss - eval_loss) < eps:
-            assert False
+            raise AssertionError()
             break
-    #print(f"min_loss: {min_loss}, best param: {best_param} , init: {init_param}")
+    # print(f"min_loss: {min_loss}, best param: {best_param} , init: {init_param}")
 
     return min_loss, best_param, best_step
 
@@ -187,7 +187,7 @@ class MultiObjScalingLaw:
     def __init__(self, funcs):
         self.funcs = funcs
         self.params = None
-        
+
     def fit(self, x, ys, init_params, max_step=20, eps=0, workers=-1, valid_split=0, delta=0.01, loss_type="huber"):
         if workers == -1:
             workers = mp.cpu_count()
@@ -196,23 +196,21 @@ class MultiObjScalingLaw:
         _fit = partial(fit_multi_obj_scaling_laws, self.funcs, valid_split, x, ys, max_step, eps, delta, loss_type)
         print(f"workers: {workers}")
         if workers != 1:
-            best_step = 0
             with mp.Pool(workers) as p:
-                for loss, param, step in tqdm(p.imap_unordered(_fit, init_params, chunksize=2), total=len(init_params)):
+                for loss, param, _step in tqdm(
+                    p.imap_unordered(_fit, init_params, chunksize=2), total=len(init_params)
+                ):
                     if loss < minloss:
                         minloss = loss
                         optimal_param = param
-                        best_step = step
         else:
             for init_param in tqdm(init_params):
-                loss, param, step = _fit(init_param)
+                loss, param, _step = _fit(init_param)
                 # print(param)
                 if loss < minloss:
                     minloss = loss
-                    optimal_param = param 
+                    optimal_param = param
         self.params = optimal_param.tolist()
         print(f"min loss: {minloss}")
         print(f"optimal_param: {optimal_param}")
         return self.params
-
-
