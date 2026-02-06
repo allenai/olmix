@@ -1,4 +1,4 @@
-from enum import Enum
+from enum import Enum, StrEnum
 from os import PathLike
 from pathlib import Path
 from typing import Any, Union
@@ -65,7 +65,7 @@ def get_model_num_params(proxy_model_id: str) -> int:
     return MODEL_NUM_PARAMS[proxy_model_id]
 
 
-class Priority(str, Enum):
+class Priority(StrEnum):
     """Beaker job priority levels."""
 
     low = "low"
