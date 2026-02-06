@@ -285,6 +285,7 @@ def generate_weights_dirichlet(
                                 for q in sorted(topic.quality, key=lambda x: x.name)
                             ]
                             total_quality_weight = sum(quality_weights)
+                            assert topic.weight is not None
                             for qw in quality_weights:
                                 unit_weights.append(
                                     topic.weight * (qw / total_quality_weight) if total_quality_weight > 0 else 0
@@ -296,6 +297,7 @@ def generate_weights_dirichlet(
                                 for q in sorted(topic.quality, key=lambda x: x.name)
                             ]
                             total_quality_tokens = sum(quality_tokens)
+                            assert topic.weight is not None
                             for qt in quality_tokens:
                                 unit_weights.append(
                                     topic.weight * (qt / total_quality_tokens) if total_quality_tokens > 0 else 0
@@ -308,8 +310,9 @@ def generate_weights_dirichlet(
 
     sample_multiplier = sample_multiplier if sample_multiplier else ConfigDefaults.sample_multiplier
 
+    fixed_source_weights_list: list[float] | None = None
     if fixed_source_weights is not None:
-        fixed_source_weights = [
+        fixed_source_weights_list = [
             fixed_source_weights[source_config.name] for source_config in sorted(sources, key=lambda x: x.name)
         ]
 
@@ -323,16 +326,16 @@ def generate_weights_dirichlet(
 
         # first, generate source-level weights
         if min_source_strength == max_source_strength:
-            if fixed_source_weights is not None:
+            if fixed_source_weights_list is not None:
                 # if we have fixed source weights, we use those
-                source_samples = np.array([fixed_source_weights])
+                source_samples = np.array([fixed_source_weights_list])
             else:
                 source_samples = np.random.dirichlet(source_prior * min_source_strength, 1)
         else:
             source_samples = []
-            if fixed_source_weights is not None:
+            if fixed_source_weights_list is not None:
                 for _ in range(15):
-                    source_samples.append(np.array([fixed_source_weights]))
+                    source_samples.append(np.array([fixed_source_weights_list]))
             else:
                 min_source_strength_log = np.log10(min_source_strength)
                 max_source_strength_log = np.log10(max_source_strength)
@@ -673,6 +676,7 @@ def calculate_priors(
     source_configs = leaf_configs
 
     for source in source_configs:
+        assert source.paths is not None
         schemes = {urlparse(path).scheme for path in source.paths}
 
         # Check for mixed schemes within a source
@@ -690,6 +694,7 @@ def calculate_priors(
     # Multithreaded token counting at leaf level
     with concurrent.futures.ThreadPoolExecutor(max_workers=64) as executor:
         for source in source_configs:
+            assert source.paths is not None
             scheme = next(iter({urlparse(path).scheme for path in source.paths}), "local")
             fs = filesystems.get(scheme)
 
@@ -700,6 +705,7 @@ def calculate_priors(
         futures = {
             executor.submit(_count_tokens_for_file, path, dtype): source
             for source in source_configs
+            if source.paths is not None
             for path in source.paths
         }
 

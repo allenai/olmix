@@ -185,5 +185,5 @@ def mk_launch_configs(group: ExperimentGroup, beaker_user: str) -> list[BeakerLa
 
 def get_beaker_username() -> str:
     """Get the current Beaker username."""
-    beaker = Beaker.from_env()
+    beaker = Beaker.from_env()  # type: ignore[attr-defined]
     return beaker.account.whoami().name

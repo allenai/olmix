@@ -123,7 +123,7 @@ def plot_correlation(
     X_train: np.ndarray,
     index: int,
     predictors: list["Regressor"],
-    train_split: tuple[float],
+    train_split: tuple[float, ...],
     n_test: int,
     split_seed: int,
     n_samples: int,

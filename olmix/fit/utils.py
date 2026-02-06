@@ -1070,12 +1070,12 @@ def mk_weights_from_config(config: dict, priors: tuple, display_name: str, patch
 
 
 def solve_log_linear(
-    predictor: list[Regressor],
+    predictor: list[Any],
     prior_distributions: np.ndarray,
     df_config: pd.DataFrame,
     metric_name: str,
     regression_type: str,
-    train_split: float,
+    train_split: tuple[float, ...],
     n_test: int,
     split_seed: int,
     n_samples: int,
@@ -1327,6 +1327,7 @@ def calculate_priors_with_manual(
                     value = getattr(topic, "weight", None)
                     if value is None:
                         value = getattr(topic, "target_ratio", None)
+                    assert value is not None
                     priors[0][f"{source_config.name}:{topic.name}"] = value * source_weight
 
     original_prior = deepcopy(priors)

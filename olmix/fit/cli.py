@@ -337,7 +337,7 @@ def fit(
     no_cache: bool,
     use_entropy: bool,
     regression_type: str,
-    train_split: tuple[float],
+    train_split: tuple[float, ...],
     n_test: int,
     seed: int,
     opt_avg_metric: bool,
@@ -736,6 +736,7 @@ def fit(
         logger.info(f"Subsampling training data to {train_split} of original size")
 
         train_split = tuple(int(t) if t > 1 else t for t in train_split)
+        assert len(train_split) > 0
 
         if neighborhood is None:
             # we IID subselect training data
@@ -1143,4 +1144,4 @@ def fit(
 
 
 if __name__ == "main":
-    cli(obj={})
+    cli()

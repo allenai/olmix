@@ -85,6 +85,7 @@ def fit_scaling_laws(func, valid_split, x, y, max_step, eps, delta, init_param, 
             print(eval_prediction)
             print(train_x, param)
 
+        assert best_param is not None
         return min_loss, best_param.detach().cpu().numpy(), best_step
 
     except Exception as e:
@@ -121,6 +122,7 @@ class ScalingLaw:
                 if loss < minloss:
                     minloss = loss
                     optimal_param = param
+        assert optimal_param is not None
         self.params = optimal_param.tolist()
         print(f"min loss: {minloss}")
         return self.params
@@ -141,14 +143,14 @@ def fit_multi_obj_scaling_laws(funcs, valid_split, x, ys, max_step, eps, delta, 
     # optimizer = torch.optim.AdamW([param], lr=1e-3)
     def closure():
         optimizer.zero_grad()
-        loss = 0
+        loss = torch.tensor(0.0)
         for func, y in zip(funcs, train_y):
             prediction = func(train_x, param)
 
             if loss_type == "huber":
-                loss += torch.nn.functional.huber_loss(y, prediction, delta=delta, reduction="sum")
+                loss = loss + torch.nn.functional.huber_loss(y, prediction, delta=delta, reduction="sum")
             elif loss_type == "mse":
-                loss += torch.nn.functional.mse_loss(y, prediction, reduction="sum")
+                loss = loss + torch.nn.functional.mse_loss(y, prediction, reduction="sum")
         loss.backward()
         return loss
 
@@ -210,6 +212,7 @@ class MultiObjScalingLaw:
                 if loss < minloss:
                     minloss = loss
                     optimal_param = param
+        assert optimal_param is not None
         self.params = optimal_param.tolist()
         print(f"min loss: {minloss}")
         print(f"optimal_param: {optimal_param}")
