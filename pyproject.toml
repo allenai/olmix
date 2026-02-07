@@ -51,7 +51,7 @@ dynamic = ["version"]
 
 [project.scripts]
 olmix = "olmix.cli:cli"
-olmix-fit = "olmix.fit.cli:cli"
+olmix-fit = "olmix.fit.cli:fit"
 
 [project.urls]
 Homepage = "https://github.com/allenai/olmix"

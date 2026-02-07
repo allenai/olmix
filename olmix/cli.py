@@ -395,9 +395,9 @@ def launch_preview(config: Path):
 # ============================================================================
 
 try:
-    from olmix.fit import cli as fit_module
+    from olmix.fit.cli import fit as fit_command
 
-    cli.add_command(fit_module.cli, name="fit")
+    cli.add_command(fit_command, name="fit")
 except ImportError:
     # fit module not available (missing optional dependencies)
     pass

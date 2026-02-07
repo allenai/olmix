@@ -79,9 +79,9 @@ class TestFitCLI:
 
     def test_fit_cli_help(self, runner):
         """Test fit CLI shows help."""
-        from olmix.fit.cli import cli
+        from olmix.fit.cli import fit
 
-        result = runner.invoke(cli, ["--help"])
+        result = runner.invoke(fit, ["--help"])
         assert result.exit_code == 0
 
 

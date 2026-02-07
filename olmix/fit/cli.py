@@ -16,7 +16,6 @@ import numpy as np
 import pandas as pd
 import wandb
 import yaml
-from olmo_core.utils import prepare_cli_environment
 from sklearn.model_selection import train_test_split
 
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -55,12 +54,7 @@ BASE_CACHE_DIR = "cache/"
 DEFAULT_WORKSPACE = "ai2-llm/regmixer"
 
 
-@click.group()
-def cli():
-    prepare_cli_environment()
-
-
-@cli.command()
+@click.command()
 @click.option(
     "--experiment-groups",
     "-g",
@@ -1141,7 +1135,3 @@ def fit(
             plt.close()
 
     logger.info(f"Results saved to {output_dir}")
-
-
-if __name__ == "main":
-    cli()
