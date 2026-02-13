@@ -19,7 +19,7 @@ uv pip install -e ".[dev]"
 
 ## Part 1: Fitting from CSV data
 
-The fastest way to use olmix is to bring your own swarm results as CSV files. This section explains how to run regression fitting and mixture optimization.
+The easiest way to use Olmix is to bring your own swarm results as CSV files. Our swarms are available on [Huggingface](https://huggingface.co/datasets/allenai/olmix). This section explains how to run regression fitting and mixture optimization.
 
 ### Input format
 
