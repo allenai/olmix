@@ -260,7 +260,7 @@ def launch_run(config: Path, mixture_file: Path | None, dry_run: bool, no_cache:
         try:
             if dry_run:
                 logger.info("Dry run mode enabled. Running dry-run for each experiment...")
-                torchrun = experiment_config.gpus > 1
+                torchrun = experiment_config.infra.gpus > 1
                 for lc in launch_configs:
                     logger.info(f"Dry run for {lc.name}:")
                     lc.dry_run(torchrun=torchrun)
@@ -277,7 +277,7 @@ def launch_run(config: Path, mixture_file: Path | None, dry_run: bool, no_cache:
                 return
 
             results = []
-            torchrun = experiment_config.gpus > 1
+            torchrun = experiment_config.infra.gpus > 1
             for lc in tqdm(launch_configs, desc="Launching experiments"):
                 results.append(lc.launch(torchrun=torchrun))
 
@@ -325,7 +325,7 @@ def launch_status(config: Path, group_id: str):
     beaker = Beaker.from_env()
     client = JobClient(beaker=beaker)
     exp_config = config_from_path(config)
-    cluster = beaker.cluster.get(exp_config.cluster)
+    cluster = beaker.cluster.get(exp_config.infra.cluster)
     jobs = client.list(cluster=cluster)
 
     statuses = [
@@ -361,7 +361,7 @@ def launch_cancel(config: Path, group_id: str):
     beaker = Beaker.from_env()
     client = JobClient(beaker=beaker)
     exp_config = config_from_path(config)
-    cluster = beaker.cluster.get(exp_config.cluster)
+    cluster = beaker.cluster.get(exp_config.infra.cluster)
     jobs = [
         {"id": job.id, "display_name": job.display_name, "status": job.status}
         for job in client.list(cluster=cluster)

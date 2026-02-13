@@ -32,7 +32,7 @@ def mk_experiments(
     return [
         ExperimentInstance(
             name=f"{config.name}-{group_uuid}-{idx:04}",
-            sources=mk_source_instances(config.sources, mix),
+            sources=mk_source_instances(config.data.sources, mix),
         )
         for idx, mix in enumerate(mixes)
     ]
@@ -86,31 +86,31 @@ def mk_instance_cmd(
         "train",
         f"-n {instance.name}",
         f"-g {group_id}",
-        f"-x {config.chinchilla_multiple}",
-        f"-S {config.seed}",
-        f"-c {config.cluster}",
+        f"-x {config.training.chinchilla_multiple}",
+        f"-S {config.training.seed}",
+        f"-c {config.infra.cluster}",
         f"-u {beaker_user}",
-        f"-d {config.dtype.value}",
-        f"-T {config.tokenizer}",
-        f"-m {config.proxy_model_id}",
-        f"-w {config.weka}",
-        f"-y {config.train_type.value}",
-        f"-b {config.device_batch_size}",
+        f"-d {config.data.dtype.value}",
+        f"-T {config.training.tokenizer}",
+        f"-m {config.training.proxy_model_id}",
+        f"-w {config.infra.weka}",
+        f"-y {config.training.train_type.value}",
+        f"-b {config.training.device_batch_size}",
     ]
 
-    if config.global_batch_size:
-        cmd_list.append(f"-B {config.global_batch_size}")
+    if config.training.global_batch_size:
+        cmd_list.append(f"-B {config.training.global_batch_size}")
 
-    if config.checkpoint_path:
-        cmd_list.append(f"-C {config.checkpoint_path}")
+    if config.training.checkpoint_path:
+        cmd_list.append(f"-C {config.training.checkpoint_path}")
 
     # In-loop evaluation settings
-    if config.no_eval:
+    if config.training.no_eval:
         cmd_list.append("--no-eval")
     else:
-        cmd_list.append(f"-E {config.eval_interval}")
-        if config.eval_tasks:
-            for task in config.eval_tasks:
+        cmd_list.append(f"-E {config.training.eval_interval}")
+        if config.training.eval_tasks:
+            for task in config.training.eval_tasks:
                 cmd_list.append(f'-e "{task}"')
 
     cmd_list.extend(sources)
@@ -130,16 +130,16 @@ def mk_launch_configs(group: ExperimentGroup, beaker_user: str) -> list[BeakerLa
         List of BeakerLaunchConfig objects ready for submission
     """
     weka_buckets: list[BeakerWekaBucket] = []
-    if group.config.weka:
+    if group.config.infra.weka:
         weka_buckets.append(BeakerWekaBucket("oe-training-default", "/weka/oe-training-default"))
 
     # Build environment variables
     env_vars: list[BeakerEnvVar] = []
 
-    if group.config.wandb_debug:
+    if group.config.infra.wandb_debug:
         env_vars.append(BeakerEnvVar(name="WANDB_DEBUG", value="true"))
 
-    if group.config.gpus == 1:
+    if group.config.infra.gpus == 1:
         # Single-process environment variables
         env_vars.extend(
             [
@@ -157,17 +157,17 @@ def mk_launch_configs(group: ExperimentGroup, beaker_user: str) -> list[BeakerLa
             description=group.config.description,
             task_name=experiment.name,
             cmd=mk_instance_cmd(experiment, group.config, group.group_id, beaker_user),
-            clusters=[group.config.cluster],
-            num_nodes=group.config.nodes,
-            num_gpus=group.config.gpus,
-            shared_filesystem=group.config.weka,
+            clusters=[group.config.infra.cluster],
+            num_nodes=group.config.infra.nodes,
+            num_gpus=group.config.infra.gpus,
+            shared_filesystem=group.config.infra.weka,
             allow_dirty=True,
             weka_buckets=weka_buckets,
-            budget=group.config.budget or "ai2/oe-data",
-            workspace=group.config.workspace,
-            preemptible=group.config.preemptible,
+            budget=group.config.infra.budget or "ai2/oe-data",
+            workspace=group.config.infra.workspace,
+            preemptible=group.config.infra.preemptible,
             beaker_image="petew/olmo-core-tch270cu128-v2.1",
-            priority=group.config.priority.value,
+            priority=group.config.infra.priority.value,
             env_vars=env_vars,
             env_secrets=[
                 BeakerEnvSecret(name="BEAKER_TOKEN", secret=f"{beaker_user}_BEAKER_TOKEN"),

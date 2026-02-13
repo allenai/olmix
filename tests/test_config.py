@@ -4,14 +4,18 @@ import pytest
 
 from olmix.aliases import (
     TOKENS_PER_PARAM,
+    DataConfig,
     ExperimentConfig,
     ExperimentGroup,
     ExperimentInstance,
+    InfraConfig,
     InstanceFilterConfig,
     Priority,
     SourceConfig,
     SourceInstance,
+    SwarmConfig,
     TopicConfig,
+    TrainingConfig,
     TrainType,
     compute_max_tokens,
     config_from_path,
@@ -78,20 +82,29 @@ class TestExperimentConfig:
         return {
             "name": "test-swarm",
             "description": "Test experiment",
-            "budget": "ai2/oe-data",
-            "workspace": "ai2/dolma2",
-            "nodes": 1,
-            "gpus": 8,
-            "variants": 64,
-            "chinchilla_multiple": 1.0,
-            "seed": 42,
-            "cluster": "ai2/saturn-cirrascale",
-            "tokenizer": "gpt_neox",
-            "proxy_model_id": "olmo2_30m",
-            "sources": [
-                {"name": "wikipedia", "paths": ["s3://bucket/wiki/**/*.npy"]},
-                {"name": "dclm", "paths": ["s3://bucket/dclm/**/*.npy"]},
-            ],
+            "infra": {
+                "budget": "ai2/oe-data",
+                "workspace": "ai2/dolma2",
+                "cluster": "ai2/saturn-cirrascale",
+                "nodes": 1,
+                "gpus": 8,
+            },
+            "training": {
+                "proxy_model_id": "olmo2_30m",
+                "tokenizer": "gpt_neox",
+                "chinchilla_multiple": 1.0,
+                "seed": 42,
+            },
+            "data": {
+                "sources": [
+                    {"name": "wikipedia", "paths": ["s3://bucket/wiki/**/*.npy"]},
+                    {"name": "dclm", "paths": ["s3://bucket/dclm/**/*.npy"]},
+                ],
+            },
+            "swarm": {
+                "seed": 42,
+                "variants": 64,
+            },
         }
 
     def test_valid_config_parses(self, sample_config_dict):
@@ -99,19 +112,19 @@ class TestExperimentConfig:
         config = ExperimentConfig(**sample_config_dict)
 
         assert config.name == "test-swarm"
-        assert config.variants == 64
-        assert len(config.sources) == 2
-        assert config.chinchilla_multiple == 1.0
+        assert config.swarm.variants == 64
+        assert len(config.data.sources) == 2
+        assert config.training.chinchilla_multiple == 1.0
 
     def test_config_defaults(self, sample_config_dict):
         """Test default values are set correctly."""
         config = ExperimentConfig(**sample_config_dict)
 
-        assert config.priority == Priority.normal
-        assert config.train_type == TrainType.pretrain
-        assert config.preemptible is True
-        assert config.weka is False
-        assert config.mix_temperature == 1.0
+        assert config.infra.priority == Priority.normal
+        assert config.training.train_type == TrainType.pretrain
+        assert config.infra.preemptible is True
+        assert config.infra.weka is False
+        assert config.swarm.mix_temperature == 1.0
 
     def test_config_from_yaml(self, sample_config_dict, tmp_path):
         """Test loading config from YAML file."""
@@ -124,7 +137,7 @@ class TestExperimentConfig:
         config = ExperimentConfig.from_yaml(config_file)
 
         assert config.name == "test-swarm"
-        assert len(config.sources) == 2
+        assert len(config.data.sources) == 2
 
     def test_config_from_path_helper(self, sample_config_dict, tmp_path):
         """Test config_from_path helper function."""
@@ -176,19 +189,28 @@ class TestExperimentGroup:
         return ExperimentConfig(
             name="test-swarm",
             description="Test",
-            budget="ai2/oe-data",
-            workspace="ai2/dolma2",
-            nodes=1,
-            gpus=8,
-            variants=2,
-            chinchilla_multiple=1.0,
-            seed=42,
-            cluster="ai2/saturn-cirrascale",
-            tokenizer="gpt_neox",
-            proxy_model_id="olmo2_30m",
-            sources=[
-                SourceConfig(name="wiki", paths=["s3://bucket/wiki/*.npy"]),
-            ],
+            infra=InfraConfig(
+                budget="ai2/oe-data",
+                workspace="ai2/dolma2",
+                cluster="ai2/saturn-cirrascale",
+                nodes=1,
+                gpus=8,
+            ),
+            training=TrainingConfig(
+                proxy_model_id="olmo2_30m",
+                tokenizer="gpt_neox",
+                chinchilla_multiple=1.0,
+                seed=42,
+            ),
+            data=DataConfig(
+                sources=[
+                    SourceConfig(name="wiki", paths=["s3://bucket/wiki/*.npy"]),
+                ],
+            ),
+            swarm=SwarmConfig(
+                seed=42,
+                variants=2,
+            ),
         )
 
     def test_experiment_group(self, sample_config):
@@ -251,41 +273,37 @@ class TestExperimentConfigChinchilla:
         """Test get_max_tokens method."""
         config = ExperimentConfig(
             name="test",
-            budget="test",
-            workspace="test",
-            nodes=1,
-            gpus=1,
-            variants=1,
-            chinchilla_multiple=1.0,
-            seed=42,
-            cluster="test",
-            tokenizer="dolma2",
-            proxy_model_id="olmo2_30m",
-            sources=[SourceConfig(name="wiki", paths=["test.npy"])],
+            infra=InfraConfig(budget="test", workspace="test", cluster="test"),
+            training=TrainingConfig(
+                proxy_model_id="olmo2_30m",
+                tokenizer="dolma2",
+                chinchilla_multiple=1.0,
+                seed=42,
+            ),
+            data=DataConfig(sources=[SourceConfig(name="wiki", paths=["test.npy"])]),
+            swarm=SwarmConfig(seed=42, variants=1),
         )
 
         # 1xC with 30M params = 600M tokens
-        assert config.get_max_tokens() == 600_000_000
+        assert config.training.get_max_tokens() == 600_000_000
 
     def test_get_max_tokens_5x(self):
         """Test get_max_tokens with 5x Chinchilla multiple."""
         config = ExperimentConfig(
             name="test",
-            budget="test",
-            workspace="test",
-            nodes=1,
-            gpus=1,
-            variants=1,
-            chinchilla_multiple=5.0,
-            seed=42,
-            cluster="test",
-            tokenizer="dolma2",
-            proxy_model_id="olmo2_30m",
-            sources=[SourceConfig(name="wiki", paths=["test.npy"])],
+            infra=InfraConfig(budget="test", workspace="test", cluster="test"),
+            training=TrainingConfig(
+                proxy_model_id="olmo2_30m",
+                tokenizer="dolma2",
+                chinchilla_multiple=5.0,
+                seed=42,
+            ),
+            data=DataConfig(sources=[SourceConfig(name="wiki", paths=["test.npy"])]),
+            swarm=SwarmConfig(seed=42, variants=1),
         )
 
         # 5xC with 30M params = 3B tokens
-        assert config.get_max_tokens() == 3_000_000_000
+        assert config.training.get_max_tokens() == 3_000_000_000
 
 
 class TestInstanceFilterConfig:
@@ -315,23 +333,21 @@ class TestInstanceFilterConfig:
         """Test ExperimentConfig with instance filter."""
         config = ExperimentConfig(
             name="test",
-            budget="test",
-            workspace="test",
-            nodes=1,
-            gpus=1,
-            variants=1,
-            chinchilla_multiple=1.0,
-            seed=42,
-            cluster="test",
-            tokenizer="dolma2",
-            proxy_model_id="olmo2_30m",
-            sources=[SourceConfig(name="wiki", paths=["test.npy"])],
-            instance_filter=InstanceFilterConfig(
-                repetition_min_period=1,
-                repetition_max_period=13,
-                repetition_max_count=32,
+            infra=InfraConfig(budget="test", workspace="test", cluster="test"),
+            training=TrainingConfig(
+                proxy_model_id="olmo2_30m",
+                tokenizer="dolma2",
+                chinchilla_multiple=1.0,
+                seed=42,
+                instance_filter=InstanceFilterConfig(
+                    repetition_min_period=1,
+                    repetition_max_period=13,
+                    repetition_max_count=32,
+                ),
             ),
+            data=DataConfig(sources=[SourceConfig(name="wiki", paths=["test.npy"])]),
+            swarm=SwarmConfig(seed=42, variants=1),
         )
 
-        assert config.instance_filter is not None
-        assert config.instance_filter.repetition_max_period == 13
+        assert config.training.instance_filter is not None
+        assert config.training.instance_filter.repetition_max_period == 13
