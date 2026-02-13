@@ -23,9 +23,14 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 from tqdm import tqdm
 
-from olmix.fit.constants import ALL_WANDB_METRICS
+from olmix.fit.constants import ALL_TASK_FAMILIES, ALL_WANDB_METRICS, ObjectiveWeights
+
+# Mayee: add REGRESSOR_TYPES? Add filter_constrained_swarm
+# remove unneeded functionality (check with Kyle)
+
 from olmix.fit.utils import (
     PROPOSER_TYPES,
+    REGRESSION_TYPES,
     LogLinearRegressor,
     add_back_in_fixed_source_weights,
     aggregate_mmlu,
@@ -45,7 +50,7 @@ from olmix.plots import (
     plot_and_log_weights,
     plot_correlation,
     plot_interaction_matrix,
-    plot_interaction_matrix_signed_evidence,
+    plot_interaction_matrix_signed_evidence, # which one to keep
 )
 
 logger = logging.getLogger(__name__)
@@ -177,6 +182,13 @@ DEFAULT_WORKSPACE = "ai2-llm/regmixer"
     help="If set, we produce a proposed mix that is unconstrained according to the final cookbook config.",
     required=False,
     default=False,
+)
+@click.option(
+    "--obj-weights",
+    type=str,
+    help="The non-uniform weights used to average BPB over all tasks. If not set, uniform weights are used.",
+    required=False,
+    default=None,
 )
 @click.option(
     "--temperature",
@@ -321,6 +333,43 @@ DEFAULT_WORKSPACE = "ai2-llm/regmixer"
     required=False,
     default=False,
 )
+@click.option(
+    '--requested-tokens', 
+    type=int,
+    help="if --constrain-objective and --manual-token-constraint-path are set, this overrides the number of requested tokens to use in the constraint",
+    required=False,
+    default=None
+)
+@click.option(
+    '--natural-kl', 
+    is_flag=True,
+    help="if set to true and we use an exact solver, the reference distribution for the KL penalty will be the natural distribution, not the prior (which could be manually set).",
+    required=False,
+    default=False
+)
+@click.option(
+    '--test-ratios-path', 
+    type=str,
+    multiple=True,
+    help="paths to ratios of held out mixtures to evaluate fit on.",
+    required=False,
+    default=[]
+)
+@click.option(
+    '--test-metrics-path', 
+    type=str,
+    multiple=True,
+    help="paths to metrics of held out mixtures to evaluate fit on.",
+    required=False,
+    default=[]
+)
+@click.option(
+    '--aggregate-task-families', 
+    is_flag=True,
+    help="if set to true, we fit one model per task family (math, code, qa)",
+    required=False,
+    default=False
+)
 def fit(
     experiment_groups: list[str],
     config: list[pathlib.Path],
@@ -338,6 +387,7 @@ def fit(
     proposer_type: str,
     neighborhood: str | None,
     constrain_objective: bool,
+    obj_weights: str | None,
     temperature: float | None,
     keep_sources: list[str] | None,
     dashboard: list[str],
@@ -362,6 +412,11 @@ def fit(
     use_hardcoded_reference_ratio: bool = False,
     kl_reg: float | None = None,
     patched: bool = False,
+    requested_tokens: int | None = None,
+    natural_kl: bool = False,
+    test_ratios_path: tuple[str, ...] = (),
+    test_metrics_path: tuple[str,...] = (),
+    aggregate_task_families: bool = False, 
 ):
     output_dir = get_output_dir(experiment_groups)
     pathlib.Path(output_dir).mkdir(parents=True, exist_ok=True)
@@ -404,6 +459,8 @@ def fit(
             )
         eval_config["target_tokens"] = target_tokens
         eval_config["repetition_factor"] = swarm_config.repetition_factor
+    if obj_weights is not None:
+        eval_config["obj_weights"] = obj_weights
     if temperature is not None:
         eval_config["temperature"] = temperature
     if keep_sources:
@@ -442,6 +499,19 @@ def fit(
     if kl_reg is not None:
         assert proposer_type == "exact"
         eval_config["kl_reg"] = kl_reg
+    if requested_tokens is not None:
+        eval_config['requested_tokens'] = requested_tokens
+    if natural_kl:
+        assert proposer_type == "exact", "Natural KL option only works with exact proposer"
+        eval_config["natural_kl"] = True
+    if len(test_ratios_path) != 0 and len(test_metrics_path) != 0:
+        paths = "_".join([tr.split("/")[-1].split("_")[0] for tr in test_ratios_path])
+        eval_config['test_paths'] = paths
+    if aggregate_task_families:
+        assert group_metrics == "pretraining_tasks_for_paper"
+        eval_config['aggregate_task_families'] = True
+
+
 
     # used for caching regression model
     regression_config = {
@@ -465,6 +535,9 @@ def fit(
 
     if len(support_domains) != 0:
         regression_config["support_domains"] = support_domains
+    if aggregate_task_families:
+        regression_config['aggregate_task_families'] = True
+
 
     output_dir = save_eval_config(eval_config, output_dir, custom_name)
 
@@ -514,6 +587,17 @@ def fit(
         if hasattr(launch_configs[0], "fixed_source_weights")
         else None,
     )
+
+    if natural_kl and proposer_type == "exact" and kl_reg is not None:
+        logger.info(f"Calculating natural source weights for KL regularization...")
+        natural_distribution, _ = calculate_priors_with_manual(
+            source_configs=launch_configs[0].dataset.sources if use_cookbook else launch_configs[0].sources,
+            dtype=launch_configs[0].dataset.dtype if use_cookbook else launch_configs[0].dtype,
+            use_cache=(no_cache == False),
+            manual_prior=None,
+            fixed_source_weights= launch_configs[0].fixed_source_weights if hasattr(launch_configs[0], "fixed_source_weights") else None,
+        )
+
 
     if fixed_weight is not None:
         # remove the fixed weight domains from the priors, and renormalize the remaining domains to add to 1
@@ -634,11 +718,12 @@ def fit(
             domains = ratios.columns[3:]
             ratios[domains] = ratios[domains].div(ratios[domains].sum(axis=1), axis=0)
 
-        pd.to_pickle(ratios, ratios_cache_path)
-        pd.to_pickle(metrics, metrics_cache_path)
+        ratios.to_pickle(ratios_cache_path)
+        metrics.to_pickle(metrics_cache_path)
         logger.info(f"Saved ratios to {ratios_cache_path} and metrics to {metrics_cache_path}")
 
     metrics_to_index = eval_metrics
+    old_metrics_to_index = deepcopy(metrics_to_index)
     if len(support_domains) != 0:
         # only keep ratios/
         keep_idxs = np.where(np.isclose(ratios[list(support_domains)].sum(axis=1), 1))[0]
@@ -670,18 +755,6 @@ def fit(
         metrics = metrics[metrics["name"].isin(ratios["name"])]
         ratios.drop(columns=other_columns, inplace=True)
 
-    if experiment_groups[0] == "870881c8":
-        # hardcoded logic: drop outlier for reasoning swarm
-        ratios = ratios.drop(index=27)
-        metrics = metrics.drop(index=27)
-
-    if experiment_groups[0] == "a09b2bf1":
-        ratios = ratios.drop(index=[30, 47, 49])
-        metrics = metrics.drop(index=[30, 47, 49])
-
-    if experiment_groups == ["a3e06472", "515eaf2d"]:
-        ratios = ratios.drop(index=[11, 12, 25, 27, 30, 35, 55])
-        metrics = metrics.drop(index=[11, 12, 25, 27, 30, 35, 55])
 
     if select_top_k_runs < 1.0:
         metrics["all_bpb"] = metrics[metrics.columns[3:]].mean(axis=1)
@@ -714,16 +787,66 @@ def fit(
             logger.info("Log-linear regression requires non-negative metrics, shifting metrics to be non-negative.")
             metrics[metrics.columns[3:]] = metrics[metrics.columns[3:]].subtract(metrics[metrics.columns[3:]].min())
 
+
+    if aggregate_task_families:
+        meta_cols = metrics.columns[:3]
+        task_cols = metrics.columns[3:]
+        metrics_new = metrics.loc[:, meta_cols].copy()
+
+        for family, tasks in ALL_TASK_FAMILIES.items():
+            # Only keep tasks that actually exist in the dataframe
+            existing = [t for t in tasks if t in task_cols]
+
+            if not existing:
+                raise ValueError(f"No columns found for task family '{family}'")
+
+            # Row-wise mean across the family
+            metrics_new[family] = metrics[existing].mean(axis=1)
+        metrics = metrics_new
+        metrics_to_index = list(ALL_TASK_FAMILIES.keys())
+
     # X = Domain weights
     X_train = ratios[ratios.columns[3:]].values
     # Y = Metric values
     Y_train = metrics[metrics.columns[3:]].values
 
-    if n_test > 0:
+    if len(test_ratios_path) != 0 and len(test_metrics_path) != 0:
+        test_ratios = [pd.read_pickle(ratios_path) for ratios_path in test_ratios_path]
+        test_metrics = []
+        for metrics_path in test_metrics_path:
+            tm = pd.read_pickle(metrics_path)
+            if all("mmlu_stem" not in s for s in tm.columns) and any("mmlu" in s for s in tm.columns):
+                tm, _ = aggregate_mmlu(
+                    tm, old_metrics_to_index
+                )
+
+            if aggregate_task_families:
+                # we need to aggregate the test set metrics as well
+                meta_cols = tm.columns[:3]
+                task_cols = tm.columns[3:]
+                metrics_new = tm.loc[:, meta_cols].copy()
+
+                for family, tasks in ALL_TASK_FAMILIES.items():
+                    # Only keep tasks that actually exist in the dataframe
+                    existing = [t for t in tasks if t in task_cols]
+
+                    if not existing:
+                        raise ValueError(f"No columns found for task family '{family}'")
+
+                    # Row-wise mean across the family
+                    metrics_new[family] = tm[existing].mean(axis=1)
+                tm = metrics_new
+
+            test_metrics.append(tm)
+
+
+        X_test = np.concatenate([tr[tr.columns[3:]].values for tr in test_ratios])
+        Y_test = np.concatenate([tm[tm.columns[3:]].values for tm in test_metrics])
+
+
+    if n_test > 0 and (len(test_ratios_path) == 0 or len(test_metrics_path) == 0):
         logger.info(f"Using {n_test} samples for test data")
-        X_train, X_test, Y_train, Y_test = train_test_split(
-            X_train, Y_train, test_size=n_test / len(Y_train), random_state=seed
-        )
+        X_train, X_test, Y_train, Y_test = train_test_split(X_train, Y_train, test_size=n_test / len(Y_train), random_state=seed)
 
     if train_split[0] != 1.0:
         # If we also want to subsample the training_data to study the effect of number of proxy runs
@@ -764,7 +887,7 @@ def fit(
             assert len(train_split) == 1, "If neighborhood is not set, train_split must be a single float"
             X_train, Y_train = compute_mixture_neighborhood(X_train, Y_train, ratios, neighborhood, train_split[0])
 
-    if n_test == 0:
+    if n_test == 0 and (len(test_ratios_path) == 0 or len(test_metrics_path) == 0):
         X_test = deepcopy(X_train)
         Y_test = deepcopy(Y_train)
 
@@ -776,8 +899,13 @@ def fit(
     logger.info(f"Fitting {regression_type} regression for metrics:")
     logger.info(indexed_metrics)
 
-    # Objective weights are now fixed at uniform weighting
-    obj_weights = None
+
+    if obj_weights:
+        # we consider weighted objectives, which is needed for regression granularity experiments
+        obj_weights = ObjectiveWeights[obj_weights]
+        obj_weights = [obj_weights.value.get(metric, 1) for idx, metric in indexed_metrics]
+        logger.info(f"Minimizing weighted average: {obj_weights}")
+
 
     """ if regression_type=="lightgbm":
         # debugging - just fit on first metric
@@ -807,7 +935,7 @@ def fit(
 
         # initialize the regression models using the cached parameters
         for idx, metric in indexed_metrics:
-            reg = LogLinearRegressor(params[metric])
+            reg = REGRESSION_TYPES[regression_type](params=params[metric], requested_tokens=requested_tokens if regression_type=="autoscale" else None)
             predictors.append(reg)
     elif (
         not os.path.exists(regression_model_cache_path)
@@ -824,16 +952,15 @@ def fit(
 
             # initialize the regression models using the cached parameters
             for idx, metric in indexed_metrics:
-                reg = LogLinearRegressor(params[metric])
+                reg = REGRESSION_TYPES[regression_type](params=params[metric], requested_tokens=requested_tokens if regression_type=="autoscale" else None)
                 predictors.append(reg)
     else:
         logger.info(f"Will save regression model to {regression_model_cache_path}")
         for idx, metric in indexed_metrics:
             predictors.append(
                 build_regression(
-                    idx, Y_train, X_train, regression_type, early_stopping, list(interactions) if interactions else None
-                )
-            )
+                    idx, Y_train, X_train, regression_type, early_stopping, list(interactions) if interactions else None,
+                    requested_tokens if regression_type=="autoscale" else None, X_val=X_val if regression_type=="lightgbm" else None, Y_val=Y_val if regression_type=="lightgbm" else None))
             # save intermediate progress after each regression model
             if regression_type == "log_linear":
                 parameters = {indexed_metrics[i][-1]: predictors[i].model for i in range(len(predictors))}
@@ -956,6 +1083,7 @@ def fit(
             n_samples=num_samples,
             alpha=alpha,
             output_dir=output_dir,
+            test_ratios_path=test_ratios_path
         )
 
         if not opt_avg_metric and n_test == 0:
@@ -979,6 +1107,8 @@ def fit(
                 reference_ratio=reference_ratio if use_reference_model_as_search_prior else None,
                 make_worst_mix=make_worst_mix,
                 min_weight_per_domain=min_weight_per_domain,
+                requested_tokens=requested_tokens,
+                manual_kl=natural_distribution[0] if natural_kl else None 
             )
 
             plot_and_log_weights(
@@ -1001,40 +1131,31 @@ def fit(
 
             results.append((metric, weights))
 
+        plot_correlation(
+            Y_test,
+            X_test,
+            Y_train,
+            X_train,
+            idx,
+            predictors=predictors,
+            train_split=train_split,
+            metric_name=metric,
+            regression_type=regression_type,
+            n_test=n_test,
+            split_seed=seed,
+            n_samples=num_samples,
+            alpha=alpha,
+            output_dir=output_dir,
+            average_bpb=True,
+            test_ratios_path=test_ratios_path
+        )
+
+
     if fit_only:
         logger.info("Fit only mode, not proposing a mix.")
         return
 
     if opt_avg_metric and n_test == 0:
-        if experiment_groups[0] in ["5c712b3b", "daf37f03", "f5a3ff58"] and use_hardcoded_reference_ratio:
-            logger.info("Using hardcoded reference ratio for s2pdf + web one node swarms...")
-            reference_ratio = np.array(
-                [
-                    0.75,
-                    0.00528905,
-                    0.00994264,
-                    0.01429609,
-                    0.01794769,
-                    0.00955301,
-                    0.00601014,
-                    0.01521388,
-                    0.00796704,
-                    0.00801173,
-                    0.01751576,
-                    0.00872822,
-                    0.01303348,
-                    0.01352303,
-                    0.01408978,
-                    0.0128043,
-                    0.02283908,
-                    0.01021371,
-                    0.01405873,
-                    0.0094072,
-                    0.01173855,
-                    0.0078169,
-                ]
-            )
-
         weights = PROPOSER_TYPES[proposer_type]().propose(
             index=-1,
             predictor=predictors,
@@ -1058,6 +1179,8 @@ def fit(
             make_worst_mix=make_worst_mix,
             min_weight_per_domain=min_weight_per_domain,
             kl_reg=kl_reg,
+            requested_tokens=requested_tokens,
+            manual_kl=natural_distribution[0] if natural_kl else None 
         )
         plot_and_log_weights(
             prior=priors[0],

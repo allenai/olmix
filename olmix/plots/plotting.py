@@ -131,6 +131,8 @@ def plot_correlation(
     regression_type: str,
     alpha: float | None = None,
     output_dir: str = BASE_OUTPUT_DIR,
+    average_bpb: bool = False,
+    test_ratios_path: tuple[str, ...] = ()
 ):
     """Create a regression plot showing predicted vs actual values."""
     plt.close()
@@ -144,12 +146,19 @@ def plot_correlation(
         }
     )
 
-    y_pred_train = predictors[index].predict(X_train)
-    y_true_train = Y_train[:, index]
+
+    if average_bpb:
+        num_tasks = len(predictors)
+        y_pred_train = np.mean([predictors[i].predict(X_train) for i in range(num_tasks)], axis=0)
+        y_true_train = Y_train.mean(axis=1)
+        metric_name = "average_bpb"
+    else:
+        y_pred_train = predictors[index].predict(X_train)
+        y_true_train = Y_train[:, index]
 
     corr_results = {}
 
-    if train_split[0] == 1 and n_test == 0:
+    if train_split[0] == 1 and n_test == 0 and len(test_ratios_path) == 0:
         # Only plot train if train and test are the same
         sns.regplot(
             x=y_pred_train,
@@ -170,8 +179,13 @@ def plot_correlation(
         corr_results["train"] = corr_train
     else:
         # Predict test
-        y_pred_test = predictors[index].predict(X_test)
-        y_true_test = Y_test[:, index]
+        if average_bpb:
+            y_pred_test = np.mean([predictors[i].predict(X_test) for i in range(num_tasks)], axis=0)
+            y_true_test = Y_test.mean(axis=1)
+            metric_name = "average_bpb"
+        else:
+            y_pred_test = predictors[index].predict(X_test)
+            y_true_test = Y_test[:, index]
 
         # Plot test
         sns.regplot(
