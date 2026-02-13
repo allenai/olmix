@@ -43,7 +43,7 @@ class TestPackageImports:
         from olmix.fit.law import ScalingLaw
         from olmix.fit.utils import (
             LightGBMRegressor,
-            LinearRegressor,
+            LogLinearRegressor,
             Regressor,
         )
 
@@ -53,7 +53,7 @@ class TestPackageImports:
         assert WandbMetrics is not None
         assert ScalingLaw is not None
         assert LightGBMRegressor is not None
-        assert LinearRegressor is not None
+        assert LogLinearRegressor is not None
         assert Regressor is not None
 
     def test_launch_module_imports(self):
