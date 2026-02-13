@@ -23,11 +23,11 @@ The fastest way to use olmix is to bring your own swarm results as CSV files. Th
 
 ### Input format
 
-Prepare a directory with two CSV files. Each row is one training run from your swarm, and the two files are joined on `run_id`.
+Prepare two CSV files. Each row is one training run from your swarm, and the two files are joined on the ID column (`run` or `run_id`).
 
 **`ratios.csv`** — the mixing weights used in each run. Domain columns must sum to ~1.0 per row:
 
-| run_id  | dclm  | wikipedia | arxiv |
+| run     | dclm  | wikipedia | arxiv |
 |---------|-------|-----------|-------|
 | run_001 | 0.45  | 0.30      | 0.25  |
 | run_002 | 0.60  | 0.20      | 0.20  |
@@ -35,99 +35,121 @@ Prepare a directory with two CSV files. Each row is one training run from your s
 
 **`metrics.csv`** — the evaluation metrics measured for each run (lower is better for BPB metrics):
 
-| run_id  | arc_challenge_bpb | hellaswag_bpb | mmlu_stem_bpb |
+| run     | arc_challenge_bpb | hellaswag_bpb | mmlu_stem_bpb |
 |---------|-------------------|---------------|---------------|
 | run_001 | 1.23              | 0.87          | 1.45          |
 | run_002 | 1.15              | 0.91          | 1.38          |
 | run_003 | 1.20              | 0.89          | 1.42          |
 
-The domain column names in `ratios.csv` and the metric column names in `metrics.csv` can be anything — olmix derives them from the CSV headers. An optional `name` column in either file provides human-readable run labels.
+The domain column names in `ratios.csv` and the metric column names in `metrics.csv` can be anything — olmix derives them from the CSV headers. Both `run` and `run_id` are accepted as the ID column. An optional `name` column in either file provides human-readable run labels.
+
+### Fit config
+
+`olmix fit` is configured entirely via a YAML file. See [`configs/fits/dclm_baseline.yaml`](configs/fits/dclm_baseline.yaml) for a full example. The config has these sections:
+
+```yaml
+swarm:
+  ratios: path/to/ratios.csv        # Required — CSV with domain mixture ratios per run
+  metrics: path/to/metrics.csv      # Required — CSV with eval metrics per run
+
+priors:                              # Required — token distribution across domains
+  relative_sizes:
+    domain_a: 0.6
+    domain_b: 0.4
+  total_tokens: 1000000000
+  token_counts:
+    domain_a: 600000000
+    domain_b: 400000000
+
+regression:
+  type: log_linear                   # log_linear | lightgbm | search | gp | autoscale | bimix
+  alpha: 1.0
+  seed: 0
+  n_test: 0
+  train_split: [1.0]
+  simulation_samples: 100000
+  opt_avg_metric: true
+  aggregate_task_families: false
+
+proposer:
+  type: exact                        # exact | simulation | search
+  temperature: null
+  kl_reg: 0.1
+  use_natural_kl: false
+  fit_only: false
+  make_worst_mix: false
+
+constraints:
+  enabled: false
+  target_tokens: null                # Total token budget for the final training run
+  repetition_factor: 5.0
+
+filtering:
+  keep_sources: []
+  support_domains: []
+  drop_metrics: []
+  fixed_weight: {}
+  obj_weights: {}
+```
+
+The **priors** section defines the natural token distribution across your domains inline — no S3 access or external JSON files needed.
 
 ### Running a fit
 
-There are two ways to provide **priors** (the natural token distribution across your domains) when fitting from CSV:
-
-**Option A: Supply a priors JSON directly (no S3 access needed)**
-
 ```bash
-olmix fit \
-  --from-csv path/to/swarm_data/ \
-  --priors path/to/metadata.json \
-  --regression-type log_linear \
-  --opt-avg-metric
+olmix fit --config configs/fits/dclm_baseline.yaml --output-dir output/my_fit
 ```
 
-The `--priors` flag accepts either a launch metadata JSON (saved by `olmix launch run`) or a standalone priors JSON with `relative_sizes`, `total_tokens`, and `token_counts` keys. This is the recommended approach — it avoids S3 access entirely.
+That's it. All settings come from the YAML config. The two required CLI flags are:
 
-**Option B: Compute priors from a config file**
-
-```bash
-olmix fit \
-  --from-csv path/to/swarm_data/ \
-  --config configs/experiments/data_proportions/mix_baseline.yaml \
-  --regression-type log_linear \
-  --opt-avg-metric
-```
-
-`--config` tells olmix to compute priors by counting tokens at the S3/local paths defined in the YAML. See [How the config affects fitting](#how-the-config-affects-fitting) below. Requires access to the source paths.
-
-Either `--priors` or `--config` is required with `--from-csv`.
-
-#### Key flags
-
-| Flag | What it does |
+| Flag | Description |
 |------|-------------|
-| `--regression-type` | Model type: `log_linear` (default, parametric scaling law), `lightgbm` (gradient-boosted trees), `gp` (Gaussian process), `autoscale` (power-law autoscaling), `bimix` (BiMix-style power law) |
-| `--opt-avg-metric` | Optimize the average across all metrics jointly. Without this, each metric is optimized independently and results are averaged post-hoc. |
-| `--fit-only` | Only fit the regression models, skip the mixture proposal step. Useful for inspecting model quality before committing to a proposal. |
-| `--proposer-type` | How to search for optimal weights: `exact` (default, convex optimization for log-linear), `simulation` (Dirichlet Monte Carlo), `search` (grid over observed points) |
-| `--constrain-objective` | Constrain proposed weights so no source exceeds its available tokens (requires `target_tokens` or `target_chinchilla_multiple` in config) |
-| `--kl-reg FLOAT` | KL divergence regularization strength (exact proposer only). Penalizes the proposed mix for diverging from the prior. Higher values stay closer to the natural distribution. |
-| `--use-natural-kl` | Use the natural (token-count-based) distribution as the KL reference, even when a manual prior is set. Exact proposer only. |
-| `--obj-weights JSON` | Non-uniform weights for averaging BPB across tasks. JSON string, e.g. `'{"arc": 0.5, "hellaswag": 0.5}'`. Default is uniform. |
-| `--aggregate-task-families` | Fit one model per task family (math, code, QA) instead of per individual task. |
-| `--train-split FLOAT` | Fraction of runs used for training (rest held out). Default `1.0` uses all runs for both training and evaluation. |
-| `--keep-sources A B` | Only use runs where sources A and B have nonzero weight (and all others are zero). Useful for fitting a subset of domains. |
-| `--drop-metrics M1 M2` | Exclude specific metrics from fitting. |
-| `--test-ratios-path PATH` | Path to held-out ratios DataFrame (pickle) for evaluating the fit. |
-| `--test-metrics-path PATH` | Path to held-out metrics DataFrame (pickle) for evaluating the fit. |
+| `--config` | Path to the YAML fit configuration file |
+| `--output-dir` | Directory for saving fit outputs |
 
-### How the config affects fitting
+### Config reference
 
-The `--config` YAML file defines your data sources and their S3/local paths. During fitting, olmix uses this to compute **priors** — the natural token distribution across domains:
+#### `regression` section
 
-```yaml
-sources:
-  - name: dclm
-    topics:
-      - name: science_math_and_technology
-        paths: ["s3://bucket/dclm/science/**/*.npy"]
-      - name: software_development
-        paths: ["s3://bucket/dclm/code/**/*.npy"]
-  - name: wikipedia
-    paths: ["s3://bucket/wikipedia/*.npy"]
-  - name: arxiv
-    paths: ["s3://bucket/arxiv/*.npy"]
-```
+| Field | What it does |
+|-------|-------------|
+| `type` | Model type: `log_linear` (default, parametric scaling law), `lightgbm` (gradient-boosted trees), `gp` (Gaussian process), `autoscale` (power-law autoscaling), `bimix` (BiMix-style power law) |
+| `opt_avg_metric` | Optimize the average across all metrics jointly. Without this, each metric is optimized independently. |
+| `aggregate_task_families` | Fit one model per task family (math, code, QA) instead of per individual task. Much faster with many metrics. |
+| `train_split` | Fraction of runs used for training. Default `[1.0]` uses all runs for both training and evaluation. |
+| `simulation_samples` | Number of Monte Carlo samples for the simulation proposer. |
+| `alpha` | Alpha to apply to simulated distributions. |
+| `n_test` | Number of held-out test samples for evaluating the regression model. |
+| `seed` | Random state for train-test split. |
 
-Olmix counts tokens at each path to produce a prior like `{dclm:science_math_and_technology: 0.35, dclm:software_development: 0.25, wikipedia: 0.22, arxiv: 0.18}`. This prior serves two roles:
+#### `proposer` section
 
-1. **Regression baseline.** The fitted model learns how deviations from this distribution affect metrics.
-2. **Proposal anchor.** The optimizer uses the prior as a starting point (Dirichlet center for simulation, KL reference for exact).
+| Field | What it does |
+|-------|-------------|
+| `type` | How to search for optimal weights: `exact` (convex optimization for log-linear), `simulation` (Dirichlet Monte Carlo), `search` (grid over observed points) |
+| `kl_reg` | KL divergence regularization strength (exact proposer only). Penalizes the proposed mix for diverging from the prior. |
+| `use_natural_kl` | Use the natural (token-count-based) distribution as the KL reference, even when a manual prior is set. |
+| `temperature` | Temperature for adjusting the Dirichlet prior in simulation. Closer to 0 = more uniform. |
+| `fit_only` | Only fit the regression models, skip the mixture proposal step. Useful for inspecting model quality. |
+| `make_worst_mix` | Invert the objective function and produce a bad mix (for counterfactual analysis). |
 
-> **Tip:** If you already ran `olmix launch run`, the priors are saved in the launch metadata JSON. Use `--priors` instead of `--config` to skip recomputing them.
+#### `constraints` section
 
-Config fields that affect the fit:
+| Field | What it does |
+|-------|-------------|
+| `enabled` | Enable token budget constraints on the proposed mixture. |
+| `target_tokens` | Total token budget for the final training run. Required when `enabled: true`. |
+| `repetition_factor` | Maximum times a source's tokens can be repeated (default: 5.0). |
 
-| Field | Effect |
-|-------|--------|
-| `sources` | Defines the domain names and paths used to count tokens and compute priors |
-| `sources[].topics` | Hierarchical sources (e.g. `dclm` with topics) create domain names like `dclm:science_math_and_technology` |
-| `dtype` | Token counting uses `dtype` byte width (default: `uint32` = 4 bytes per token) |
-| `fixed_source_weights` | Pins specific sources to fixed weights — they are excluded from optimization |
-| `manual_prior` | Overrides the calculated prior for specific sources |
-| `target_tokens` / `target_chinchilla_multiple` | Token budget for `--constrain-objective` — ensures proposed weights don't require more tokens than available per source |
-| `repetition_factor` | Maximum times a source's tokens can be repeated (default: 5.0). Used with `--constrain-objective`. |
+#### `filtering` section
+
+| Field | What it does |
+|-------|-------------|
+| `keep_sources` | Only use runs where these sources have nonzero weight (and all others are zero). |
+| `support_domains` | Only use runs where these domains' ratios sum to 1. |
+| `drop_metrics` | Exclude specific metrics from fitting. |
+| `fixed_weight` | Pin specific domains to fixed weights — they are excluded from optimization. Native dict syntax (not JSON string). |
+| `obj_weights` | Non-uniform weights for averaging BPB across tasks. Default is uniform. |
 
 ### Output
 
@@ -189,18 +211,15 @@ olmix launch run --config configs/experiments/data_proportions/mix_baseline.yaml
 
 Use `--dry-run` to generate the metadata JSON (including priors) without launching any jobs. This is useful for preparing a `--priors` file for CSV fitting without needing Beaker.
 
-### Step 4: Fit from W&B results
+### Step 4: Export to CSV and fit
 
-Point `--from-wandb` at the launch output directory. The group ID, experiment config, and priors are auto-resolved from the metadata JSON written by step 3 — no `--config` or `--experiment-groups` flags needed:
+Once the swarm runs complete, export the ratios and metrics to CSV files (e.g. from W&B), then fit using the YAML config workflow described in [Part 1](#part-1-fitting-from-csv-data):
 
 ```bash
-olmix fit \
-  --from-wandb output/mixes/data_proportions/mix_baseline/<LAUNCH_OUTPUT_DIR>/ \
-  --regression-type log_linear \
-  --opt-avg-metric
+olmix fit --config configs/fits/my_config.yaml --output-dir output/my_fit
 ```
 
-This pulls eval metrics from the completed W&B runs, pairs them with the mixing weights, and produces the same output described in [Output](#output) above. If the metadata JSON contains saved priors (from step 3), they are used directly — no S3 access needed.
+The priors saved in the launch metadata JSON (from step 3) can be copied directly into the YAML config's `priors` section.
 
 ## Development
 
