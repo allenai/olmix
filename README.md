@@ -45,6 +45,22 @@ The domain column names in `ratios.csv` and the metric column names in `metrics.
 
 ### Running a fit
 
+There are two ways to provide **priors** (the natural token distribution across your domains) when fitting from CSV:
+
+**Option A: Supply a priors JSON directly (no S3 access needed)**
+
+```bash
+olmix fit \
+  --from-csv path/to/swarm_data/ \
+  --priors path/to/metadata.json \
+  --regression-type log_linear \
+  --opt-avg-metric
+```
+
+The `--priors` flag accepts either a launch metadata JSON (saved by `olmix launch run`) or a standalone priors JSON with `relative_sizes`, `total_tokens`, and `token_counts` keys. This is the recommended approach — it avoids S3 access entirely.
+
+**Option B: Compute priors from a config file**
+
 ```bash
 olmix fit \
   --from-csv path/to/swarm_data/ \
@@ -53,21 +69,28 @@ olmix fit \
   --opt-avg-metric
 ```
 
-`--from-csv` points to the directory containing `ratios.csv` and `metrics.csv`. `--config` is required — it tells olmix how to compute **priors** (the natural token distribution across your domains), which serve as the baseline the optimizer improves upon. See [How the config affects fitting](#how-the-config-affects-fitting) below.
+`--config` tells olmix to compute priors by counting tokens at the S3/local paths defined in the YAML. See [How the config affects fitting](#how-the-config-affects-fitting) below. Requires access to the source paths.
+
+Either `--priors` or `--config` is required with `--from-csv`.
 
 #### Key flags
 
 | Flag | What it does |
 |------|-------------|
-| `--regression-type` | Model type: `log_linear` (default, parametric scaling law), `lightgbm` (gradient-boosted trees), `linear` (OLS), `quadratic` (OLS with interaction terms) |
+| `--regression-type` | Model type: `log_linear` (default, parametric scaling law), `lightgbm` (gradient-boosted trees), `gp` (Gaussian process), `autoscale` (power-law autoscaling), `bimix` (BiMix-style power law) |
 | `--opt-avg-metric` | Optimize the average across all metrics jointly. Without this, each metric is optimized independently and results are averaged post-hoc. |
 | `--fit-only` | Only fit the regression models, skip the mixture proposal step. Useful for inspecting model quality before committing to a proposal. |
 | `--proposer-type` | How to search for optimal weights: `exact` (default, convex optimization for log-linear), `simulation` (Dirichlet Monte Carlo), `search` (grid over observed points) |
 | `--constrain-objective` | Constrain proposed weights so no source exceeds its available tokens (requires `target_tokens` or `target_chinchilla_multiple` in config) |
 | `--kl-reg FLOAT` | KL divergence regularization strength (exact proposer only). Penalizes the proposed mix for diverging from the prior. Higher values stay closer to the natural distribution. |
+| `--use-natural-kl` | Use the natural (token-count-based) distribution as the KL reference, even when a manual prior is set. Exact proposer only. |
+| `--obj-weights JSON` | Non-uniform weights for averaging BPB across tasks. JSON string, e.g. `'{"arc": 0.5, "hellaswag": 0.5}'`. Default is uniform. |
+| `--aggregate-task-families` | Fit one model per task family (math, code, QA) instead of per individual task. |
 | `--train-split FLOAT` | Fraction of runs used for training (rest held out). Default `1.0` uses all runs for both training and evaluation. |
 | `--keep-sources A B` | Only use runs where sources A and B have nonzero weight (and all others are zero). Useful for fitting a subset of domains. |
 | `--drop-metrics M1 M2` | Exclude specific metrics from fitting. |
+| `--test-ratios-path PATH` | Path to held-out ratios DataFrame (pickle) for evaluating the fit. |
+| `--test-metrics-path PATH` | Path to held-out metrics DataFrame (pickle) for evaluating the fit. |
 
 ### How the config affects fitting
 
@@ -91,6 +114,8 @@ Olmix counts tokens at each path to produce a prior like `{dclm:science_math_and
 
 1. **Regression baseline.** The fitted model learns how deviations from this distribution affect metrics.
 2. **Proposal anchor.** The optimizer uses the prior as a starting point (Dirichlet center for simulation, KL reference for exact).
+
+> **Tip:** If you already ran `olmix launch run`, the priors are saved in the launch metadata JSON. Use `--priors` instead of `--config` to skip recomputing them.
 
 Config fields that affect the fit:
 
@@ -156,15 +181,17 @@ olmix launch preview --config configs/experiments/data_proportions/mix_baseline.
 
 ### Step 3: Launch a swarm
 
-Submits one Beaker job per variant (steps 1-2 happen automatically if no pre-generated mix file is provided). Each job trains a proxy model on its mixture and logs eval metrics to W&B under a shared group ID. Launch metadata (Beaker experiment IDs, W&B group link, git commit) is saved alongside the mix JSON in `output/mixes/`.
+Submits one Beaker job per variant (steps 1-2 happen automatically if no pre-generated mix file is provided). Each job trains a proxy model on its mixture and logs eval metrics to W&B under a shared group ID. Launch metadata (Beaker experiment IDs, W&B group link, git commit, **priors**) is saved alongside the mix JSON in `output/mixes/`.
 
 ```bash
 olmix launch run --config configs/experiments/data_proportions/mix_baseline.yaml
 ```
 
+Use `--dry-run` to generate the metadata JSON (including priors) without launching any jobs. This is useful for preparing a `--priors` file for CSV fitting without needing Beaker.
+
 ### Step 4: Fit from W&B results
 
-Point `--from-wandb` at the launch output directory. The group ID and experiment config are auto-resolved from the metadata JSON written by step 3 — no `--config` or `--experiment-groups` flags needed:
+Point `--from-wandb` at the launch output directory. The group ID, experiment config, and priors are auto-resolved from the metadata JSON written by step 3 — no `--config` or `--experiment-groups` flags needed:
 
 ```bash
 olmix fit \
@@ -173,7 +200,7 @@ olmix fit \
   --opt-avg-metric
 ```
 
-This pulls eval metrics from the completed W&B runs, pairs them with the mixing weights, and produces the same output described in [Output](#output) above.
+This pulls eval metrics from the completed W&B runs, pairs them with the mixing weights, and produces the same output described in [Output](#output) above. If the metadata JSON contains saved priors (from step 3), they are used directly — no S3 access needed.
 
 ## Development
 
