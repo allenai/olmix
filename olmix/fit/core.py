@@ -78,6 +78,8 @@ def run_fit(
     wandb_api=None,
     workspace: str = "ai2-llm/regmixer",
     requested_tokens: int | None = None,
+    target_tokens: int | None = None,
+    repetition_factor: float = 5.0,
     natural_kl: tuple | None = None,
     test_ratios_path: tuple[str, ...] = (),
     test_metrics_path: tuple[str, ...] = (),
@@ -458,6 +460,8 @@ def run_fit(
             make_worst_mix=make_worst_mix,
             kl_reg=kl_reg,
             requested_tokens=requested_tokens,
+            target_tokens=target_tokens,
+            repetition_factor=repetition_factor,
             manual_kl=natural_kl,
         )
         plot_and_log_weights(

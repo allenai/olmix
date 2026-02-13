@@ -17,6 +17,7 @@ from olmix.fit.loaders import load_from_csv, load_from_wandb, load_priors_from_j
 from olmix.fit.utils import (
     calculate_priors_with_manual,
     get_output_dir,
+    get_target_tokens,
     save_fit_config,
     swarm_config_from_path,
 )
@@ -32,7 +33,7 @@ class FitConfig:
     """Configuration capturing all CLI parameters."""
 
     # Required/base fields (always included)
-    config: str | list[str] | None
+    experiment_config_path: str | list[str] | None
     alpha: float
     simulation_samples: int
     workspace: str
@@ -48,7 +49,9 @@ class FitConfig:
     proposer_type: str = "simulation"
     constrain_objective: bool = False
     target_tokens: int | None = None
-    repetition_factor: float | None = None
+    target_chinchilla_multiple: float | None = None
+    target_model_id: str | None = None
+    repetition_factor: float = 5.0
     obj_weights: str | None = None
     temperature: float | None = None
     keep_sources: list[str] = field(default_factory=list)
@@ -71,7 +74,7 @@ class FitConfig:
         for key, value in asdict(self).items():
             # Always include base fields
             if key in {
-                "config",
+                "experiment_config_path",
                 "alpha",
                 "simulation_samples",
                 "workspace",
@@ -88,6 +91,9 @@ class FitConfig:
                     continue
                 # Special case: only include dashboard if not default ("regmixer",)
                 if key == "dashboard" and value == ("regmixer",):
+                    continue
+                # Special case: only include repetition_factor if not default 5.0
+                if key == "repetition_factor" and value == 5.0:
                     continue
                 result[key] = value
             # Include boolean flags explicitly if True
@@ -311,6 +317,34 @@ DEFAULT_WORKSPACE = "ai2-llm/regmixer"
     default=False,
 )
 @click.option(
+    "--target-tokens",
+    type=int,
+    help="Target token count for constraint optimization (used with --constrain-objective)",
+    required=False,
+    default=None,
+)
+@click.option(
+    "--target-chinchilla-multiple",
+    type=float,
+    help="Target Chinchilla multiple for constraint optimization (requires --target-model-id)",
+    required=False,
+    default=None,
+)
+@click.option(
+    "--target-model-id",
+    type=str,
+    help="Target model ID for computing target tokens from --target-chinchilla-multiple",
+    required=False,
+    default=None,
+)
+@click.option(
+    "--repetition-factor",
+    type=float,
+    help="Max repetition factor for constraint checking (default: 5.0)",
+    required=False,
+    default=5.0,
+)
+@click.option(
     "--requested-tokens",
     type=int,
     help="if --constrain-objective and --manual-token-constraint-path are set, this overrides the number of requested tokens to use in the constraint",
@@ -377,6 +411,10 @@ def fit(
     make_worst_mix: bool = False,
     kl_reg: float | None = None,
     patched: bool = False,
+    target_tokens: int | None = None,
+    target_chinchilla_multiple: float | None = None,
+    target_model_id: str | None = None,
+    repetition_factor: float = 5.0,
     requested_tokens: int | None = None,
     use_natural_kl: bool = False,
     test_ratios_path: tuple[str, ...] = (),
@@ -428,26 +466,24 @@ def fit(
             launch_configs = [swarm_config_from_path(c) for c in config] if config else []
         else:
             launch_configs = [swarm_config_from_path(c) for c in config]
+            lc = launch_configs[0]
             priors_data, original_priors_data = calculate_priors_with_manual(
-                source_configs=launch_configs[0].sources,
-                dtype=launch_configs[0].dtype,
+                source_configs=lc.data.sources,
+                dtype=lc.data.dtype,
                 use_cache=(not no_cache),
-                manual_prior=launch_configs[0].manual_prior if hasattr(launch_configs[0], "manual_prior") else None,
-                fixed_source_weights=launch_configs[0].fixed_source_weights
-                if hasattr(launch_configs[0], "fixed_source_weights")
-                else None,
+                manual_prior=lc.swarm.manual_prior,
+                fixed_source_weights=lc.swarm.fixed_source_weights,
             )
 
         if use_natural_kl and proposer_type == "exact":
             logger.info("Calculating natural source weights for KL regularization...")
+            lc = launch_configs[0]
             natural_kl, _ = calculate_priors_with_manual(
-                source_configs=launch_configs[0].sources,
-                dtype=launch_configs[0].dtype,
+                source_configs=lc.data.sources,
+                dtype=lc.data.dtype,
                 use_cache=(not no_cache),
                 manual_prior=None,
-                fixed_source_weights=launch_configs[0].fixed_source_weights
-                if hasattr(launch_configs[0], "fixed_source_weights")
-                else None,
+                fixed_source_weights=lc.swarm.fixed_source_weights,
             )
         else:
             natural_kl = None
@@ -481,12 +517,11 @@ def fit(
     pathlib.Path(BASE_CACHE_DIR).mkdir(parents=True, exist_ok=True)
 
     # ── Validate constrain_objective ─────────────────────────────────────
+    resolved_target_tokens = get_target_tokens(target_tokens, target_chinchilla_multiple, target_model_id)
     if constrain_objective:
-        swarm_config = launch_configs[0]
-        target_tokens = swarm_config.get_target_tokens()
-        if target_tokens is None:
+        if resolved_target_tokens is None:
             raise click.UsageError(
-                "For --constrain-objective, set target_tokens or target_chinchilla_multiple in config"
+                "For --constrain-objective, specify --target-tokens or --target-chinchilla-multiple + --target-model-id"
             )
 
     # ── Build and save eval config ───────────────────────────────────────
@@ -505,21 +540,13 @@ def fit(
         else None
     )
 
-    # Handle constrain_objective special case
-    target_tokens_value = None
-    repetition_factor_value = None
-    if constrain_objective:
-        swarm_config = launch_configs[0]
-        target_tokens_value = swarm_config.get_target_tokens()
-        repetition_factor_value = swarm_config.repetition_factor
-
     # Validate kl_reg constraint
     if kl_reg is not None:
         assert proposer_type == "exact", "kl_reg requires proposer_type='exact'"
 
     # Create FitConfig dataclass
     fit_config_obj = FitConfig(
-        config=config_value,
+        experiment_config_path=config_value,
         alpha=alpha,
         simulation_samples=simulation_samples,
         workspace=workspace,
@@ -532,8 +559,10 @@ def fit(
         priors=priors_file,
         proposer_type=proposer_type,
         constrain_objective=constrain_objective,
-        target_tokens=target_tokens_value,
-        repetition_factor=repetition_factor_value,
+        target_tokens=resolved_target_tokens,
+        target_chinchilla_multiple=target_chinchilla_multiple,
+        target_model_id=target_model_id,
+        repetition_factor=repetition_factor,
         obj_weights=obj_weights,
         temperature=temperature,
         keep_sources=list(keep_sources) if keep_sources else [],
@@ -586,6 +615,8 @@ def fit(
         kl_reg=kl_reg,
         workspace=workspace,
         requested_tokens=requested_tokens,
+        target_tokens=resolved_target_tokens,
+        repetition_factor=repetition_factor,
         natural_kl=natural_kl,
         test_ratios_path=test_ratios_path,
         test_metrics_path=test_metrics_path,

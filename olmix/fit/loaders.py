@@ -103,13 +103,11 @@ def load_from_wandb(
     else:
         logger.info("No saved priors in metadata, calculating from source files...")
         priors, original_priors = calculate_priors_with_manual(
-            source_configs=launch_config.sources,
-            dtype=launch_config.dtype,
+            source_configs=launch_config.data.sources,
+            dtype=launch_config.data.dtype,
             use_cache=(not no_cache),
-            manual_prior=launch_config.manual_prior if hasattr(launch_config, "manual_prior") else None,
-            fixed_source_weights=launch_config.fixed_source_weights
-            if hasattr(launch_config, "fixed_source_weights")
-            else None,
+            manual_prior=launch_config.swarm.manual_prior,
+            fixed_source_weights=launch_config.swarm.fixed_source_weights,
         )
 
     if fixed_weight_dict is not None:

@@ -136,68 +136,36 @@ class InstanceFilterConfig(BaseModel):
     repetition_max_count: int = 32
 
 
-class ExperimentConfig(BaseModel):
-    name: str
-    description: str = ""
+class InfraConfig(BaseModel):
+    """Beaker launch infrastructure settings."""
+
     budget: str
     workspace: str
-    variants: int
-    nodes: int
-    gpus: int
-    chinchilla_multiple: float = 1.0  # Trains for N * Chinchilla optimal tokens (20 * params * N)
-    seed: int
     cluster: str
-    tokenizer: str
-    sources: list[SourceConfig]
-    proxy_model_id: str
     priority: Priority = Priority.normal
-    instance_filter: InstanceFilterConfig | None = None  # Optional quality filter for repetitive sequences
-    minimum_weight: float | None = None
-    minimum_source_weight: float | None = None
-    minimum_topic_weight: float | None = None
-    checkpoint_path: str | None = None
-    train_type: TrainType = TrainType.pretrain
-    allow_repetition: bool = True
-    dtype: NumpyDatasetDType = NumpyDatasetDType.uint32
-    mix_temperature: float = 1.0
-    source_mix_temperature: float | None = None
-    topic_mix_temperature: float | None = None
     preemptible: bool = True
-    shared_filesystem: bool = False
+    nodes: int = 1
+    gpus: int = 1
     weka: bool = False
-    min_strength: float = 0.1
-    max_strength: float = 5.0
-    min_source_strength: float | None = None
-    max_source_strength: float | None = None
-    min_topic_strength: float | None = None
-    max_topic_strength: float | None = None
-    nonzero_weight: list[str] | None = None
-    fixed_source_weights: dict[str, float] | None = None
+    shared_filesystem: bool = False
+    wandb_debug: bool = False
+
+
+class TrainingConfig(BaseModel):
+    """OLMo Core model + training + eval settings."""
+
+    proxy_model_id: str
+    tokenizer: str
+    chinchilla_multiple: float = 1.0  # Trains for N * Chinchilla optimal tokens (20 * params * N)
+    seed: int = 42  # OLMo Core training seed (passed as -S to training script)
     device_batch_size: int = 4
     global_batch_size: int | None = None
-    manual_prior: dict[str, float] | None = None
-    manual_topic_prior: dict[str, float] | None = None
-    sample_multiplier: int | None = None
-    wandb_debug: bool = False
-    existing_mix_file: str | None = None
-
-    # In-loop evaluation settings
+    checkpoint_path: str | None = None
+    train_type: TrainType = TrainType.pretrain
     eval_interval: int = 1000  # Steps between evaluations
     eval_tasks: list[str] | None = None  # Custom eval tasks (None uses DEFAULT_EVAL_TASKS)
     no_eval: bool = False  # Disable downstream evaluations
-
-    # Constraint optimization settings (for olmix fit)
-    target_tokens: int | None = None
-    target_chinchilla_multiple: float | None = None
-    target_model_id: str | None = None
-    repetition_factor: float = 5.0
-
-    @classmethod
-    def from_yaml(cls, path: PathType) -> "ExperimentConfig":
-        """Load an ExperimentConfig from a YAML file."""
-        with open(path) as f:
-            data = yaml.safe_load(f)
-        return cls(**data)
+    instance_filter: InstanceFilterConfig | None = None  # Optional quality filter for repetitive sequences
 
     def get_max_tokens(self) -> int:
         """Compute the maximum training tokens from chinchilla_multiple and model size.
@@ -208,26 +176,54 @@ class ExperimentConfig(BaseModel):
         num_params = get_model_num_params(self.proxy_model_id)
         return compute_max_tokens(self.chinchilla_multiple, num_params)
 
-    def get_target_tokens(self) -> int | None:
-        """Compute target tokens for the final run.
 
-        Uses target_tokens directly if set, otherwise computes from
-        target_chinchilla_multiple and target_model_id.
+class DataConfig(BaseModel):
+    """Data landscape: what data exists and how it's stored."""
 
-        Returns:
-            Target token count for constraint optimization, or None if not configured.
+    sources: list[SourceConfig]
+    dtype: NumpyDatasetDType = NumpyDatasetDType.uint32
 
-        Raises:
-            ValueError: If target_chinchilla_multiple is set but target_model_id is not.
-        """
-        if self.target_tokens is not None:
-            return self.target_tokens
-        if self.target_chinchilla_multiple is not None:
-            if self.target_model_id is None:
-                raise ValueError("target_model_id required when using target_chinchilla_multiple")
-            num_params = get_model_num_params(self.target_model_id)
-            return compute_max_tokens(self.target_chinchilla_multiple, num_params)
-        return None
+
+class SwarmConfig(BaseModel):
+    """Outer-loop mixture sampling parameters."""
+
+    seed: int = 42  # Dirichlet sampling seed for synthesize_mixture.py
+    variants: int = 1
+    mix_temperature: float = 1.0
+    source_mix_temperature: float | None = None
+    topic_mix_temperature: float | None = None
+    min_strength: float = 0.1
+    max_strength: float = 5.0
+    min_source_strength: float | None = None
+    max_source_strength: float | None = None
+    min_topic_strength: float | None = None
+    max_topic_strength: float | None = None
+    minimum_weight: float | None = None
+    minimum_source_weight: float | None = None
+    minimum_topic_weight: float | None = None
+    nonzero_weight: list[str] | None = None
+    fixed_source_weights: dict[str, float] | None = None
+    manual_prior: dict[str, float] | None = None
+    manual_topic_prior: dict[str, float] | None = None
+    allow_repetition: bool = True
+    sample_multiplier: int | None = None
+    existing_mix_file: str | None = None
+
+
+class ExperimentConfig(BaseModel):
+    name: str
+    description: str = ""
+    infra: InfraConfig
+    training: TrainingConfig
+    data: DataConfig
+    swarm: SwarmConfig = SwarmConfig()
+
+    @classmethod
+    def from_yaml(cls, path: PathType) -> "ExperimentConfig":
+        """Load an ExperimentConfig from a YAML file."""
+        with open(path) as f:
+            data = yaml.safe_load(f)
+        return cls(**data)
 
 
 class ExperimentInstance(BaseModel):

@@ -486,15 +486,15 @@ def generate_weights_dirichlet(
 def mk_mixtures(
     config: ExperimentConfig, group_uuid: str, use_cache: bool = True
 ) -> tuple[list[dict[str, tuple[float, float]]], dict]:
-    random.seed(config.seed)
-    np.random.seed(config.seed)
+    random.seed(config.swarm.seed)
+    np.random.seed(config.swarm.seed)
 
-    num_samples = config.variants
-    sources = config.sources
-    leaf_dist, available_tokens, leaf_tokens = calculate_priors(sources, config.dtype, use_cache=use_cache)
+    num_samples = config.swarm.variants
+    sources = config.data.sources
+    leaf_dist, available_tokens, leaf_tokens = calculate_priors(sources, config.data.dtype, use_cache=use_cache)
     priors = {"relative_sizes": leaf_dist, "total_tokens": available_tokens, "token_counts": leaf_tokens}
     logger.info(f"Total tokens for config: {available_tokens:,}")
-    logger.info(f"Using seed: {config.seed}")
+    logger.info(f"Using seed: {config.swarm.seed}")
 
     logger.info("Source distribution:")
     logger.info(leaf_dist)
@@ -511,29 +511,30 @@ def mk_mixtures(
     prior_dist = prior_dist / np.sum(prior_dist)
 
     # convert single-level sampling params into topic/source level
+    swarm = config.swarm
     minimum_source_weight = (
-        config.minimum_source_weight
-        if config.minimum_source_weight
-        else config.minimum_weight
-        if config.minimum_weight
+        swarm.minimum_source_weight
+        if swarm.minimum_source_weight
+        else swarm.minimum_weight
+        if swarm.minimum_weight
         else ConfigDefaults.minimum_weight
     )
     minimum_topic_weight = (
-        config.minimum_topic_weight
-        if config.minimum_topic_weight
-        else config.minimum_weight
-        if config.minimum_weight
+        swarm.minimum_topic_weight
+        if swarm.minimum_topic_weight
+        else swarm.minimum_weight
+        if swarm.minimum_weight
         else ConfigDefaults.minimum_weight
     )
 
-    source_mix_temperature = config.source_mix_temperature if config.source_mix_temperature else config.mix_temperature
-    topic_mix_temperature = config.topic_mix_temperature if config.topic_mix_temperature else config.mix_temperature
+    source_mix_temperature = swarm.source_mix_temperature if swarm.source_mix_temperature else swarm.mix_temperature
+    topic_mix_temperature = swarm.topic_mix_temperature if swarm.topic_mix_temperature else swarm.mix_temperature
 
-    min_source_strength = config.min_source_strength if config.min_source_strength else config.min_strength
-    max_source_strength = config.max_source_strength if config.max_source_strength else config.max_strength
+    min_source_strength = swarm.min_source_strength if swarm.min_source_strength else swarm.min_strength
+    max_source_strength = swarm.max_source_strength if swarm.max_source_strength else swarm.max_strength
 
-    min_topic_strength = config.min_topic_strength if config.min_topic_strength else config.min_strength
-    max_topic_strength = config.max_topic_strength if config.max_topic_strength else config.max_strength
+    min_topic_strength = swarm.min_topic_strength if swarm.min_topic_strength else swarm.min_strength
+    max_topic_strength = swarm.max_topic_strength if swarm.max_topic_strength else swarm.max_strength
 
     mixtures = generate_weights_dirichlet(
         sources=sources,
@@ -547,15 +548,15 @@ def mk_mixtures(
         max_source_strength=max_source_strength,
         min_topic_strength=min_topic_strength,
         max_topic_strength=max_topic_strength,
-        allow_repetition=config.allow_repetition,
-        max_tokens=config.get_max_tokens(),
+        allow_repetition=swarm.allow_repetition,
+        max_tokens=config.training.get_max_tokens(),
         available_tokens=available_tokens,
         enable_bound=True,
-        nonzero_weight=config.nonzero_weight,
-        fixed_source_weights=config.fixed_source_weights,
-        manual_prior=config.manual_prior,
-        sample_multiplier=config.sample_multiplier,
-        existing_mix_file=config.existing_mix_file,
+        nonzero_weight=swarm.nonzero_weight,
+        fixed_source_weights=swarm.fixed_source_weights,
+        manual_prior=swarm.manual_prior,
+        sample_multiplier=swarm.sample_multiplier,
+        existing_mix_file=swarm.existing_mix_file,
     )
 
     weight_maps = []
