@@ -57,7 +57,6 @@ def mk_output_prefix(
     train_split: tuple[float, ...],
     n_test: int,
     split_seed: int,
-    n_samples: int,
     alpha: float | None = None,
 ) -> str:
     """Generate a standardized output file prefix for plots and results."""
@@ -73,7 +72,6 @@ def mk_output_prefix(
         + (f"_trainsplit_{'_'.join(train_split_str)}" if train_split[0] != 1.0 else "")
         + (f"_ntest_{n_test}" if n_test != 0 else "")
         + (f"_seed_{split_seed}" if split_seed != 0 else "")
-        + (f"_{n_samples}_samples" if n_samples != 10 else "")
     )
 
 
@@ -86,7 +84,6 @@ def plot_simulations(
     train_split: tuple[float, ...],
     n_test: int,
     split_seed: int,
-    n_samples: int,
     alpha: float,
     output_dir: str = BASE_OUTPUT_DIR,
 ):
@@ -109,7 +106,7 @@ def plot_simulations(
         ax.yaxis.grid(True, linestyle="--", which="both", color="gray", alpha=0.7)
 
     plt.savefig(
-        f"{mk_output_prefix(output_dir, metric_name, regression_type, train_split, n_test, split_seed, n_samples, alpha)}_sim_grid.png",
+        f"{mk_output_prefix(output_dir, metric_name, regression_type, train_split, n_test, split_seed, alpha=alpha)}_sim_grid.png",
         bbox_inches="tight",
         pad_inches=0.1,
     )
@@ -126,11 +123,12 @@ def plot_correlation(
     train_split: tuple[float, ...],
     n_test: int,
     split_seed: int,
-    n_samples: int,
     metric_name: str,
     regression_type: str,
     alpha: float | None = None,
     output_dir: str = BASE_OUTPUT_DIR,
+    average_bpb: bool = False,
+    test_ratios_path: tuple[str, ...] = (),
 ):
     """Create a regression plot showing predicted vs actual values."""
     plt.close()
@@ -144,12 +142,18 @@ def plot_correlation(
         }
     )
 
-    y_pred_train = predictors[index].predict(X_train)
-    y_true_train = Y_train[:, index]
+    if average_bpb:
+        num_tasks = len(predictors)
+        y_pred_train = np.mean([predictors[i].predict(X_train) for i in range(num_tasks)], axis=0)
+        y_true_train = Y_train.mean(axis=1)
+        metric_name = "average_bpb"
+    else:
+        y_pred_train = predictors[index].predict(X_train)
+        y_true_train = Y_train[:, index]
 
     corr_results = {}
 
-    if train_split[0] == 1 and n_test == 0:
+    if train_split[0] == 1 and n_test == 0 and len(test_ratios_path) == 0:
         # Only plot train if train and test are the same
         sns.regplot(
             x=y_pred_train,
@@ -170,8 +174,13 @@ def plot_correlation(
         corr_results["train"] = corr_train
     else:
         # Predict test
-        y_pred_test = predictors[index].predict(X_test)
-        y_true_test = Y_test[:, index]
+        if average_bpb:
+            y_pred_test = np.mean([predictors[i].predict(X_test) for i in range(num_tasks)], axis=0)
+            y_true_test = Y_test.mean(axis=1)
+            metric_name = "average_bpb"
+        else:
+            y_pred_test = predictors[index].predict(X_test)
+            y_true_test = Y_test[:, index]
 
         # Plot test
         sns.regplot(
@@ -217,12 +226,12 @@ def plot_correlation(
 
     # Save figure
     plt.savefig(
-        f"{mk_output_prefix(output_dir, metric_name, regression_type, train_split, n_test, split_seed, n_samples, alpha)}_fit.png"
+        f"{mk_output_prefix(output_dir, metric_name, regression_type, train_split, n_test, split_seed, alpha)}_fit.png"
     )
     plt.close()
 
     with open(
-        f"{mk_output_prefix(output_dir, metric_name, regression_type, train_split, n_test, split_seed, n_samples, alpha=alpha)}_correlations.json",
+        f"{mk_output_prefix(output_dir, metric_name, regression_type, train_split, n_test, split_seed, alpha=alpha)}_correlations.json",
         "w",
     ) as f:
         f.write(json.dumps(corr_results))
@@ -235,7 +244,6 @@ def plot_interaction_matrix(
     domain_names: list[str],
     metric_names: list[str],
     ratios: pd.DataFrame,
-    metric_type: str | None = None,
     interactions: list[str] | None = None,
 ):
     """Create a heatmap showing domain-metric interaction coefficients."""
@@ -304,10 +312,7 @@ def plot_interaction_matrix(
     plt.imshow(interaction_matrix, cmap=cmap, vmin=-vlim, vmax=+vlim, aspect="auto")
 
     bar_label = "Influence"
-    if metric_type == "primary_score":
-        bar_label += " (higher is better)"
-    else:
-        bar_label += " (lower is better)"
+    bar_label += " (lower is better)"
 
     plt.colorbar(label=bar_label)
     plt.xticks(ticks=np.arange(len(domain_names)), labels=domain_names, rotation=90)
@@ -350,7 +355,6 @@ def plot_interaction_matrix_signed_evidence(
     domain_names: list[str],
     metric_names: list[str],
     ratios: pd.DataFrame,
-    metric_type: str | None = None,
     use_fdr: bool = False,
     p_cap: float = 10.0,  # kept for API compatibility; unused in p-coloring
     sig_threshold: float = 0.05,
@@ -455,7 +459,7 @@ def plot_interaction_matrix_signed_evidence(
 
         cbar = plt.colorbar(im)
         cbar.set_label(r"sign(β) × (1 − p)$^{1/\gamma}$")
-        better = "higher is better" if metric_type == "primary_score" else "lower is better"
+        better = "lower is better"
         plt.title(f"Signed evidence heatmap (color ∝ p, gentler gradient; text shows raw p)\n({better})")
 
     else:
@@ -485,7 +489,6 @@ def plot_and_log_weights(
     train_split: tuple[float, ...],
     n_test: int,
     split_seed: int,
-    n_samples: int,
     alpha: float,
     df_config: pd.DataFrame,
     output_dir: str = BASE_OUTPUT_DIR,
@@ -518,7 +521,7 @@ def plot_and_log_weights(
         logger.info(raw_weights)
 
     with open(
-        f"{mk_output_prefix(output_dir, metric_name, regression_type, train_split, n_test, split_seed, n_samples, alpha=alpha)}_optimal.json",
+        f"{mk_output_prefix(output_dir, metric_name, regression_type, train_split, n_test, split_seed, alpha=alpha)}_optimal.json",
         "w",
     ) as f:
         logger.info(out)
@@ -588,7 +591,7 @@ def plot_and_log_weights(
     )
 
     plt.savefig(
-        f"{mk_output_prefix(output_dir, metric_name, regression_type, train_split, n_test, split_seed, n_samples, alpha=alpha)}_optimal.png",
+        f"{mk_output_prefix(output_dir, metric_name, regression_type, train_split, n_test, split_seed, alpha=alpha)}_optimal.png",
         bbox_inches="tight",
         pad_inches=0.1,
     )

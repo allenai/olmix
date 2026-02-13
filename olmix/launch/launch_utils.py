@@ -134,13 +134,13 @@ def mk_mixes(
     use_cache: bool = True,
     group_uuid: str | None = None,
     save: bool = True,
-) -> list[dict[str, tuple[float, float]]]:
+) -> tuple[list[dict[str, tuple[float, float]]], dict]:
     import uuid
 
     config = config_from_path(config_file)
     if group_uuid is None:
         group_uuid = str(uuid.uuid4())[:8]
-    mixes = mk_mixtures(config, group_uuid, use_cache=use_cache)
+    mixes, priors = mk_mixtures(config, group_uuid, use_cache=use_cache)
     mix_string = prettify_mixes(mixes)
 
     if save:
@@ -186,4 +186,4 @@ def mk_mixes(
         nested_mixes.append(nested)
     logger.info(nested_mixes)
 
-    return mixes
+    return mixes, priors

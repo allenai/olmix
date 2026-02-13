@@ -9,9 +9,6 @@ import json
 import logging
 import os
 import pathlib
-import re
-import subprocess
-from io import StringIO
 
 import numpy as np
 import pandas as pd
@@ -58,12 +55,8 @@ def load_from_wandb(
     launch_output_dir: str,
     *,
     workspace: str = "ai2-llm/regmixer",
-    num_samples: int = 1,
     no_cache: bool = False,
-    use_cookbook: bool = False,
-    pull_from_dashboard: bool = False,
     dashboard: list[str] | None = None,
-    metric_type: str | None = None,
     patched: bool = False,
     fixed_weight_dict: dict[str, float] | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, list[ExperimentConfig], tuple, tuple, list[str]]:
@@ -75,12 +68,8 @@ def load_from_wandb(
     Args:
         launch_output_dir: Path to the launch output directory containing metadata JSON
         workspace: WandB workspace
-        num_samples: Number of evaluation samples per metric
         no_cache: Disable caching
-        use_cookbook: Use olmo-cookbook params
-        pull_from_dashboard: Pull eval results from dashboard
         dashboard: Dashboard names for eval results
-        metric_type: Metric type for evaluation
         patched: Apply patched domain name logic
         fixed_weight_dict: Dict of fixed domain weights (already parsed from JSON)
 
@@ -103,16 +92,25 @@ def load_from_wandb(
     launch_config = ExperimentConfig(**config_data)
     launch_configs = [launch_config]
 
-    # Calculate priors
-    priors, original_priors = calculate_priors_with_manual(
-        source_configs=launch_config.dataset.sources if use_cookbook else launch_config.sources,
-        dtype=launch_config.dataset.dtype if use_cookbook else launch_config.dtype,
-        use_cache=(not no_cache),
-        manual_prior=launch_config.manual_prior if hasattr(launch_config, "manual_prior") else None,
-        fixed_source_weights=launch_config.fixed_source_weights
-        if hasattr(launch_config, "fixed_source_weights")
-        else None,
-    )
+    # Use saved priors from metadata if available, otherwise compute from S3
+    if "priors" in metadata:
+        logger.info("Using saved priors from launch metadata (skipping S3 prior calculation)")
+        saved = metadata["priors"]
+        priors = (saved["relative_sizes"], saved["total_tokens"], saved["token_counts"])
+        from copy import deepcopy
+
+        original_priors = deepcopy(priors)
+    else:
+        logger.info("No saved priors in metadata, calculating from source files...")
+        priors, original_priors = calculate_priors_with_manual(
+            source_configs=launch_config.sources,
+            dtype=launch_config.dtype,
+            use_cache=(not no_cache),
+            manual_prior=launch_config.manual_prior if hasattr(launch_config, "manual_prior") else None,
+            fixed_source_weights=launch_config.fixed_source_weights
+            if hasattr(launch_config, "fixed_source_weights")
+            else None,
+        )
 
     if fixed_weight_dict is not None:
         new_priors = {k: v for k, v in priors[0].items() if k not in fixed_weight_dict}
@@ -137,9 +135,7 @@ def load_from_wandb(
 
     if no_cache:
         logger.info("Cache disabled, will not use cache for run samples...")
-        run_instances = get_runs_from_api(
-            api, workspace, full_group_names, cache_path, no_cache, num_samples, eval_metrics
-        )
+        run_instances = get_runs_from_api(api, workspace, full_group_names, cache_path, no_cache, eval_metrics)
     else:
         try:
             with open(cache_path) as f:
@@ -148,9 +144,7 @@ def load_from_wandb(
             logger.info(f"Loaded cached runs from {cache_path}")
         except FileNotFoundError:
             logger.warning(f"Failed to load cache from {cache_path}, fetching runs from API...")
-            run_instances = get_runs_from_api(
-                api, workspace, full_group_names, cache_path, no_cache, num_samples, eval_metrics
-            )
+            run_instances = get_runs_from_api(api, workspace, full_group_names, cache_path, no_cache, eval_metrics)
 
     logger.info(f"Found {len(run_instances)} runs in {workspace} that match group id filter {experiment_groups}...")
 
@@ -180,65 +174,21 @@ def load_from_wandb(
             for idx, run in enumerate(run_instances)
         ]
 
-        if pull_from_dashboard:
-            all_dashboard_results = pd.DataFrame()
-            for d in dashboard:
-                logger.info(f"Pulling results from dashboard {d}...")
-                command = ["olmo-cookbook-eval", "results", "--dashboard", f"{d}"]
-                for task in eval_metrics:
-                    command.append("--tasks")
-                    command.append(task)
-                command.extend(["--format", "csv", "--skip-on-fail"])
-                result = subprocess.run(command, capture_output=True, text=True)
-                if result.returncode != 0:
-                    print("Error:", result.stderr)
-                else:
-                    csv_data = result.stdout
-                    df = pd.read_csv(StringIO(csv_data))
-                    all_dashboard_results = pd.concat([all_dashboard_results, df], ignore_index=True)
-
-            run_metrics = []
-            for idx, run in tqdm(enumerate(run_instances)):
-                matched = all_dashboard_results[
-                    all_dashboard_results["name"].str.contains(re.escape(run.display_name), regex=True)
-                ]
-                if matched.empty:
-                    logger.warning(f"No matching results found for run {run.display_name}")
-                    continue
-                try:
-                    metrics_dict = {k: next(iter(v.values())) for k, v in matched[eval_metrics].to_dict().items()}
-                except StopIteration:
-                    logger.warning(f"Empty values found when parsing metrics for {run.display_name}")
-                    continue
-                run_metrics.append(
-                    {
-                        "run": run.id,
-                        "name": run.display_name,
-                        "index": idx,
-                        **metrics_dict,
-                    }
-                )
-        else:
-            run_metrics = [
-                {
-                    "run": run.id,
-                    "name": run.display_name,
-                    "index": idx,
-                    **mk_run_metrics(
-                        history=run.samples,
-                        samples=num_samples,
-                        metrics=(eval_metric_group_name, eval_metrics),
-                        display_name=run.display_name
-                        if experiment_groups[0] != "ee22e17f"
-                        else run.display_name.replace("all-dressed", "dclmv2"),
-                        pull_from_dashboard=pull_from_dashboard,
-                        dashboard=dashboard,
-                        metric_type=metric_type,
-                    ),
-                }
-                for idx, run in tqdm(enumerate(run_instances))
-                if len(run.samples) > 0
-            ]
+        run_metrics = [
+            {
+                "run": run.id,
+                "name": run.display_name,
+                "index": idx,
+                **mk_run_metrics(
+                    history=run.samples,
+                    metrics=(eval_metric_group_name, eval_metrics),
+                    display_name=run.display_name,
+                    dashboard=dashboard,
+                ),
+            }
+            for idx, run in tqdm(enumerate(run_instances))
+            if len(run.samples) > 0
+        ]
 
         ratios = pd.DataFrame(run_ratios)
         metrics = pd.DataFrame(run_metrics)
@@ -255,6 +205,46 @@ def load_from_wandb(
         logger.info(f"Saved ratios to {ratios_cache_path} and metrics to {metrics_cache_path}")
 
     return ratios, metrics, launch_configs, priors, original_priors, experiment_groups
+
+
+def load_priors_from_json(
+    json_path: str,
+) -> tuple[dict[str, float], int, dict[str, int]]:
+    """Load priors from a JSON file.
+
+    Accepts either:
+    - A launch metadata JSON (reads from the "priors" key)
+    - A standalone priors JSON with "relative_sizes", "total_tokens", "token_counts"
+
+    Args:
+        json_path: Path to the JSON file
+
+    Returns:
+        Tuple of (relative_sizes, total_tokens, token_counts)
+
+    Raises:
+        ValueError: If the JSON file doesn't contain priors data
+    """
+    with open(json_path) as f:
+        data = json.load(f)
+
+    # Support both launch metadata JSON and standalone priors JSON
+    if "priors" in data:
+        priors_data = data["priors"]
+    elif "relative_sizes" in data:
+        priors_data = data
+    else:
+        raise ValueError(
+            f"JSON file {json_path} does not contain priors data. "
+            "Expected a 'priors' key (launch metadata) or 'relative_sizes' key (standalone priors)."
+        )
+
+    relative_sizes = priors_data["relative_sizes"]
+    total_tokens = priors_data["total_tokens"]
+    token_counts = priors_data["token_counts"]
+
+    logger.info(f"Loaded priors from {json_path}: {len(relative_sizes)} domains, {total_tokens:,} total tokens")
+    return (relative_sizes, total_tokens, token_counts)
 
 
 def load_from_csv(
