@@ -11,7 +11,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 from olmix.fit.constants import ALL_WANDB_METRICS
 from olmix.fit.core import run_fit
-from olmix.fit.loaders import load_from_csv, load_from_wandb
+from olmix.fit.loaders import load_from_csv, load_from_wandb, load_priors_from_json
 from olmix.fit.utils import (
     calculate_priors_with_manual,
     get_output_dir,
@@ -47,11 +47,18 @@ DEFAULT_WORKSPACE = "ai2-llm/regmixer"
     help="The group ID(s) to fit the regression model against (auto-resolved when using --from-wandb)",
 )
 @click.option(
+    "--priors",
+    type=click.Path(exists=True),
+    default=None,
+    help="Path to JSON file containing prior distribution (e.g., from launch output metadata). "
+    "Avoids S3 access for prior calculation when using --from-csv.",
+)
+@click.option(
     "-c",
     "--config",
     type=click.Path(exists=True),
     multiple=True,
-    help="Relative path to the experiment configuration file. Required with --from-csv.",
+    help="Relative path to the experiment configuration file. Required with --from-csv unless --priors is given.",
 )
 @click.option(
     "-a",
@@ -306,6 +313,7 @@ DEFAULT_WORKSPACE = "ai2-llm/regmixer"
 def fit(
     from_csv: str | None,
     from_wandb: str | None,
+    priors: str | None,
     experiment_groups: tuple[str, ...],
     config: tuple[str, ...],
     alpha: float,
@@ -348,12 +356,14 @@ def fit(
     patched: bool = False,
 ):
     # ── Validate data source flags ───────────────────────────────────────
+    priors_file = priors  # rename to avoid shadowing the priors data variable
+
     if from_csv and from_wandb:
         raise click.UsageError("--from-csv and --from-wandb are mutually exclusive")
     if not from_csv and not from_wandb:
         raise click.UsageError("Must specify either --from-csv or --from-wandb")
-    if from_csv and not config:
-        raise click.UsageError("--config is required when using --from-csv")
+    if from_csv and not config and not priors_file:
+        raise click.UsageError("--from-csv requires either --config or --priors")
 
     if proposer_type == "search" and regression_type != "search":
         raise ValueError("Proposer type search only works with regression type search")
@@ -386,19 +396,27 @@ def fit(
         assert from_csv is not None
         ratios, metrics = load_from_csv(from_csv)
 
-        launch_configs = [swarm_config_from_path(c, use_cookbook) for c in config]
         experiment_groups_list = list(experiment_groups) if experiment_groups else []
 
-        # Calculate priors
-        priors, original_priors = calculate_priors_with_manual(
-            source_configs=launch_configs[0].dataset.sources if use_cookbook else launch_configs[0].sources,
-            dtype=launch_configs[0].dataset.dtype if use_cookbook else launch_configs[0].dtype,
-            use_cache=(not no_cache),
-            manual_prior=launch_configs[0].manual_prior if hasattr(launch_configs[0], "manual_prior") else None,
-            fixed_source_weights=launch_configs[0].fixed_source_weights
-            if hasattr(launch_configs[0], "fixed_source_weights")
-            else None,
-        )
+        # Load or calculate priors
+        if priors_file:
+            loaded_priors = load_priors_from_json(priors_file)
+            from copy import deepcopy
+
+            priors = loaded_priors
+            original_priors = deepcopy(loaded_priors)
+            launch_configs = [swarm_config_from_path(c, use_cookbook) for c in config] if config else []
+        else:
+            launch_configs = [swarm_config_from_path(c, use_cookbook) for c in config]
+            priors, original_priors = calculate_priors_with_manual(
+                source_configs=launch_configs[0].dataset.sources if use_cookbook else launch_configs[0].sources,
+                dtype=launch_configs[0].dataset.dtype if use_cookbook else launch_configs[0].dtype,
+                use_cache=(not no_cache),
+                manual_prior=launch_configs[0].manual_prior if hasattr(launch_configs[0], "manual_prior") else None,
+                fixed_source_weights=launch_configs[0].fixed_source_weights
+                if hasattr(launch_configs[0], "fixed_source_weights")
+                else None,
+            )
 
         if fixed_weight_dict is not None:
             new_priors = {k: v for k, v in priors[0].items() if k not in fixed_weight_dict}
@@ -445,7 +463,7 @@ def fit(
         ]
 
     eval_config: dict = {
-        "config": str(config[0]) if len(config) == 1 else [str(c) for c in config],
+        "config": str(config[0]) if len(config) == 1 else [str(c) for c in config] if config else None,
         "alpha": alpha,
         "num_samples": num_samples,
         "simulation_samples": simulation_samples,
@@ -460,6 +478,8 @@ def fit(
         eval_config["from_csv"] = from_csv
     if from_wandb:
         eval_config["from_wandb"] = from_wandb
+    if priors_file:
+        eval_config["priors"] = priors_file
     if proposer_type != "simulation":
         eval_config["proposer_type"] = proposer_type
     if neighborhood is not None:

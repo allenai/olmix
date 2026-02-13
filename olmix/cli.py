@@ -63,6 +63,7 @@ def _save_launch_metadata(
     beaker_user: str,
     mixes: list[dict],
     results: list,
+    priors: dict | None = None,
 ) -> None:
     """Save launch metadata to the mix file for reproducibility tracking."""
     output_path = _get_output_path_from_config(config_path, group_uuid)
@@ -98,6 +99,8 @@ def _save_launch_metadata(
         "experiments": experiments,
         "mixes": mixes,
     }
+    if priors is not None:
+        metadata["priors"] = priors
 
     # Write to file
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -149,7 +152,7 @@ def generate_mixes(config: Path, output: Path | None = None, no_cache: bool = Fa
     """Generate a set of mixtures based on a provided config."""
     from olmix.launch.launch_utils import mk_mixes
 
-    mk_mixes(config, output, use_cache=not no_cache)
+    mk_mixes(config, output, use_cache=not no_cache)  # priors returned but not needed here
 
 
 # ============================================================================
@@ -217,6 +220,7 @@ def launch_run(config: Path, mixture_file: Path | None, dry_run: bool, no_cache:
 
     launch_configs = None
     mixes = None
+    priors = None
 
     if mixture_file:
         with open(mixture_file) as f:
@@ -236,7 +240,7 @@ def launch_run(config: Path, mixture_file: Path | None, dry_run: bool, no_cache:
                 )
                 spinner.ok("Done")
     else:
-        mixes = mk_mixes(config, use_cache=(no_cache is False), group_uuid=group_uuid, save=False)
+        mixes, priors = mk_mixes(config, use_cache=(no_cache is False), group_uuid=group_uuid, save=False)
         if click.confirm(f"Launch experiment {group_uuid} with this set of mixtures?", default=False):
             with yaspin(text="Building experiment group...", color="yellow") as spinner:
                 launch_configs = mk_launch_configs(
@@ -260,6 +264,16 @@ def launch_run(config: Path, mixture_file: Path | None, dry_run: bool, no_cache:
                 for lc in launch_configs:
                     logger.info(f"Dry run for {lc.name}:")
                     lc.dry_run(torchrun=torchrun)
+
+                # Save launch metadata (without beaker experiment IDs)
+                _save_launch_metadata(
+                    config_path=config,
+                    group_uuid=group_uuid,
+                    beaker_user=beaker_user,
+                    mixes=mixes,
+                    results=[],
+                    priors=priors,
+                )
                 return
 
             results = []
@@ -276,6 +290,7 @@ def launch_run(config: Path, mixture_file: Path | None, dry_run: bool, no_cache:
                 beaker_user=beaker_user,
                 mixes=mixes,
                 results=results,
+                priors=priors,
             )
 
             logger.info(results)
@@ -383,7 +398,7 @@ def launch_preview(config: Path):
     with open(config) as f:
         data = yaml.safe_load(f)
 
-    mixes = mk_mixes(config)
+    mixes, _priors = mk_mixes(config)
     experiment_group = mk_experiment_group(ExperimentConfig(**data), mixes, generate_uuid()[:8])
 
     for experiment in experiment_group.instances:

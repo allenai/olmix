@@ -103,16 +103,25 @@ def load_from_wandb(
     launch_config = ExperimentConfig(**config_data)
     launch_configs = [launch_config]
 
-    # Calculate priors
-    priors, original_priors = calculate_priors_with_manual(
-        source_configs=launch_config.dataset.sources if use_cookbook else launch_config.sources,
-        dtype=launch_config.dataset.dtype if use_cookbook else launch_config.dtype,
-        use_cache=(not no_cache),
-        manual_prior=launch_config.manual_prior if hasattr(launch_config, "manual_prior") else None,
-        fixed_source_weights=launch_config.fixed_source_weights
-        if hasattr(launch_config, "fixed_source_weights")
-        else None,
-    )
+    # Use saved priors from metadata if available, otherwise compute from S3
+    if "priors" in metadata:
+        logger.info("Using saved priors from launch metadata (skipping S3 prior calculation)")
+        saved = metadata["priors"]
+        priors = (saved["relative_sizes"], saved["total_tokens"], saved["token_counts"])
+        from copy import deepcopy
+
+        original_priors = deepcopy(priors)
+    else:
+        logger.info("No saved priors in metadata, calculating from source files...")
+        priors, original_priors = calculate_priors_with_manual(
+            source_configs=launch_config.dataset.sources if use_cookbook else launch_config.sources,
+            dtype=launch_config.dataset.dtype if use_cookbook else launch_config.dtype,
+            use_cache=(not no_cache),
+            manual_prior=launch_config.manual_prior if hasattr(launch_config, "manual_prior") else None,
+            fixed_source_weights=launch_config.fixed_source_weights
+            if hasattr(launch_config, "fixed_source_weights")
+            else None,
+        )
 
     if fixed_weight_dict is not None:
         new_priors = {k: v for k, v in priors[0].items() if k not in fixed_weight_dict}
@@ -255,6 +264,46 @@ def load_from_wandb(
         logger.info(f"Saved ratios to {ratios_cache_path} and metrics to {metrics_cache_path}")
 
     return ratios, metrics, launch_configs, priors, original_priors, experiment_groups
+
+
+def load_priors_from_json(
+    json_path: str,
+) -> tuple[dict[str, float], int, dict[str, int]]:
+    """Load priors from a JSON file.
+
+    Accepts either:
+    - A launch metadata JSON (reads from the "priors" key)
+    - A standalone priors JSON with "relative_sizes", "total_tokens", "token_counts"
+
+    Args:
+        json_path: Path to the JSON file
+
+    Returns:
+        Tuple of (relative_sizes, total_tokens, token_counts)
+
+    Raises:
+        ValueError: If the JSON file doesn't contain priors data
+    """
+    with open(json_path) as f:
+        data = json.load(f)
+
+    # Support both launch metadata JSON and standalone priors JSON
+    if "priors" in data:
+        priors_data = data["priors"]
+    elif "relative_sizes" in data:
+        priors_data = data
+    else:
+        raise ValueError(
+            f"JSON file {json_path} does not contain priors data. "
+            "Expected a 'priors' key (launch metadata) or 'relative_sizes' key (standalone priors)."
+        )
+
+    relative_sizes = priors_data["relative_sizes"]
+    total_tokens = priors_data["total_tokens"]
+    token_counts = priors_data["token_counts"]
+
+    logger.info(f"Loaded priors from {json_path}: {len(relative_sizes)} domains, {total_tokens:,} total tokens")
+    return (relative_sizes, total_tokens, token_counts)
 
 
 def load_from_csv(
