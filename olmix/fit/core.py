@@ -52,6 +52,7 @@ def run_fit(
     experiment_groups: list[str] | None = None,
     launch_configs: list[ExperimentConfig] | None = None,
     full_group_names: list[str] | None = None,
+    token_counts: dict[str, int] | None = None,
     # Regression options
     regression_type: str = "log_linear",
     train_split: tuple[float, ...] = (1.0,),
@@ -69,6 +70,7 @@ def run_fit(
     support_domains: tuple[str, ...] = (),
     drop_metrics: tuple[str, ...] = (),
     fixed_weight: str | None = None,
+    obj_weights: dict[str, float] | None = None,
     # Other options
     alpha: float = 1.0,
     fit_only: bool = False,
@@ -77,7 +79,6 @@ def run_fit(
     # WandB params (needed only for DRO reference model via WandB)
     wandb_api=None,
     workspace: str = "ai2-llm/regmixer",
-    requested_tokens: int | None = None,
     target_tokens: int | None = None,
     repetition_factor: float = 5.0,
     natural_kl: tuple | None = None,
@@ -117,7 +118,7 @@ def run_fit(
         kl_reg: KL regularization lambda for log-linear exact proposer
         wandb_api: Optional WandB API instance (for DRO reference model)
         workspace: WandB workspace (for DRO reference model)
-        requested_tokens: number of tokens (R) requested
+        target_tokens: number of tokens (R) requested
         natural_kl: whether to use natural distribution for KL regularization, even when swarm dirichlet prior is different
         test_ratios_path: Optional paths to ratios DataFrames for test set
         test_metrics_path: Optional paths to metrics DataFrames for test set
@@ -294,8 +295,9 @@ def run_fit(
     logger.info(f"Fitting {regression_type} regression for metrics:")
     logger.info(indexed_metrics)
 
-    # Objective weights are now fixed at uniform weighting
-    obj_weights = None
+    if obj_weights:
+        obj_weights = [obj_weights.get(metric, 1) for idx, metric in indexed_metrics]
+        logger.info(f"Minimizing weighted average: {obj_weights}")
 
     # Caching logic for regression model
     experiment_groups_key = "_".join(experiment_groups) if experiment_groups else "csv"
@@ -316,7 +318,7 @@ def run_fit(
         # initialize the regression models using the cached parameters
         for idx, metric in indexed_metrics:
             reg = REGRESSION_TYPES[regression_type](
-                params=params[metric], requested_tokens=requested_tokens if regression_type == "autoscale" else None
+                params=params[metric], requested_tokens=target_tokens if regression_type == "autoscale" else None
             )
             predictors.append(reg)
     elif (
@@ -335,7 +337,7 @@ def run_fit(
             # initialize the regression models using the cached parameters
             for idx, metric in indexed_metrics:
                 reg = REGRESSION_TYPES[regression_type](
-                    params=params[metric], requested_tokens=requested_tokens if regression_type == "autoscale" else None
+                    params=params[metric], requested_tokens=target_tokens if regression_type == "autoscale" else None
                 )
                 predictors.append(reg)
     else:
@@ -348,7 +350,7 @@ def run_fit(
                     X_train,
                     regression_type,
                     early_stopping,
-                    requested_tokens if regression_type == "autoscale" else None,
+                    target_tokens if regression_type == "autoscale" else None,
                 )
             )
             # save intermediate progress after each regression model
@@ -456,12 +458,11 @@ def run_fit(
             obj_weights=obj_weights,
             temperature=temperature,
             fixed_weight=fixed_weight_dict if fixed_weight is not None else None,
-            ratios=ratios,
             make_worst_mix=make_worst_mix,
             kl_reg=kl_reg,
-            requested_tokens=requested_tokens,
             target_tokens=target_tokens,
             repetition_factor=repetition_factor,
+            token_counts=token_counts,
             manual_kl=natural_kl,
         )
         plot_and_log_weights(

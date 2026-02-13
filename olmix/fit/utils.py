@@ -468,7 +468,7 @@ class SimulationProposer(Proposer):
         index: int,
         predictor: list[Regressor],
         prior_distributions: dict,
-        ratios: pd.DataFrame,
+        token_counts: dict[str, int],
         num_samples: int = 1_000_000,
         seed: int = 1337,
         search_iterations: int = 10,
@@ -478,7 +478,6 @@ class SimulationProposer(Proposer):
         obj_weights: list | None = None,
         temperature: float | None = None,
         make_worst_mix: bool = False,
-        requested_tokens: int | None = None,
         target_tokens: int | None = None,
         repetition_factor: float = 5.0,
         **kwargs,
@@ -503,18 +502,10 @@ class SimulationProposer(Proposer):
         best_weights = np.zeros(len(prior_distributions))
 
         if constrain_objective:
-            if swarm_config is None:
-                raise ValueError("swarm_config required for constrain_objective")
-            if target_tokens is None:
-                raise ValueError("target_tokens required for constrain_objective")
-            desired_tokens, available_tokens_per_source, rep_factor = compute_constraints_from_config(
-                swarm_config, target_tokens=target_tokens, repetition_factor=repetition_factor
-            )
-            if requested_tokens is not None:
-                desired_tokens = requested_tokens
+            desired_tokens = target_tokens
             # Ensure order of sources in simulations matches constraint dictionary
             available_tokens_per_source = {
-                source: available_tokens_per_source[source] for source, _ in prior_distributions.items()
+                source: token_counts[source] for source, _ in prior_distributions.items()
             }
 
         # Multi-step search leveraging iterative prior results
@@ -538,7 +529,7 @@ class SimulationProposer(Proposer):
 
                 # Simple elementwise constraint checking: weight[source] * target_tokens <= available[source] * repetition_factor
                 token_usage = simulations * desired_tokens
-                token_limits = np.array(list(available_tokens_per_source.values())) * rep_factor
+                token_limits = np.array(list(available_tokens_per_source.values())) * repetition_factor
                 valid_mask = (token_usage <= token_limits).all(axis=1)
 
                 filtered_count = np.sum(~valid_mask)
@@ -599,27 +590,19 @@ class SearchProposer(Proposer):
         index: int,
         predictor: list[SearchRegressor],
         prior_distributions: dict,
+        token_counts: dict[str, int],
         opt_avg_metric: bool = False,
         constrain_objective: bool = False,
         swarm_config: ExperimentConfig | None = None,
-        requested_tokens: int | None = None,
         target_tokens: int | None = None,
         repetition_factor: float = 5.0,
         **kwargs,
     ):
         if constrain_objective:
-            if swarm_config is None:
-                raise ValueError("swarm_config required for constrain_objective")
-            if target_tokens is None:
-                raise ValueError("target_tokens required for constrain_objective")
-            desired_tokens, available_tokens_per_source, rep_factor = compute_constraints_from_config(
-                swarm_config, target_tokens=target_tokens, repetition_factor=repetition_factor
-            )
-            if requested_tokens is not None:
-                desired_tokens = requested_tokens
+            desired_tokens = target_tokens
             # Ensure order matches prior_distributions
             available_tokens_per_source = {
-                source: available_tokens_per_source[source] for source, _ in prior_distributions.items()
+                source: token_counts[source] for source, _ in prior_distributions.items()
             }
 
         searched_weights = predictor[0].get_searched_weights()
@@ -633,7 +616,7 @@ class SearchProposer(Proposer):
 
             if constrain_objective:
                 token_usage = weight * desired_tokens
-                token_limits = np.array(list(available_tokens_per_source.values())) * rep_factor
+                token_limits = np.array(list(available_tokens_per_source.values())) * repetition_factor
 
                 if (token_usage <= token_limits).all() and pred < best_performance:
                     best_performance = pred
@@ -651,12 +634,12 @@ class LogLinearExactProposer(Proposer):
         self,
         predictor: list[SearchRegressor],
         prior_distributions: dict,
+        token_counts: dict[str, int],
         opt_avg_metric: bool = False,
         constrain_objective: bool = False,
         swarm_config: ExperimentConfig | None = None,
         kl_reg: float | None = 0.1,
         obj_weights: list | None = None,
-        requested_tokens: int | None = None,
         manual_kl: dict | None = None,
         target_tokens: int | None = None,
         repetition_factor: float = 5.0,
@@ -668,20 +651,12 @@ class LogLinearExactProposer(Proposer):
 
         caps = None
         if constrain_objective:
-            if swarm_config is None:
-                raise ValueError("swarm_config required for constrain_objective")
-            if target_tokens is None:
-                raise ValueError("target_tokens required for constrain_objective")
-            desired_tokens, available_tokens_per_source, rep_factor = compute_constraints_from_config(
-                swarm_config, target_tokens=target_tokens, repetition_factor=repetition_factor
-            )
-            if requested_tokens is not None:
-                desired_tokens = requested_tokens
+            desired_tokens = target_tokens
             # Ensure order matches prior_distributions
             available_tokens_per_source = {
-                source: available_tokens_per_source[source] for source, _ in prior_distributions.items()
+                source: token_counts[source] for source, _ in prior_distributions.items()
             }
-            caps = np.array(list(available_tokens_per_source.values())) * rep_factor / desired_tokens
+            caps = np.array(list(available_tokens_per_source.values())) * repetition_factor / desired_tokens
 
         np.array([p.model[0] for p in predictor])  # (n,)
         A = np.array([p.model[1:] for p in predictor])  # (n, d)
@@ -715,6 +690,8 @@ class LogLinearExactProposer(Proposer):
         constraints = [x >= 0, cp.sum(x) == 1]
         if constrain_objective:
             constraints.append(x <= caps)
+
+        breakpoint()
 
         prob = cp.Problem(cp.Minimize(obj), constraints)
         prob.solve(solver="ECOS", verbose=True)  # ECOS or SCS are good
