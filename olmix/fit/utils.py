@@ -25,10 +25,37 @@ from sklearn.gaussian_process.kernels import RBF, ConstantKernel, WhiteKernel
 from tqdm import tqdm
 from wandb.apis.public import Run
 
-from olmix.aliases import ExperimentConfig, SourceConfig
+from olmix.aliases import ExperimentConfig, SourceConfig, compute_max_tokens, get_model_num_params
 from olmix.fit.law import ScalingLaw
 from olmix.launch.synthesize_mixture import calculate_priors
 from olmix.plots import BASE_OUTPUT_DIR
+
+
+def get_target_tokens(
+    target_tokens: int | None = None,
+    target_chinchilla_multiple: float | None = None,
+    target_model_id: str | None = None,
+) -> int | None:
+    """Compute target tokens for the final run.
+
+    Uses target_tokens directly if set, otherwise computes from
+    target_chinchilla_multiple and target_model_id.
+
+    Returns:
+        Target token count for constraint optimization, or None if not configured.
+
+    Raises:
+        ValueError: If target_chinchilla_multiple is set but target_model_id is not.
+    """
+    if target_tokens is not None:
+        return target_tokens
+    if target_chinchilla_multiple is not None:
+        if target_model_id is None:
+            raise ValueError("target_model_id required when using target_chinchilla_multiple")
+        num_params = get_model_num_params(target_model_id)
+        return compute_max_tokens(target_chinchilla_multiple, num_params)
+    return None
+
 
 logger = logging.getLogger(__name__)
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -66,29 +93,27 @@ def get_token_counts_and_ratios(
 
 def compute_constraints_from_config(
     config: ExperimentConfig,
+    *,
+    target_tokens: int,
+    repetition_factor: float = 5.0,
     use_cache: bool = True,
 ) -> tuple[int, dict[str, float], float]:
     """Compute constraints from config's sources and target settings.
 
     Args:
-        config: ExperimentConfig with target_tokens or target_chinchilla_multiple set
+        config: ExperimentConfig (used for sources and dtype)
+        target_tokens: Target token count for the final run
+        repetition_factor: Max repetition factor for constraint checking
         use_cache: Whether to use cached token counts
 
     Returns:
         Tuple of (target_tokens, available_tokens_per_source, repetition_factor)
-
-    Raises:
-        ValueError: If config doesn't have target_tokens or target_chinchilla_multiple
     """
-    target_tokens = config.get_target_tokens()
-    if target_tokens is None:
-        raise ValueError("Config must have target_tokens or target_chinchilla_multiple")
-
-    token_universe = get_token_counts_and_ratios(config.sources, config.dtype, use_cache)
+    token_universe = get_token_counts_and_ratios(config.data.sources, config.data.dtype, use_cache)
     available_tokens_per_source = {
         path: relative_size * token_universe[1] for path, relative_size in token_universe[0].items()
     }
-    return target_tokens, available_tokens_per_source, config.repetition_factor
+    return target_tokens, available_tokens_per_source, repetition_factor
 
 
 # Match regmix setup: https://github.com/sail-sg/regmix/blob/main/regression_fitting/regression.ipynb
@@ -454,6 +479,8 @@ class SimulationProposer(Proposer):
         temperature: float | None = None,
         make_worst_mix: bool = False,
         requested_tokens: int | None = None,
+        target_tokens: int | None = None,
+        repetition_factor: float = 5.0,
         **kwargs,
     ) -> np.ndarray:
         np.random.seed(seed)
@@ -478,8 +505,10 @@ class SimulationProposer(Proposer):
         if constrain_objective:
             if swarm_config is None:
                 raise ValueError("swarm_config required for constrain_objective")
-            desired_tokens, available_tokens_per_source, repetition_factor = compute_constraints_from_config(
-                swarm_config
+            if target_tokens is None:
+                raise ValueError("target_tokens required for constrain_objective")
+            desired_tokens, available_tokens_per_source, rep_factor = compute_constraints_from_config(
+                swarm_config, target_tokens=target_tokens, repetition_factor=repetition_factor
             )
             if requested_tokens is not None:
                 desired_tokens = requested_tokens
@@ -509,7 +538,7 @@ class SimulationProposer(Proposer):
 
                 # Simple elementwise constraint checking: weight[source] * target_tokens <= available[source] * repetition_factor
                 token_usage = simulations * desired_tokens
-                token_limits = np.array(list(available_tokens_per_source.values())) * repetition_factor
+                token_limits = np.array(list(available_tokens_per_source.values())) * rep_factor
                 valid_mask = (token_usage <= token_limits).all(axis=1)
 
                 filtered_count = np.sum(~valid_mask)
@@ -557,7 +586,7 @@ class SimulationProposer(Proposer):
         if constrain_objective:
             # Verify best weights satisfy constraints
             token_usage = best_weights * desired_tokens
-            token_limits = np.array(list(available_tokens_per_source.values())) * repetition_factor
+            token_limits = np.array(list(available_tokens_per_source.values())) * rep_factor
             if not all(token_usage <= token_limits):
                 raise ValueError("Best weights are out of bounds!")
 
@@ -574,13 +603,17 @@ class SearchProposer(Proposer):
         constrain_objective: bool = False,
         swarm_config: ExperimentConfig | None = None,
         requested_tokens: int | None = None,
+        target_tokens: int | None = None,
+        repetition_factor: float = 5.0,
         **kwargs,
     ):
         if constrain_objective:
             if swarm_config is None:
                 raise ValueError("swarm_config required for constrain_objective")
-            desired_tokens, available_tokens_per_source, repetition_factor = compute_constraints_from_config(
-                swarm_config
+            if target_tokens is None:
+                raise ValueError("target_tokens required for constrain_objective")
+            desired_tokens, available_tokens_per_source, rep_factor = compute_constraints_from_config(
+                swarm_config, target_tokens=target_tokens, repetition_factor=repetition_factor
             )
             if requested_tokens is not None:
                 desired_tokens = requested_tokens
@@ -600,7 +633,7 @@ class SearchProposer(Proposer):
 
             if constrain_objective:
                 token_usage = weight * desired_tokens
-                token_limits = np.array(list(available_tokens_per_source.values())) * repetition_factor
+                token_limits = np.array(list(available_tokens_per_source.values())) * rep_factor
 
                 if (token_usage <= token_limits).all() and pred < best_performance:
                     best_performance = pred
@@ -625,6 +658,8 @@ class LogLinearExactProposer(Proposer):
         obj_weights: list | None = None,
         requested_tokens: int | None = None,
         manual_kl: dict | None = None,
+        target_tokens: int | None = None,
+        repetition_factor: float = 5.0,
         **kwargs,
     ):
         assert opt_avg_metric, "LogLinearExactProposer only supports opt_avg_metric=True"
@@ -635,8 +670,10 @@ class LogLinearExactProposer(Proposer):
         if constrain_objective:
             if swarm_config is None:
                 raise ValueError("swarm_config required for constrain_objective")
-            desired_tokens, available_tokens_per_source, repetition_factor = compute_constraints_from_config(
-                swarm_config
+            if target_tokens is None:
+                raise ValueError("target_tokens required for constrain_objective")
+            desired_tokens, available_tokens_per_source, rep_factor = compute_constraints_from_config(
+                swarm_config, target_tokens=target_tokens, repetition_factor=repetition_factor
             )
             if requested_tokens is not None:
                 desired_tokens = requested_tokens
@@ -644,7 +681,7 @@ class LogLinearExactProposer(Proposer):
             available_tokens_per_source = {
                 source: available_tokens_per_source[source] for source, _ in prior_distributions.items()
             }
-            caps = np.array(list(available_tokens_per_source.values())) * repetition_factor / desired_tokens
+            caps = np.array(list(available_tokens_per_source.values())) * rep_factor / desired_tokens
 
         np.array([p.model[0] for p in predictor])  # (n,)
         A = np.array([p.model[1:] for p in predictor])  # (n, d)
@@ -1145,9 +1182,9 @@ def filter_constrained_swarm(final_cookbook_path: Path, run_ratios: list, run_me
         data = yaml.safe_load(f)
 
     final_config = ExperimentConfig(**data)
-    desired_tokens = final_config.get_max_tokens()
+    desired_tokens = final_config.training.get_max_tokens()
 
-    token_universe = get_token_counts_and_ratios(final_config.sources, final_config.dtype, True)
+    token_universe = get_token_counts_and_ratios(final_config.data.sources, final_config.data.dtype, True)
     available_tokens_per_source = {
         path: relative_size * token_universe[1] for path, relative_size in token_universe[0].items()
     }

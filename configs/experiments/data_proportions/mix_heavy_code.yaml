@@ -15,50 +15,46 @@
 
 name: mix-heavy-code
 description: Data proportions experiment - 50% code emphasis
-budget: ai2/oe-base
-workspace: ai2/oe-data
-cluster: ai2/jupiter
-priority: high
-
-# Model settings - use 14M model for fast tests
-proxy_model_id: olmo3_14m
-tokenizer: dolma2
-
-# Training settings - fixed at 0.5x Chinchilla for all proportion experiments
-chinchilla_multiple: 0.5  # 0.5 * 20 * 14M = 140M tokens
-nodes: 1
-gpus: 1
-global_batch_size: 16
-variants: 1
-seed: 42
-
-# Data sources - code-heavy mix
-# Target: 50% code, 20% science, 10% education, 10% wiki, 10% arxiv
-sources:
+infra:
+  budget: ai2/oe-base
+  workspace: ai2/oe-data
+  cluster: ai2/saturn
+  priority: urgent
+  nodes: 1
+  gpus: 1
+training:
+  proxy_model_id: olmo3_14m
+  tokenizer: dolma2
+  chinchilla_multiple: 0.5
+  seed: 42
+  global_batch_size: 16
+data:
+  sources:
   - name: dclm
     max_repetition_factor: 1.0
     topics:
-      - name: software_development
-        weight: 5.0  # 50% - primary emphasis
-        paths:
-          - "s3://ai2-llm/preprocessed/dclm/baseline_topic_ft_lr05_ng2_n3M6_ova_20pct/allenai/dolma2-tokenizer/software_development/**/*.npy"
-      - name: science_math_and_technology
-        weight: 2.0  # 20%
-        paths:
-          - "s3://ai2-llm/preprocessed/dclm/baseline_topic_ft_lr05_ng2_n3M6_ova_20pct/allenai/dolma2-tokenizer/science_math_and_technology/**/*.npy"
-      - name: education_and_jobs
-        weight: 1.0  # 10%
-        paths:
-          - "s3://ai2-llm/preprocessed/dclm/baseline_topic_ft_lr05_ng2_n3M6_ova_20pct/allenai/dolma2-tokenizer/education_and_jobs/**/*.npy"
-
+    - name: software_development
+      weight: 5.0
+      paths:
+      - s3://ai2-llm/preprocessed/dclm/baseline_topic_ft_lr05_ng2_n3M6_ova_20pct/allenai/dolma2-tokenizer/software_development/**/*.npy
+    - name: science_math_and_technology
+      weight: 2.0
+      paths:
+      - s3://ai2-llm/preprocessed/dclm/baseline_topic_ft_lr05_ng2_n3M6_ova_20pct/allenai/dolma2-tokenizer/science_math_and_technology/**/*.npy
+    - name: education_and_jobs
+      weight: 1.0
+      paths:
+      - s3://ai2-llm/preprocessed/dclm/baseline_topic_ft_lr05_ng2_n3M6_ova_20pct/allenai/dolma2-tokenizer/education_and_jobs/**/*.npy
   - name: wikipedia
-    weight: 1.0  # 10%
+    weight: 1.0
     paths:
-      - "s3://ai2-llm/preprocessed/wikipedia-dolma-0823/allenai/dolma2-tokenizer/*.npy"
+    - s3://ai2-llm/preprocessed/wikipedia-dolma-0823/allenai/dolma2-tokenizer/*.npy
     max_repetition_factor: 2.0
-
   - name: arxiv
-    weight: 1.0  # 10%
+    weight: 1.0
     paths:
-      - "s3://ai2-llm/preprocessed/proof-pile-2/v0_decontaminated-0625_tokenized/arxiv/train/allenai/dolma2-tokenizer/*.npy"
+    - s3://ai2-llm/preprocessed/proof-pile-2/v0_decontaminated-0625_tokenized/arxiv/train/allenai/dolma2-tokenizer/*.npy
     max_repetition_factor: 1.5
+swarm:
+  seed: 42
+  variants: 1
