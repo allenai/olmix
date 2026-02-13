@@ -128,7 +128,7 @@ def plot_correlation(
     alpha: float | None = None,
     output_dir: str = BASE_OUTPUT_DIR,
     average_bpb: bool = False,
-    test_ratios_path: tuple[str, ...] = ()
+    test_ratios_path: tuple[str, ...] = (),
 ):
     """Create a regression plot showing predicted vs actual values."""
     plt.close()
@@ -141,7 +141,6 @@ def plot_correlation(
             "axes.labelsize": 16,
         }
     )
-
 
     if average_bpb:
         num_tasks = len(predictors)

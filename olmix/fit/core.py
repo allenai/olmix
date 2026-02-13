@@ -13,13 +13,12 @@ import pickle
 import warnings
 from copy import deepcopy
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import yaml
 from sklearn.model_selection import train_test_split
 
 from olmix.aliases import ExperimentConfig
+from olmix.fit.constants import ALL_TASK_FAMILIES
 from olmix.fit.utils import (
     PROPOSER_TYPES,
     REGRESSION_TYPES,
@@ -27,9 +26,6 @@ from olmix.fit.utils import (
     aggregate_mmlu,
     build_regression,
     expand_collapsed_weights,
-    get_runs_from_api,
-    mk_run_metrics,
-    mk_weights_from_config,
 )
 from olmix.plots import (
     plot_and_log_weights,
@@ -37,8 +33,6 @@ from olmix.plots import (
     plot_interaction_matrix,
     plot_interaction_matrix_signed_evidence,
 )
-
-from olmix.fit.constants import ALL_TASK_FAMILIES
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -84,7 +78,7 @@ def run_fit(
     wandb_api=None,
     workspace: str = "ai2-llm/regmixer",
     requested_tokens: int | None = None,
-    natural_kl: bool = False,
+    natural_kl: tuple | None = None,
     test_ratios_path: tuple[str, ...] = (),
     test_metrics_path: tuple[str, ...] = (),
     aggregate_task_families: bool = False,
@@ -219,9 +213,7 @@ def run_fit(
         for metrics_path in test_metrics_path:
             tm = pd.read_pickle(metrics_path)
             if all("mmlu_stem" not in s for s in tm.columns) and any("mmlu" in s for s in tm.columns):
-                tm, _ = aggregate_mmlu(
-                    tm, old_metrics_to_index
-                )
+                tm, _ = aggregate_mmlu(tm, metrics_to_index)
 
             if aggregate_task_families:
                 # we need to aggregate the test set metrics as well
@@ -242,11 +234,8 @@ def run_fit(
 
             test_metrics.append(tm)
 
-
         X_test = np.concatenate([tr[tr.columns[3:]].values for tr in test_ratios])
         Y_test = np.concatenate([tm[tm.columns[3:]].values for tm in test_metrics])
-
-
 
     if n_test > 0 and (len(test_ratios_path) == 0 or len(test_metrics_path) == 0):
         logger.info(f"Using {n_test} samples for test data")
@@ -324,7 +313,9 @@ def run_fit(
 
         # initialize the regression models using the cached parameters
         for idx, metric in indexed_metrics:
-            reg = REGRESSION_TYPES[regression_type](params=params[metric], requested_tokens=requested_tokens if regression_type=="autoscale" else None)
+            reg = REGRESSION_TYPES[regression_type](
+                params=params[metric], requested_tokens=requested_tokens if regression_type == "autoscale" else None
+            )
             predictors.append(reg)
     elif (
         not os.path.exists(regression_model_cache_path)
@@ -341,21 +332,21 @@ def run_fit(
 
             # initialize the regression models using the cached parameters
             for idx, metric in indexed_metrics:
-                reg = REGRESSION_TYPES[regression_type](params=params[metric], requested_tokens=requested_tokens if regression_type=="autoscale" else None)
+                reg = REGRESSION_TYPES[regression_type](
+                    params=params[metric], requested_tokens=requested_tokens if regression_type == "autoscale" else None
+                )
                 predictors.append(reg)
     else:
         logger.info(f"Will save regression model to {regression_model_cache_path}")
         for idx, metric in indexed_metrics:
             predictors.append(
                 build_regression(
-                    idx, 
-                    Y_train, 
-                    X_train, 
-                    regression_type, 
-                    early_stopping, 
-                    requested_tokens if regression_type=="autoscale" else None,
-                    X_val=X_val if regression_type=="lightgbm" else None, 
-                    Y_val=Y_val if regression_type=="lightgbm" else None
+                    idx,
+                    Y_train,
+                    X_train,
+                    regression_type,
+                    early_stopping,
+                    requested_tokens if regression_type == "autoscale" else None,
                 )
             )
             # save intermediate progress after each regression model
@@ -411,7 +402,6 @@ def run_fit(
     )
     results = []
 
-
     for idx, metric in indexed_metrics:
         plot_correlation(
             Y_test,
@@ -445,7 +435,7 @@ def run_fit(
         alpha=alpha,
         output_dir=output_dir,
         average_bpb=True,
-        test_ratios_path=test_ratios_path
+        test_ratios_path=test_ratios_path,
     )
 
     if fit_only or n_test > 0:
@@ -468,7 +458,7 @@ def run_fit(
             make_worst_mix=make_worst_mix,
             kl_reg=kl_reg,
             requested_tokens=requested_tokens,
-            manual_kl=natural_kl
+            manual_kl=natural_kl,
         )
         plot_and_log_weights(
             prior=priors[0],
@@ -488,7 +478,6 @@ def run_fit(
         )
 
         results.append(("opt_avg_all_metrics", weights))
-
 
     metric, weights = results[-1]
     predictions = np.array([p.predict(weights[None])[0] for p in predictors])

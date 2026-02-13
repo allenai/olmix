@@ -32,7 +32,7 @@ class FitConfig:
     """Configuration capturing all CLI parameters."""
 
     # Required/base fields (always included)
-    config: str | list[str]
+    config: str | list[str] | None
     alpha: float
     simulation_samples: int
     workspace: str
@@ -403,7 +403,7 @@ def fit(
         if experiment_groups:
             logger.warning("--experiment-groups is ignored when using --from-wandb (auto-resolved from metadata JSON)")
 
-        ratios, metrics, launch_configs, priors, original_priors, experiment_groups_list = load_from_wandb(
+        ratios, metrics, launch_configs, priors_data, original_priors_data, experiment_groups_list = load_from_wandb(
             from_wandb,
             workspace=workspace,
             no_cache=no_cache,
@@ -412,6 +412,7 @@ def fit(
             fixed_weight_dict=fixed_weight_dict,
         )
         eval_metrics: list[str] | None = ALL_WANDB_METRICS
+        natural_kl: tuple | None = None
     else:
         assert from_csv is not None
         ratios, metrics = load_from_csv(from_csv)
@@ -420,15 +421,14 @@ def fit(
 
         # Load or calculate priors
         if priors_file:
-            loaded_priors = load_priors_from_json(priors_file)
+            priors_data = load_priors_from_json(priors_file)
             from copy import deepcopy
 
-            priors = loaded_priors
-            original_priors = deepcopy(loaded_priors)
+            original_priors_data = deepcopy(priors_data)
             launch_configs = [swarm_config_from_path(c) for c in config] if config else []
         else:
             launch_configs = [swarm_config_from_path(c) for c in config]
-            priors, original_priors = calculate_priors_with_manual(
+            priors_data, original_priors_data = calculate_priors_with_manual(
                 source_configs=launch_configs[0].sources,
                 dtype=launch_configs[0].dtype,
                 use_cache=(not no_cache),
@@ -453,14 +453,14 @@ def fit(
             natural_kl = None
 
         if fixed_weight_dict is not None:
-            new_priors = {k: v for k, v in priors[0].items() if k not in fixed_weight_dict}
+            new_priors = {k: v for k, v in priors_data[0].items() if k not in fixed_weight_dict}
             total = sum(new_priors.values())
             new_priors = {k: v / total for k, v in new_priors.items()}
-            priors[0].clear()
-            priors[0].update(new_priors)
+            priors_data[0].clear()
+            priors_data[0].update(new_priors)
 
         logger.info("Source weights:")
-        logger.info(priors[0])
+        logger.info(priors_data[0])
 
         # Validate ratios sum to ~1.0 (CSV data was already validated in loader,
         # but apply fixed_weight normalization here if needed)
@@ -559,8 +559,8 @@ def fit(
     run_fit(
         ratios,
         metrics,
-        priors,
-        original_priors,
+        priors_data,
+        original_priors_data,
         output_dir,
         eval_metrics=eval_metrics,
         experiment_groups=experiment_groups_list if experiment_groups_list else None,
