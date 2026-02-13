@@ -1,79 +1,127 @@
-import hashlib
 import json
 import logging
 import os
 import pathlib
-import pickle
-import re
-import subprocess
 import warnings
-from copy import deepcopy
-from io import StringIO
+from dataclasses import dataclass, asdict, field
+from typing import Any
 
 import click
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-import wandb
-import yaml
-from sklearn.model_selection import train_test_split
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
-
 from tqdm import tqdm
 
-from olmix.fit.constants import ALL_TASK_FAMILIES, ALL_WANDB_METRICS, ObjectiveWeights
-
-# Mayee: add REGRESSOR_TYPES? Add filter_constrained_swarm
-# remove unneeded functionality (check with Kyle)
-
+from olmix.fit.constants import ALL_WANDB_METRICS
+from olmix.fit.core import run_fit
+from olmix.fit.loaders import load_from_csv, load_from_wandb
 from olmix.fit.utils import (
-    PROPOSER_TYPES,
-    REGRESSION_TYPES,
-    LogLinearRegressor,
-    add_back_in_fixed_source_weights,
-    aggregate_mmlu,
-    build_regression,
+    calculate_priors_with_manual,
+    get_output_dir,
+    save_fit_config,
+    swarm_config_from_path,
     calculate_priors_with_manual,
     expand_collapsed_weights,
-    get_output_dir,
-    get_runs_from_api,
-    mk_run_from_json,
-    mk_run_metrics,
-    mk_weights_from_config,
-    save_eval_config,
-    swarm_config_from_path,
 )
 from olmix.plots import (
-    plot_and_log_weights,
-    plot_correlation,
-    plot_interaction_matrix,
-    plot_interaction_matrix_signed_evidence, # which one to keep
+    BASE_OUTPUT_DIR
 )
 
 logger = logging.getLogger(__name__)
 
 BASE_CACHE_DIR = "cache/"
+
+
+@dataclass
+class FitConfig:
+    """Configuration capturing all CLI parameters."""
+
+    # Required/base fields (always included)
+    config: str | list[str]
+    alpha: float
+    simulation_samples: int
+    workspace: str
+    regression_type: str
+    n_test: int
+    seed: int
+    opt_avg_metric: bool
+
+    # Optional fields with defaults (only included if non-default)
+    from_csv: str | None = None
+    from_wandb: str | None = None
+    proposer_type: str = "simulation"
+    constrain_objective: bool = False
+    target_tokens: int | None = None
+    repetition_factor: float | None = None
+    obj_weights: str | None = None
+    temperature: float | None = None
+    keep_sources: list[str] = field(default_factory=list)
+    early_stopping: float = 0.0
+    fixed_weight: str | None = None
+    dashboard: tuple[str, ...] | None = None
+    support_domains: tuple[str, ...] = field(default_factory=tuple)
+    drop_metrics: tuple[str, ...] = field(default_factory=tuple)
+    make_worst_mix: bool = False
+    kl_reg: float | None = None
+    requested_tokens: int | None = None
+    use_natural_kl: bool = False
+    test_paths: str | None = None
+    aggregate_task_families: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dict, filtering out None values and empty/default collections."""
+        result = {}
+
+        for key, value in asdict(self).items():
+            # Always include base fields
+            if key in {
+                "config", "alpha", "simulation_samples", "workspace",
+                "regression_type", "n_test", "seed", "opt_avg_metric"
+            }:
+                result[key] = value
+            # Include optional fields only if they have meaningful values
+            elif value is not None and value is not False and value != () and value != [] and value != 0.0:
+                # Special case: only include proposer_type if not default "simulation"
+                if key == "proposer_type" and value == "simulation":
+                    continue
+                # Special case: only include dashboard if not default ("regmixer",)
+                if key == "dashboard" and value == ("regmixer",):
+                    continue
+                result[key] = value
+            # Include boolean flags explicitly if True
+            elif isinstance(value, bool) and value is True:
+                result[key] = value
+
+        return result
 DEFAULT_WORKSPACE = "ai2-llm/regmixer"
 
 
 @click.command()
 @click.option(
+    "--from-csv",
+    type=click.Path(exists=True, file_okay=False),
+    default=None,
+    help="Path to directory containing ratios.csv and metrics.csv",
+)
+@click.option(
+    "--from-wandb",
+    type=click.Path(exists=True, file_okay=False),
+    default=None,
+    help="Path to launch output directory containing metadata JSON (auto-resolves group_id and config)",
+)
+@click.option(
     "--experiment-groups",
     "-g",
     type=str,
     multiple=True,
-    help="The group ID(s) to fit the regression model against",
-    required=True,
+    help="The group ID(s) to fit the regression model against (auto-resolved when using --from-wandb)",
 )
 @click.option(
     "-c",
     "--config",
     type=click.Path(exists=True),
     multiple=True,
-    help="Relative path to the experiment configuration file.",
-    required=True,
+    help="Relative path to the experiment configuration file. Required with --from-csv.",
 )
 @click.option(
     "-a",
@@ -189,20 +237,6 @@ DEFAULT_WORKSPACE = "ai2-llm/regmixer"
     default=0.0,
 )
 @click.option(
-    "--dro-reference-model-id",
-    type=str,
-    help="If we want to enforce pareto improvements, this is the id of the initial model we want to do better than",
-    required=False,
-    default=None,
-)
-@click.option(
-    "--use-reference-model-predicted-scores",
-    is_flag=True,
-    help="If true, we use the predicted performance of the reference model, not the true performance",
-    required=False,
-    default=False,
-)
-@click.option(
     "--fixed-weight", type=str, help="string dict of domains and their weights to fix", required=False, default=None
 )
 @click.option(
@@ -223,7 +257,6 @@ DEFAULT_WORKSPACE = "ai2-llm/regmixer"
 @click.option(
     "--custom-name", type=str, help="if set, use this custom name for the experiment", required=False, default=None
 )
-@click.option("--tol", type=float, help="Pareto constraint tolerance", default=None, required=False)
 @click.option(
     "--support-domains",
     multiple=True,
@@ -274,7 +307,7 @@ DEFAULT_WORKSPACE = "ai2-llm/regmixer"
     default=None
 )
 @click.option(
-    '--natural-kl', 
+    '--use-natural-kl', 
     is_flag=True,
     help="if set to true and we use an exact solver, the reference distribution for the KL penalty will be the natural distribution, not the prior (which could be manually set).",
     required=False,
@@ -304,8 +337,10 @@ DEFAULT_WORKSPACE = "ai2-llm/regmixer"
     default=False
 )
 def fit(
-    experiment_groups: list[str],
-    config: list[pathlib.Path],
+    from_csv: str | None,
+    from_wandb: str | None,
+    experiment_groups: tuple[str, ...],
+    config: tuple[str, ...],
     alpha: float,
     simulation_samples: int,
     workspace: str,
@@ -324,657 +359,216 @@ def fit(
     support_domains: tuple[str],
     drop_metrics: tuple[str],
     early_stopping: float = 0.0,
-    dro_reference_model_id: str | None = None,
-    use_reference_model_predicted_scores: bool = False,
     fixed_weight: str | None = None,
     fit_only: bool = False,
     custom_name: str | None = None,
-    tol: float | None = None,
     make_worst_mix: bool = False,
     kl_reg: float | None = None,
     patched: bool = False,
     requested_tokens: int | None = None,
-    natural_kl: bool = False,
+    use_natural_kl: bool = False,
     test_ratios_path: tuple[str, ...] = (),
     test_metrics_path: tuple[str,...] = (),
     aggregate_task_families: bool = False, 
 ):
-    output_dir = get_output_dir(experiment_groups)
-    pathlib.Path(output_dir).mkdir(parents=True, exist_ok=True)
-    pathlib.Path(BASE_CACHE_DIR).mkdir(parents=True, exist_ok=True)
+    # Validate data source flags
+    if from_csv and from_wandb:
+        raise click.UsageError("--from-csv and --from-wandb are mutually exclusive")
+    if not from_csv and not from_wandb:
+        raise click.UsageError("Must specify either --from-csv or --from-wandb")
+    if from_csv and not config:
+        raise click.UsageError("--config is required when using --from-csv")
 
     if proposer_type == "search" and regression_type != "search":
         raise ValueError("Proposer type search only works with regression type search")
 
-    # Load configs early so we can use them for constraint settings
-    launch_configs = [swarm_config_from_path(c) for c in config]
 
-    eval_config = {
-        "config": config[0] if len(config) == 1 else config,
-        "alpha": alpha,
-        "simulation_samples": simulation_samples,
-        "workspace": workspace,
-        "regression_type": regression_type,
-        "train_split": train_split[0] if len(train_split) == 1 else train_split,
-        "n_test": n_test,
-        "seed": seed,
-        "opt_avg_metric": opt_avg_metric,
-    }
-    if proposer_type != "simulation":
-        eval_config["proposer_type"] = proposer_type
+    fixed_weight_dict = json.loads(fixed_weight) if fixed_weight is not None else None
+
+    # Load data
+    if from_wandb:
+        if experiment_groups:
+            logger.warning("--experiment-groups is ignored when using --from-wandb (auto-resolved from metadata JSON)")
+
+        ratios, metrics, launch_configs, priors, original_priors, experiment_groups_list = load_from_wandb(
+            from_wandb,
+            workspace=workspace,
+            no_cache=no_cache,
+            dashboard=list(dashboard),
+            patched=patched,
+            fixed_weight_dict=fixed_weight_dict,
+        )
+        eval_metrics: list[str] | None = ALL_WANDB_METRICS
+    else:
+        assert from_csv is not None
+        ratios, metrics = load_from_csv(from_csv)
+
+        launch_configs = [swarm_config_from_path(c) for c in config]
+
+        experiment_groups_list = list(experiment_groups) if experiment_groups else []
+
+
+        # Calculate priors
+        priors, original_priors = calculate_priors_with_manual(
+            source_configs=launch_configs[0].sources,
+            dtype=launch_configs[0].dtype,
+            use_cache=(not no_cache),
+            manual_prior=launch_configs[0].manual_prior if hasattr(launch_configs[0], "manual_prior") else None,
+            fixed_source_weights=launch_configs[0].fixed_source_weights
+            if hasattr(launch_configs[0], "fixed_source_weights")
+            else None,
+        )
+
+        if use_natural_kl and proposer_type=="exact":
+            logger.info(f"Calculating natural source weights for KL regularization...")
+            natural_kl, _ = calculate_priors_with_manual(
+                source_configs= launch_configs[0].sources,
+                dtype=launch_configs[0].dtype,
+                use_cache=(not no_cache),
+                manual_prior=None,
+                fixed_source_weights= launch_configs[0].fixed_source_weights if hasattr(launch_configs[0], "fixed_source_weights") else None,
+            )
+        else:
+            natural_kl = None
+
+
+        if fixed_weight_dict is not None:
+            new_priors = {k: v for k, v in priors[0].items() if k not in fixed_weight_dict}
+            total = sum(new_priors.values())
+            new_priors = {k: v / total for k, v in new_priors.items()}
+            priors[0].clear()
+            priors[0].update(new_priors)
+
+        logger.info("Source weights:")
+        logger.info(priors[0])
+
+        # Validate ratios sum to ~1.0 (CSV data was already validated in loader,
+        # but apply fixed_weight normalization here if needed)
+        if fixed_weight_dict is not None:
+            domains = ratios.columns[3:]
+            ratios[domains] = ratios[domains].div(ratios[domains].sum(axis=1), axis=0)
+
+        eval_metrics = None  # derived from CSV columns in run_fit
+
+    # ── Setup output directory ───────────────────────────────────────────
+    if experiment_groups_list:
+        output_dir = get_output_dir(experiment_groups_list)
+    else:
+        csv_name = os.path.basename(os.path.normpath(from_csv)) if from_csv else "unknown"
+        output_dir = f"{BASE_OUTPUT_DIR}csv_{csv_name}/"
+
+    pathlib.Path(output_dir).mkdir(parents=True, exist_ok=True)
+    pathlib.Path(BASE_CACHE_DIR).mkdir(parents=True, exist_ok=True)
+
+    # ── Validate constrain_objective ─────────────────────────────────────
     if constrain_objective:
-        eval_config["constrain_objective"] = True
-        # Constraints now come from the config's target_tokens/target_chinchilla_multiple
         swarm_config = launch_configs[0]
         target_tokens = swarm_config.get_target_tokens()
         if target_tokens is None:
             raise click.UsageError(
                 "For --constrain-objective, set target_tokens or target_chinchilla_multiple in config"
             )
-        eval_config["target_tokens"] = target_tokens
-        eval_config["repetition_factor"] = swarm_config.repetition_factor
-    if obj_weights is not None:
-        eval_config["obj_weights"] = obj_weights
-    if temperature is not None:
-        eval_config["temperature"] = temperature
-    if keep_sources:
-        eval_config["keep_sources"] = keep_sources
-    if early_stopping > 0.0:
-        eval_config["early_stopping"] = early_stopping
-    if dro_reference_model_id is not None:
-        eval_config["dro_reference_model_id"] = dro_reference_model_id
-    if use_reference_model_predicted_scores:
-        eval_config["use_reference_model_predicted_scores"] = use_reference_model_predicted_scores
-    if fixed_weight is not None:
-        eval_config["fixed_weight"] = fixed_weight
-        fixed_weight_dict = json.loads(fixed_weight)
-    if dashboard[0] != "regmixer":
-        eval_config["dashboard"] = dashboard
-    if tol is not None:
-        eval_config["tol"] = tol
-    if len(support_domains) != 0:
-        eval_config["support_domains"] = support_domains
-    if len(drop_metrics) != 0:
-        eval_config["drop_metrics"] = drop_metrics
-    if make_worst_mix:
-        eval_config["make_worst_mix"] = True
+
+    # ── Build and save eval config ───────────────────────────────────────
+    experiment_groups_list = None
+    if experiment_groups_list:
+        full_group_names = [
+            f"{launch_config.name}-{group}" for group, launch_config in zip(experiment_groups_list, launch_configs)
+        ]
+
+    # Prepare values for FitConfig
+    config_value = str(config[0]) if len(config) == 1 else [str(c) for c in config]
+    dashboard_value = tuple(dashboard) if dashboard[0] != "regmixer" else None
+    test_paths_value = (
+        "_".join([tr.split("/")[-1].split("_")[0] for tr in test_ratios_path])
+        if test_ratios_path and test_metrics_path
+        else None
+    )
+
+    # Handle constrain_objective special case
+    target_tokens_value = None
+    repetition_factor_value = None
+    if constrain_objective:
+        swarm_config = launch_configs[0]
+        target_tokens_value = swarm_config.get_target_tokens()
+        repetition_factor_value = swarm_config.repetition_factor
+
+    # Validate kl_reg constraint
     if kl_reg is not None:
-        assert proposer_type == "exact"
-        eval_config["kl_reg"] = kl_reg
-    if requested_tokens is not None:
-        eval_config['requested_tokens'] = requested_tokens
-    if natural_kl:
-        assert proposer_type == "exact", "Natural KL option only works with exact proposer"
-        eval_config["natural_kl"] = True
-    if len(test_ratios_path) != 0 and len(test_metrics_path) != 0:
-        paths = "_".join([tr.split("/")[-1].split("_")[0] for tr in test_ratios_path])
-        eval_config['test_paths'] = paths
-    if aggregate_task_families:
-        assert group_metrics == "pretraining_tasks_for_paper"
-        eval_config['aggregate_task_families'] = True
-
-
-
-    # used for caching regression model
-    regression_config = {
-        "regression_type": regression_type,
-        "train_split": train_split[0] if len(train_split) == 1 else train_split,
-        "n_test": n_test,
-        "seed": seed,
-        "keep_sources": keep_sources,
-        "early_stopping": early_stopping,
-    }
-    if fixed_weight is not None:
-        regression_config["fixed_weight"] = fixed_weight
-
-    if len(support_domains) != 0:
-        regression_config["support_domains"] = support_domains
-    if aggregate_task_families:
-        regression_config['aggregate_task_families'] = True
-
-
-    output_dir = save_eval_config(eval_config, output_dir, custom_name)
-
-    api = wandb.Api()
-
-    # Use all WandB metrics
-    eval_metrics = ALL_WANDB_METRICS
-    eval_metric_group_name = "all_wandb_metrics"
-
-    cache_path = (
-        pathlib.Path(BASE_CACHE_DIR) / f"{'_'.join(experiment_groups)}_{eval_metric_group_name}_runs_cache.json"
-    )
-    full_group_names = [
-        f"{launch_config.name}-{group}" for group, launch_config in zip(experiment_groups, launch_configs)
-    ]
-    if no_cache:
-        logger.info("Cache disabled, will not use cache for run samples...")
-        run_instances = get_runs_from_api(
-            api, workspace, full_group_names, cache_path, no_cache, eval_metrics
-        )
-    else:
-        try:
-            # TODO: Add partitioned cache per group maybe?
-            with open(cache_path) as f:
-                run_dict = json.load(f)
-                run_instances = [mk_run_from_json(run) for run in run_dict]
-            logger.info(f"Loaded cached runs from {cache_path}")
-
-        except FileNotFoundError:
-            logger.warning(f"Failed to load cache from {cache_path}, fetching runs from API...")
-            run_instances = get_runs_from_api(
-                api, workspace, full_group_names, cache_path, no_cache, eval_metrics
-            )
-
-    # Filter out failed runs or runs without evals
-    # run_instances = [run for run in run_instances if run.samples.shape[0] > 0]
-
-    logger.info(f"Found {len(run_instances)} runs in {workspace} that match group id filter {experiment_groups}...")
-
-    logger.info("Calculating source weights...")
-    priors, original_priors = calculate_priors_with_manual(
-        source_configs=launch_configs[0].sources,
-        dtype=launch_configs[0].dtype,
-        use_cache=(not no_cache),
-        manual_prior=launch_configs[0].manual_prior if hasattr(launch_configs[0], "manual_prior") else None,
-        fixed_source_weights=launch_configs[0].fixed_source_weights
-        if hasattr(launch_configs[0], "fixed_source_weights")
-        else None,
-    )
-
-    if natural_kl and proposer_type == "exact" and kl_reg is not None:
-        logger.info(f"Calculating natural source weights for KL regularization...")
-        natural_distribution, _ = calculate_priors_with_manual(
-            source_configs=launch_configs[0].sources,
-            dtype=launch_configs[0].dtype,
-            use_cache=(no_cache == False),
-            manual_prior=None,
-            fixed_source_weights= launch_configs[0].fixed_source_weights if hasattr(launch_configs[0], "fixed_source_weights") else None,
-        )
-
-
-    if fixed_weight is not None:
-        # remove the fixed weight domains from the priors, and renormalize the remaining domains to add to 1
-        new_priors = {k: v for k, v in priors[0].items() if k not in fixed_weight_dict}
-        total = sum(list(new_priors.values()))
-        new_priors = {k: v / total for k, v in new_priors.items()}  # normalize the weights
-        priors[0].clear()
-        priors[0].update(new_priors)
-
-    logger.info("Source weights:")
-    logger.info(priors[0])
-
-    ratios_cache_path = (
-        pathlib.Path(BASE_CACHE_DIR) / f"{'_'.join(experiment_groups)}_{eval_metric_group_name}_ratios.pkl"
-    )
-    metrics_cache_path = (
-        pathlib.Path(BASE_CACHE_DIR) / f"{'_'.join(experiment_groups)}_{eval_metric_group_name}_metrics.pkl"
-    )
-    if os.path.exists(ratios_cache_path) and os.path.exists(metrics_cache_path):
-        logger.info(f"Loading cached ratios and metrics from {ratios_cache_path} and {metrics_cache_path}")
-        with open(ratios_cache_path, "rb") as f:
-            ratios = pd.read_pickle(f)
-        with open(metrics_cache_path, "rb") as f:
-            metrics = pd.read_pickle(f)
-        ratios = ratios[ratios["run"].isin(metrics["run"])]
-    else:
-        run_ratios = [
-            {
-                "run": run.id,
-                "name": run.display_name,
-                "index": idx,
-                **mk_weights_from_config(run.config, priors, run.display_name, patched),
-            }
-            for idx, run in enumerate(run_instances)
-        ]
-        run_metrics = [
-            {
-                "run": run.id,
-                "name": run.display_name,
-                "index": idx,
-                **mk_run_metrics(
-                    history=run.samples,
-                    metrics=(eval_metric_group_name, eval_metrics),
-                    display_name=run.display_name,
-                    dashboard=dashboard,
-                ),
-            }
-            for idx, run in tqdm(enumerate(run_instances))
-            if len(run.samples) > 0
-        ]
-
-        ratios = pd.DataFrame(run_ratios)
-        metrics = pd.DataFrame(run_metrics)
-        numerical_cols = metrics.columns[3:]
-        metrics[numerical_cols] = metrics[numerical_cols].apply(pd.to_numeric, errors="coerce")
-        ratios = ratios[ratios["run"].isin(metrics["run"])]
-
-        if len(support_domains) == 0 and len(train_split) == 1:
-            assert np.isclose(ratios[ratios.columns[3:]].sum(axis=1).sum(), len(ratios)), "Ratios do not add up to 1!"
-        if fixed_weight is not None:
-            # normalize the non-fixed-weight domains to add to 1
-            domains = ratios.columns[3:]
-            ratios[domains] = ratios[domains].div(ratios[domains].sum(axis=1), axis=0)
-
-        ratios.to_pickle(ratios_cache_path)
-        metrics.to_pickle(metrics_cache_path)
-        logger.info(f"Saved ratios to {ratios_cache_path} and metrics to {metrics_cache_path}")
-
-    metrics_to_index = eval_metrics
-    old_metrics_to_index = deepcopy(metrics_to_index)
-    if len(support_domains) != 0:
-        # only keep ratios/
-        keep_idxs = np.where(np.isclose(ratios[list(support_domains)].sum(axis=1), 1))[0]
-        ratios = ratios.iloc[keep_idxs]
-        drop_col = list(set(ratios.columns[3:]).difference(set(support_domains)))
-        ratios = ratios.drop(columns=drop_col)
-        metrics = metrics.iloc[keep_idxs]
-
-        new_priors = {k: v for k, v in priors[0].items() if k in list(support_domains)}
-        total = sum(list(new_priors.values()))
-        new_priors = {k: v / total for k, v in new_priors.items()}
-        priors[0].clear()
-        priors[0].update(new_priors)
-
-    if all("mmlu_stem" not in s for s in metrics.columns) and any("mmlu" in s for s in metrics.columns):
-        metrics, metrics_to_index = aggregate_mmlu(metrics, metrics_to_index)
-
-    if len(ratios[ratios.columns[3:]]) > len(ratios):
-        raise ValueError("The number of swarm runs is fewer than the number of mixing sources.")
-
-    if keep_sources:
-        old_len = len(ratios)
-        other_columns = list(set(ratios.columns[3:]).difference(set(keep_sources)))
-        ratios = ratios[
-            ratios[list(keep_sources)].ne(0).all(axis=1)  # all specified columns nonzero
-            & ratios[other_columns].eq(0).all(axis=1)
-        ]
-        logger.info(f"Filtered out {old_len - len(ratios)} runs that were not only on {keep_sources}")
-        metrics = metrics[metrics["name"].isin(ratios["name"])]
-        ratios.drop(columns=other_columns, inplace=True)
-
-
-    cols_to_check = metrics.columns[3:]
-    bad_rows = metrics[metrics[cols_to_check].isna().any(axis=1)]
-
-    if not bad_rows.empty:
-        logger.warning(f"Found NaNs in the following rows, dropping them! {bad_rows.index.tolist()}")
-        metrics = metrics.drop(index=bad_rows.index)
-        ratios = ratios.drop(index=bad_rows.index)
-
-    if regression_type == "log_linear":
-        if (metrics[metrics.columns[3:]] < 0).any().any():
-            logger.info("Log-linear regression requires non-negative metrics, shifting metrics to be non-negative.")
-            metrics[metrics.columns[3:]] = metrics[metrics.columns[3:]].subtract(metrics[metrics.columns[3:]].min())
-
-
-    if aggregate_task_families:
-        meta_cols = metrics.columns[:3]
-        task_cols = metrics.columns[3:]
-        metrics_new = metrics.loc[:, meta_cols].copy()
-
-        for family, tasks in ALL_TASK_FAMILIES.items():
-            # Only keep tasks that actually exist in the dataframe
-            existing = [t for t in tasks if t in task_cols]
-
-            if not existing:
-                raise ValueError(f"No columns found for task family '{family}'")
-
-            # Row-wise mean across the family
-            metrics_new[family] = metrics[existing].mean(axis=1)
-        metrics = metrics_new
-        metrics_to_index = list(ALL_TASK_FAMILIES.keys())
-
-    # X = Domain weights
-    X_train = ratios[ratios.columns[3:]].values
-    # Y = Metric values
-    Y_train = metrics[metrics.columns[3:]].values
-
-    if len(test_ratios_path) != 0 and len(test_metrics_path) != 0:
-        test_ratios = [pd.read_pickle(ratios_path) for ratios_path in test_ratios_path]
-        test_metrics = []
-        for metrics_path in test_metrics_path:
-            tm = pd.read_pickle(metrics_path)
-            if all("mmlu_stem" not in s for s in tm.columns) and any("mmlu" in s for s in tm.columns):
-                tm, _ = aggregate_mmlu(
-                    tm, old_metrics_to_index
-                )
-
-            if aggregate_task_families:
-                # we need to aggregate the test set metrics as well
-                meta_cols = tm.columns[:3]
-                task_cols = tm.columns[3:]
-                metrics_new = tm.loc[:, meta_cols].copy()
-
-                for family, tasks in ALL_TASK_FAMILIES.items():
-                    # Only keep tasks that actually exist in the dataframe
-                    existing = [t for t in tasks if t in task_cols]
-
-                    if not existing:
-                        raise ValueError(f"No columns found for task family '{family}'")
-
-                    # Row-wise mean across the family
-                    metrics_new[family] = tm[existing].mean(axis=1)
-                tm = metrics_new
-
-            test_metrics.append(tm)
-
-
-        X_test = np.concatenate([tr[tr.columns[3:]].values for tr in test_ratios])
-        Y_test = np.concatenate([tm[tm.columns[3:]].values for tm in test_metrics])
-
-
-    if n_test > 0 and (len(test_ratios_path) == 0 or len(test_metrics_path) == 0):
-        logger.info(f"Using {n_test} samples for test data")
-        X_train, X_test, Y_train, Y_test = train_test_split(X_train, Y_train, test_size=n_test / len(Y_train), random_state=seed)
-
-    if train_split[0] != 1.0:
-        # If we also want to subsample the training_data to study the effect of number of proxy runs
-        logger.info(f"Subsampling training data to {train_split} of original size")
-
-        train_split = tuple(int(t) if t > 1 else t for t in train_split)
-        assert len(train_split) > 0
-
-        # we IID subselect training data
-
-        if len(train_split) > 1:
-            all_x = []
-            all_y = []
-            for i, t in enumerate(train_split):
-                ratios_subset = ratios[ratios["name"].str.contains(full_group_names[i])]
-                metrics_subset = metrics[metrics["name"].str.contains(full_group_names[i])]
-
-                X_train_subset = ratios_subset[ratios_subset.columns[3:]].values
-                Y_train_subset = metrics_subset[metrics_subset.columns[3:]].values
-
-                X_train_subset, _, Y_train_subset, _ = train_test_split(
-                    X_train_subset, Y_train_subset, train_size=t, random_state=seed
-                )
-
-                all_x.append(X_train_subset)
-                all_y.append(Y_train_subset)
-            X_train = np.concatenate(all_x)
-            Y_train = np.concatenate(all_y)
-        else:
-            if train_split[0] == len(Y_train):
-                logger.info("Train split is the same as the dataset size, not subsampling...")
-            else:
-                X_train, _, Y_train, _ = train_test_split(
-                    X_train, Y_train, train_size=train_split[0], random_state=seed
-                )
-
-    if n_test == 0 and (len(test_ratios_path) == 0 or len(test_metrics_path) == 0):
-        X_test = deepcopy(X_train)
-        Y_test = deepcopy(Y_train)
-
-    logger.info(f"Number of train samples: {len(Y_train)}. Number of test samples: {len(Y_test)}.")
-
-    predictors = []
-
-    indexed_metrics = list(enumerate(metrics_to_index))
-    logger.info(f"Fitting {regression_type} regression for metrics:")
-    logger.info(indexed_metrics)
-
-
-    if obj_weights:
-        # we consider weighted objectives, which is needed for regression granularity experiments
-        obj_weights = ObjectiveWeights[obj_weights]
-        obj_weights = [obj_weights.value.get(metric, 1) for idx, metric in indexed_metrics]
-        logger.info(f"Minimizing weighted average: {obj_weights}")
-
-    # caching logic for regression model. Note that one regression model can be used for many different proposed mixes,
-    # which is why we need to cache based on a separate subconfig, regression_config
-    regression_config_str = json.dumps(regression_config, sort_keys=True)
-    hash_str = hashlib.sha256(regression_config_str.encode("utf-8")).hexdigest()[:16]
-    regression_model_cache_folder = pathlib.Path(BASE_CACHE_DIR) / "_".join(experiment_groups) / hash_str
-    regression_model_cache_folder.mkdir(parents=True, exist_ok=True)
-    regression_model_cache_path = regression_model_cache_folder / "regression_params.pkl"
-    if os.path.exists(regression_model_cache_path) and regression_type == "log_linear":
-        logger.info(f"Using log-linear regression model at {regression_model_cache_path}")
-        with open(regression_model_cache_path, "rb") as f:
-            params = pickle.load(f)
-
-        # link the regression model cache to the run that uses it
-        with open(os.path.join(output_dir, "path_to_regression_model.txt"), "w") as f:
-            f.write(str(regression_model_cache_path))
-
-        # initialize the regression models using the cached parameters
-        for idx, metric in indexed_metrics:
-            reg = REGRESSION_TYPES[regression_type](params=params[metric], requested_tokens=requested_tokens if regression_type=="autoscale" else None)
-            predictors.append(reg)
-    elif (
-        not os.path.exists(regression_model_cache_path)
-        and regression_type == "log_linear"
-        and os.path.exists(os.path.join(output_dir, "path_to_regression_model.txt"))
-    ):
-        # look in output_dir
-        with open(os.path.join(output_dir, "path_to_regression_model.txt")) as f:
-            regression_model_cache_path = pathlib.Path(f.read().strip())
-        if os.path.exists(regression_model_cache_path):
-            logger.info(f"Using log-linear regression model at {regression_model_cache_path}")
-            with open(regression_model_cache_path, "rb") as f:
-                params = pickle.load(f)
-
-            # initialize the regression models using the cached parameters
-            for idx, metric in indexed_metrics:
-                reg = REGRESSION_TYPES[regression_type](params=params[metric], requested_tokens=requested_tokens if regression_type=="autoscale" else None)
-                predictors.append(reg)
-    else:
-        logger.info(f"Will save regression model to {regression_model_cache_path}")
-        for idx, metric in indexed_metrics:
-            predictors.append(
-                build_regression(
-                    idx, Y_train, X_train, regression_type, early_stopping,
-                    requested_tokens if regression_type=="autoscale" else None, X_val=X_val if regression_type=="lightgbm" else None, Y_val=Y_val if regression_type=="lightgbm" else None))
-            # save intermediate progress after each regression model
-            if regression_type == "log_linear":
-                parameters = {indexed_metrics[i][-1]: predictors[i].model for i in range(len(predictors))}
-                with open(str(regression_model_cache_path).split(".pkl")[0] + f"_{idx}.pkl", "wb") as f:
-                    pickle.dump(parameters, f)
-                logger.info(
-                    f"First {idx} regression models saved to {str(regression_model_cache_path).split('.pkl')[0] + f'_{idx}.pkl'}"
-                )
-                with open(os.path.join(output_dir, "path_to_regression_model.txt"), "w") as f:
-                    f.write(str(regression_model_cache_path))
-
-        if regression_type == "log_linear":
-            parameters = {metric: predictors[idx].model for idx, metric in indexed_metrics}
-            with open(regression_model_cache_path, "wb") as f:
-                pickle.dump(parameters, f)
-            logger.info(f"Log linear regression model saved to {regression_model_cache_path}")
-            with open(os.path.join(output_dir, "path_to_regression_model.txt"), "w") as f:
-                f.write(str(regression_model_cache_path))
-
-    if len(drop_metrics) != 0:
-        drop_indices = [
-            metrics.columns.get_loc(m) - 3  # shift because metrics start at col 3
-            for m in drop_metrics
-            if m in metrics.columns[3:]
-        ]
-        logger.info(f"Dropping metrics {drop_metrics} at indices {drop_indices}")
-        # Remove those predictors by index
-        predictors = [p for i, p in enumerate(predictors) if i not in drop_indices]
-        metrics = metrics.drop(columns=list(drop_metrics), errors="ignore")
-        Y_train = np.delete(Y_train, drop_indices, axis=1)
-        Y_test = np.delete(Y_test, drop_indices, axis=1)
-
-        metrics_to_index = [m for i, m in indexed_metrics if i not in drop_indices]
-        indexed_metrics = list(enumerate(metrics_to_index))
-
-    plot_interaction_matrix(
-        output_dir,
-        predictors,
-        regression_type,
-        ratios.columns[3:].tolist(),
-        metrics.columns[3:].tolist(),
-        ratios,
-    )
-    plot_interaction_matrix_signed_evidence(
-        output_dir,
-        predictors,
-        regression_type,
-        ratios.columns[3:].tolist(),
-        metrics.columns[3:].tolist(),
-        ratios,
-    )
-    results = []
-
-    reference_ratio = None
-    if dro_reference_model_id is not None:
-        # load in metrics of the reference model
-        if dro_reference_model_id.endswith("yaml"):
-            with open(dro_reference_model_id) as f:
-                dro_config = yaml.safe_load(f)
-
-            assert all([entry["domain"] == ratios.columns[3:][i] for i, entry in enumerate(dro_config["sources"])])
-
-            reference_ratio = np.array([entry["weight"] for entry in dro_config["sources"]])
-            reference_ratio /= np.sum(reference_ratio)  # normalize the weights
-            reference_scores = [pred.predict(reference_ratio)[0] for pred in predictors]
-            reference_scores = np.array(reference_scores)
-
-        else:
-            reference_model_run_instance = get_runs_from_api(
-                api, workspace, [dro_reference_model_id], cache_path, True, eval_metrics
-            )[0]
-
-            if use_reference_model_predicted_scores:
-                # get reference model's mix and pass this through the regression model
-                reference_run_ratio = {
-                    "run": reference_model_run_instance.id,
-                    "name": reference_model_run_instance.display_name,
-                    "index": 0,
-                    **mk_weights_from_config(
-                        reference_model_run_instance.config, priors, reference_model_run_instance.display_name
-                    ),
-                }
-                reference_ratio_df = pd.DataFrame([reference_run_ratio])
-                reference_ratio = reference_ratio_df[reference_ratio_df.columns[3:]].values
-                reference_scores = [pred.predict(reference_ratio)[0] for pred in predictors]
-                reference_scores = np.array(reference_scores)
-            else:
-                # load in the reference model's true performance
-                reference_run_metric = {
-                    "run": reference_model_run_instance.id,
-                    "name": reference_model_run_instance.display_name,
-                    "index": 0,
-                    **mk_run_metrics(
-                        history=reference_model_run_instance.samples,
-                        metrics=(eval_metric_group_name, eval_metrics),
-                        display_name=reference_model_run_instance.display_name,
-                    ),
-                }
-                reference_scores = []
-                for idx, metric in indexed_metrics:
-                    reference_scores.append(reference_run_metric[metric])
-                reference_scores = np.array(reference_scores)
-
-    for idx, metric in indexed_metrics:
-        plot_correlation(
-            Y_test,
-            X_test,
-            Y_train,
-            X_train,
-            idx,
-            predictors=predictors,
-            train_split=train_split,
-            metric_name=metric,
-            regression_type=regression_type,
-            n_test=n_test,
-            split_seed=seed,
-            alpha=alpha,
-            output_dir=output_dir,
-            test_ratios_path=test_ratios_path
-        )
-
-    plot_correlation(
-        Y_test,
-        X_test,
-        Y_train,
-        X_train,
-        idx,
-        predictors=predictors,
-        train_split=train_split,
-        metric_name=metric,
+        assert proposer_type == "exact", "kl_reg requires proposer_type='exact'"
+
+    # Create FitConfig dataclass
+    fit_config_obj = FitConfig(
+        config=config_value,
+        alpha=alpha,
+        simulation_samples=simulation_samples,
+        workspace=workspace,
         regression_type=regression_type,
         n_test=n_test,
-        split_seed=seed,
-        alpha=alpha,
-        output_dir=output_dir,
-        average_bpb=True,
-        test_ratios_path=test_ratios_path
-    )
-
-
-    if fit_only or n_test > 0:
-        logger.info("Either in fit only mode or n_test > 0, not proposing a mix.")
-        return
-
-    weights = PROPOSER_TYPES[proposer_type]().propose(
-        index=-1,
-        predictor=predictors,
-        prior_distributions=priors[0],
-        original_prior=original_priors[0],
-        num_samples=simulation_samples,
+        seed=seed,
         opt_avg_metric=opt_avg_metric,
+        from_csv=from_csv,
+        from_wandb=from_wandb,
+        proposer_type=proposer_type,
         constrain_objective=constrain_objective,
-        swarm_config=launch_configs[0] if constrain_objective else None,
+        target_tokens=target_tokens_value,
+        repetition_factor=repetition_factor_value,
         obj_weights=obj_weights,
         temperature=temperature,
-        reference_scores=reference_scores if dro_reference_model_id is not None else None,
-        fixed_weight=fixed_weight_dict if fixed_weight is not None else None,
-        ratios=ratios,
-        tol=tol,
+        keep_sources=list(keep_sources) if keep_sources else [],
+        early_stopping=early_stopping,
+        fixed_weight=fixed_weight,
+        dashboard=dashboard_value,
+        support_domains=support_domains,
+        drop_metrics=drop_metrics,
         make_worst_mix=make_worst_mix,
         kl_reg=kl_reg,
         requested_tokens=requested_tokens,
-        manual_kl=natural_distribution[0] if natural_kl else None 
+        use_natural_kl=use_natural_kl,
+        test_paths=test_paths_value,
+        aggregate_task_families=aggregate_task_families,
     )
-    plot_and_log_weights(
-        prior=priors[0],
-        original_prior=original_priors[0],
-        prediction=weights,
-        metric_name="opt_avg_all_metrics",
+
+    # Convert to dict, filtering out None/default values
+    fit_config = fit_config_obj.to_dict()
+
+
+
+    output_dir = save_fit_config(fit_config, output_dir, custom_name)
+
+    # ── Run fit ──────────────────────────────────────────────────────────
+    run_fit(
+        ratios,
+        metrics,
+        priors,
+        original_priors,
+        output_dir,
+        eval_metrics=eval_metrics,
+        experiment_groups=experiment_groups_list if experiment_groups_list else None,
+        launch_configs=launch_configs,
+        full_group_names=full_group_names,
         regression_type=regression_type,
         train_split=train_split,
         n_test=n_test,
-        split_seed=seed,
+        seed=seed,
+        early_stopping=early_stopping,
+        opt_avg_metric=opt_avg_metric,
+        proposer_type=proposer_type,
+        simulation_samples=simulation_samples,
+        constrain_objective=constrain_objective,
+        temperature=temperature,
+        keep_sources=keep_sources,
+        support_domains=support_domains,
+        drop_metrics=drop_metrics,
+        fixed_weight=fixed_weight,
         alpha=alpha,
-        df_config=ratios,
-        output_dir=output_dir,
-        fixed_weight=fixed_weight_dict if fixed_weight is not None else None,
-        expand_collapsed_weights_fn=expand_collapsed_weights,
-        add_back_in_fixed_source_weights_fn=add_back_in_fixed_source_weights,
+        fit_only=fit_only,
+        make_worst_mix=make_worst_mix,
+        kl_reg=kl_reg,
+        workspace=workspace,
+        requested_tokens=requested_tokens,
+        natural_kl=natural_kl,
+        test_ratios_path=test_ratios_path,
+        test_metrics_path=test_metrics_path,
+        aggregate_task_families=aggregate_task_families,
     )
-
-    results.append(("opt_avg_all_metrics", weights))
-
-
-    metric, weights = results[-1]
-    predictions = np.array([p.predict(weights[None])[0] for p in predictors])
-    if obj_weights is not None:
-        predicted_performance = np.average(predictions, axis=0, weights=obj_weights)
-    else:
-        predicted_performance = predictions.mean(axis=0)
-    logger.info(f"Metric: {metric}. Predicted performance using regression model: {predicted_performance}")
-
-    with open(f"{output_dir}/predicted_performance.json", "w") as f:
-        json.dump(float(predicted_performance), f)
-
-    if dro_reference_model_id is not None and use_reference_model_predicted_scores:
-        diff = reference_scores - predictions
-        colors = ["green" if val > 0 else "red" for val in diff]
-        x = np.arange(len(diff))
-
-        plt.figure(figsize=(10, 6))
-        plt.bar(x, diff, color=colors)
-        plt.title("Pareto Improvement")
-
-        plt.ylabel("PREDICTED Improvements over reference model")
-        plt.axhline(0, color="black", linewidth=0.8)
-        plt.xticks(ticks=x, labels=metrics.columns[3:].tolist(), rotation=90)
-        plt.tight_layout()
-        plt.savefig(f"{output_dir}/predicted_pareto_improvement.png")
-        plt.close()
-
-    logger.info(f"Results saved to {output_dir}")

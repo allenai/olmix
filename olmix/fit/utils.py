@@ -449,7 +449,6 @@ class SimulationProposer(Proposer):
         index: int,
         predictor: list[Regressor],
         prior_distributions: dict,
-        original_prior: dict,
         ratios: pd.DataFrame,
         num_samples: int = 1_000_000,
         seed: int = 1337,
@@ -459,9 +458,6 @@ class SimulationProposer(Proposer):
         swarm_config: ExperimentConfig | None = None,
         obj_weights: list | None = None,
         temperature: float | None = None,
-        reference_scores: np.ndarray | None = None,
-        fixed_weight: dict[str, float] | None = None,
-        tol: float | None = None,
         make_worst_mix: bool = False,
         requested_tokens: int | None = None,
         **kwargs,
@@ -536,32 +532,6 @@ class SimulationProposer(Proposer):
                     continue
 
             predictions = np.array([reg.predict(simulations) for reg in predictor])
-            if reference_scores is not None:
-                # If reference scores are provided, filter simulations based on them
-                if tol is not None:
-                    tol_range = [tol]
-                else:
-                    tol_range = [0, 0.05, 0.1, 0.15, 0.2]
-                for t in tol_range:
-                    # we allow for predicted scores to be within a tolerance of the reference scores
-                    # if the current tol results in no remaining simulations, we increase tol
-                    if make_worst_mix:
-                        pareto_idxs = np.where(np.all(predictions.T > reference_scores - t, axis=1))[0]
-                    else:
-                        pareto_idxs = np.where(np.all(predictions.T < reference_scores + t, axis=1))[0]
-                    if len(pareto_idxs) != 0:
-                        logger.info(f"Using eps={t} for enforcing pareto improvements")
-                        break
-
-                if len(pareto_idxs) == 0:
-                    logger.info("No simulations passed the pareto filter.")
-                    continue
-
-                # filter both the simulations and corresponding predictions down
-                simulations = simulations[pareto_idxs]
-                predictions = predictions[:, pareto_idxs]
-                logger.info(f"Filtered simulations to {len(simulations)} based on reference scores.")
-
             if opt_avg_metric:
                 if obj_weights is not None:
                     objs = np.average(predictions, axis=0, weights=obj_weights)
@@ -1143,9 +1113,9 @@ def add_back_in_fixed_source_weights(
     return final_weights
 
 
-def save_eval_config(eval_config: dict, output_dir: str, custom_name: str | None = None) -> str:
+def save_fit_config(fit_config: dict, output_dir: str, custom_name: str | None = None) -> str:
     # Serialize dict in a stable way
-    config_str = json.dumps(eval_config, sort_keys=True)
+    config_str = json.dumps(fit_config, sort_keys=True)
 
     # Hash it (short hash for readability)
     hash_str = hashlib.sha256(config_str.encode("utf-8")).hexdigest()[:16]
@@ -1160,7 +1130,7 @@ def save_eval_config(eval_config: dict, output_dir: str, custom_name: str | None
     # Save config JSON inside
     config_path = os.path.join(folder_path, "config.json")
     with open(config_path, "w") as f:
-        json.dump(eval_config, f, indent=2)
+        json.dump(fit_config, f, indent=2)
 
     print(f"[INFO] Saved config to {config_path}")
     return folder_path
@@ -1369,7 +1339,7 @@ def aggregate_mmlu(metrics: pd.DataFrame, metrics_to_index: list):
     return metrics, metrics_to_index
 
 
-def swarm_config_from_path(config: Path) -> ExperimentConfig:
+def swarm_config_from_path(config: str) -> ExperimentConfig:
     """
     Load configuration from a config file path.
 
