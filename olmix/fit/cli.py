@@ -36,7 +36,6 @@ from olmix.fit.utils import (
     aggregate_mmlu,
     build_regression,
     calculate_priors_with_manual,
-    compute_mixture_neighborhood,
     expand_collapsed_weights,
     get_output_dir,
     get_runs_from_api,
@@ -85,14 +84,6 @@ DEFAULT_WORKSPACE = "ai2-llm/regmixer"
     required=False,
 )
 @click.option(
-    "-s",
-    "--num-samples",
-    type=int,
-    default=1,
-    help="The number of evaluation samples per metric to collect from the run history",
-    required=False,
-)
-@click.option(
     "-w",
     "--workspace",
     type=str,
@@ -105,14 +96,6 @@ DEFAULT_WORKSPACE = "ai2-llm/regmixer"
     "--no-cache",
     is_flag=True,
     help="Do not use the cache for the runs",
-    required=False,
-    default=False,
-)
-@click.option(
-    "-e",
-    "--use-entropy",
-    is_flag=True,
-    help="Select highest entropy samples for simulation.",
     required=False,
     default=False,
 )
@@ -170,13 +153,6 @@ DEFAULT_WORKSPACE = "ai2-llm/regmixer"
     default="exact",
 )
 @click.option(
-    "--neighborhood",
-    type=str,
-    help="the training run display name that defines the neighborhood of subselected mixtures we regress on",
-    required=False,
-    default=None,
-)
-@click.option(
     "--constrain-objective",
     is_flag=True,
     help="If set, we produce a proposed mix that is unconstrained according to the final cookbook config.",
@@ -227,28 +203,7 @@ DEFAULT_WORKSPACE = "ai2-llm/regmixer"
     default=False,
 )
 @click.option(
-    "--use-reference-model-as-search-prior",
-    is_flag=True,
-    help="If true, we center our proposal/simulation around the reference model weights",
-    required=False,
-    default=False,
-)
-@click.option(
-    "--select-top-k-runs",
-    type=float,
-    help="If set, only use the metrics and ratios of the top k runs, where performance is the average BPB across all tasks",
-    required=False,
-    default=1.0,
-)
-@click.option(
     "--fixed-weight", type=str, help="string dict of domains and their weights to fix", required=False, default=None
-)
-@click.option(
-    "--pull-from-dashboard",
-    is_flag=True,
-    help="if set, pull eval results from dashboard",
-    required=False,
-    default=False,
 )
 @click.option(
     "--dashboard",
@@ -257,14 +212,6 @@ DEFAULT_WORKSPACE = "ai2-llm/regmixer"
     required=False,
     multiple=True,
     default=["regmixer"],
-)
-@click.option("--metric-type", type=str, help="the metric type to use for evaluation", required=False, default=None)
-@click.option(
-    "--use-cookbook",
-    is_flag=True,
-    help="if set, use a series of params designed for olmo-cookbook, not regmixer swarm",
-    required=False,
-    default=False,
 )
 @click.option(
     "--fit-only",
@@ -276,14 +223,7 @@ DEFAULT_WORKSPACE = "ai2-llm/regmixer"
 @click.option(
     "--custom-name", type=str, help="if set, use this custom name for the experiment", required=False, default=None
 )
-@click.option("--interactions", multiple=True, help="Feature interactions, like 1,2 ", type=str, default=None)
 @click.option("--tol", type=float, help="Pareto constraint tolerance", default=None, required=False)
-@click.option(
-    "--fixed-search-weight",
-    type=str,
-    help="If set, this states that certain elements of our proposed mix must have a specific weight",
-    required=False,
-)
 @click.option(
     "--support-domains",
     multiple=True,
@@ -313,16 +253,9 @@ DEFAULT_WORKSPACE = "ai2-llm/regmixer"
     default=0.0,
 )
 @click.option(
-    "--use-hardcoded-reference-ratio",
-    is_flag=True,
-    help="if set, we use a hardcoded reference ratio for the mix",
-    required=False,
-    default=False,
-)
-@click.option(
     "--kl-reg",
     type=float,
-    help="the lambda for KL regularization, only used for log-linear regression",
+    help="the lambda for KL regularization with exact solver",
     required=False,
     default=None,
 )
@@ -374,18 +307,15 @@ def fit(
     experiment_groups: list[str],
     config: list[pathlib.Path],
     alpha: float,
-    num_samples: int,
     simulation_samples: int,
     workspace: str,
     no_cache: bool,
-    use_entropy: bool,
     regression_type: str,
     train_split: tuple[float, ...],
     n_test: int,
     seed: int,
     opt_avg_metric: bool,
     proposer_type: str,
-    neighborhood: str | None,
     constrain_objective: bool,
     obj_weights: str | None,
     temperature: float | None,
@@ -393,23 +323,14 @@ def fit(
     dashboard: list[str],
     support_domains: tuple[str],
     drop_metrics: tuple[str],
-    interactions: tuple[str],
     early_stopping: float = 0.0,
     dro_reference_model_id: str | None = None,
     use_reference_model_predicted_scores: bool = False,
-    use_reference_model_as_search_prior: bool = False,
-    select_top_k_runs: float = 1.0,
     fixed_weight: str | None = None,
-    pull_from_dashboard: bool = False,
-    metric_type: str | None = None,
-    use_cookbook: bool = False,
     fit_only: bool = False,
     custom_name: str | None = None,
     tol: float | None = None,
-    fixed_search_weight: str | None = None,
     make_worst_mix: bool = False,
-    min_weight_per_domain: float = 0.0,
-    use_hardcoded_reference_ratio: bool = False,
     kl_reg: float | None = None,
     patched: bool = False,
     requested_tokens: int | None = None,
@@ -425,17 +346,12 @@ def fit(
     if proposer_type == "search" and regression_type != "search":
         raise ValueError("Proposer type search only works with regression type search")
 
-    if use_cookbook:
-        workspace = "ai2-llm/olmo-cookbook"
-        assert pull_from_dashboard, "If using olmo-cookbook, pull_from_dashboard must be set to True"
-
     # Load configs early so we can use them for constraint settings
-    launch_configs = [swarm_config_from_path(c, use_cookbook) for c in config]
+    launch_configs = [swarm_config_from_path(c) for c in config]
 
     eval_config = {
         "config": config[0] if len(config) == 1 else config,
         "alpha": alpha,
-        "num_samples": num_samples,
         "simulation_samples": simulation_samples,
         "workspace": workspace,
         "regression_type": regression_type,
@@ -446,8 +362,6 @@ def fit(
     }
     if proposer_type != "simulation":
         eval_config["proposer_type"] = proposer_type
-    if neighborhood is not None:
-        eval_config["neighborhood"] = neighborhood
     if constrain_objective:
         eval_config["constrain_objective"] = True
         # Constraints now come from the config's target_tokens/target_chinchilla_multiple
@@ -471,31 +385,19 @@ def fit(
         eval_config["dro_reference_model_id"] = dro_reference_model_id
     if use_reference_model_predicted_scores:
         eval_config["use_reference_model_predicted_scores"] = use_reference_model_predicted_scores
-    if use_reference_model_as_search_prior:
-        eval_config["use_reference_model_as_search_prior"] = use_reference_model_as_search_prior
     if fixed_weight is not None:
         eval_config["fixed_weight"] = fixed_weight
         fixed_weight_dict = json.loads(fixed_weight)
-    if pull_from_dashboard:
-        eval_config["pull_from_dashboard"] = pull_from_dashboard
     if dashboard[0] != "regmixer":
         eval_config["dashboard"] = dashboard
-    if metric_type is not None:
-        eval_config["metric_type"] = metric_type
     if tol is not None:
         eval_config["tol"] = tol
-    if fixed_search_weight is not None:
-        eval_config["fixed_search_weight"] = fixed_search_weight
     if len(support_domains) != 0:
         eval_config["support_domains"] = support_domains
     if len(drop_metrics) != 0:
         eval_config["drop_metrics"] = drop_metrics
     if make_worst_mix:
         eval_config["make_worst_mix"] = True
-    if min_weight_per_domain > 0.0:
-        eval_config["min_weight_per_domain"] = min_weight_per_domain
-    if use_hardcoded_reference_ratio:
-        eval_config["use_hardcoded_reference_ratio"] = True
     if kl_reg is not None:
         assert proposer_type == "exact"
         eval_config["kl_reg"] = kl_reg
@@ -519,19 +421,11 @@ def fit(
         "train_split": train_split[0] if len(train_split) == 1 else train_split,
         "n_test": n_test,
         "seed": seed,
-        "neighborhood": neighborhood,
         "keep_sources": keep_sources,
         "early_stopping": early_stopping,
     }
-    if select_top_k_runs < 1.0:
-        eval_config["select_top_k_runs"] = select_top_k_runs
-        regression_config["select_top_k_runs"] = select_top_k_runs
     if fixed_weight is not None:
         regression_config["fixed_weight"] = fixed_weight
-    if metric_type is not None:
-        regression_config["metric_type"] = metric_type
-    if len(interactions) != 0:
-        regression_config["interactions"] = interactions
 
     if len(support_domains) != 0:
         regression_config["support_domains"] = support_domains
@@ -556,7 +450,7 @@ def fit(
     if no_cache:
         logger.info("Cache disabled, will not use cache for run samples...")
         run_instances = get_runs_from_api(
-            api, workspace, full_group_names, cache_path, no_cache, num_samples, eval_metrics
+            api, workspace, full_group_names, cache_path, no_cache, eval_metrics
         )
     else:
         try:
@@ -569,7 +463,7 @@ def fit(
         except FileNotFoundError:
             logger.warning(f"Failed to load cache from {cache_path}, fetching runs from API...")
             run_instances = get_runs_from_api(
-                api, workspace, full_group_names, cache_path, no_cache, num_samples, eval_metrics
+                api, workspace, full_group_names, cache_path, no_cache, eval_metrics
             )
 
     # Filter out failed runs or runs without evals
@@ -579,8 +473,8 @@ def fit(
 
     logger.info("Calculating source weights...")
     priors, original_priors = calculate_priors_with_manual(
-        source_configs=launch_configs[0].dataset.sources if use_cookbook else launch_configs[0].sources,
-        dtype=launch_configs[0].dataset.dtype if use_cookbook else launch_configs[0].dtype,
+        source_configs=launch_configs[0].sources,
+        dtype=launch_configs[0].dtype,
         use_cache=(not no_cache),
         manual_prior=launch_configs[0].manual_prior if hasattr(launch_configs[0], "manual_prior") else None,
         fixed_source_weights=launch_configs[0].fixed_source_weights
@@ -591,8 +485,8 @@ def fit(
     if natural_kl and proposer_type == "exact" and kl_reg is not None:
         logger.info(f"Calculating natural source weights for KL regularization...")
         natural_distribution, _ = calculate_priors_with_manual(
-            source_configs=launch_configs[0].dataset.sources if use_cookbook else launch_configs[0].sources,
-            dtype=launch_configs[0].dataset.dtype if use_cookbook else launch_configs[0].dtype,
+            source_configs=launch_configs[0].sources,
+            dtype=launch_configs[0].dtype,
             use_cache=(no_cache == False),
             manual_prior=None,
             fixed_source_weights= launch_configs[0].fixed_source_weights if hasattr(launch_configs[0], "fixed_source_weights") else None,
@@ -633,77 +527,21 @@ def fit(
             }
             for idx, run in enumerate(run_instances)
         ]
-        if pull_from_dashboard:
-            all_dashboard_results = pd.DataFrame()
-            for d in dashboard:
-                logger.info(f"Pulling results from dashboard {d}...")
-                command = [
-                    "olmo-cookbook-eval",
-                    "results",
-                    "--dashboard",
-                    f"{d}",
-                ]
-                for task in eval_metrics:
-                    command.append("--tasks")
-                    command.append(task)
-                command.extend(["--format", "csv", "--skip-on-fail"])
-                result = subprocess.run(command, capture_output=True, text=True)
-                # Check for errors
-                if result.returncode != 0:
-                    print("Error:", result.stderr)
-                else:
-                    # Load CSV content into a DataFrame
-                    csv_data = result.stdout
-                    df = pd.read_csv(StringIO(csv_data))
-                    all_dashboard_results = pd.concat([all_dashboard_results, df], ignore_index=True)
-
-            run_metrics = []
-            for idx, run in tqdm(enumerate(run_instances)):
-                # Filter the dashboard results
-                matched = all_dashboard_results[
-                    all_dashboard_results["name"].str.contains(re.escape(run.display_name), regex=True)
-                ]
-
-                if matched.empty:
-                    logger.warning(f"No matching results found for run {run.display_name}")
-                    continue
-
-                try:
-                    metrics = {k: next(iter(v.values())) for k, v in matched[eval_metrics].to_dict().items()}
-                except StopIteration:
-                    logger.warning(f"Empty values found when parsing metrics for {run.display_name}")
-                    continue
-
-                run_metrics.append(
-                    {
-                        "run": run.id,
-                        "name": run.display_name,
-                        "index": idx,
-                        **metrics,
-                    }
-                )
-
-        else:
-            run_metrics = [
-                {
-                    "run": run.id,
-                    "name": run.display_name,
-                    "index": idx,
-                    **mk_run_metrics(
-                        history=run.samples,
-                        samples=num_samples,
-                        metrics=(eval_metric_group_name, eval_metrics),
-                        display_name=run.display_name
-                        if experiment_groups[0] != "ee22e17f"
-                        else run.display_name.replace("all-dressed", "dclmv2"),
-                        pull_from_dashboard=pull_from_dashboard,
-                        dashboard=dashboard,
-                        metric_type=metric_type,
-                    ),
-                }
-                for idx, run in tqdm(enumerate(run_instances))
-                if len(run.samples) > 0
-            ]
+        run_metrics = [
+            {
+                "run": run.id,
+                "name": run.display_name,
+                "index": idx,
+                **mk_run_metrics(
+                    history=run.samples,
+                    metrics=(eval_metric_group_name, eval_metrics),
+                    display_name=run.display_name,
+                    dashboard=dashboard,
+                ),
+            }
+            for idx, run in tqdm(enumerate(run_instances))
+            if len(run.samples) > 0
+        ]
 
         ratios = pd.DataFrame(run_ratios)
         metrics = pd.DataFrame(run_metrics)
@@ -756,18 +594,6 @@ def fit(
         ratios.drop(columns=other_columns, inplace=True)
 
 
-    if select_top_k_runs < 1.0:
-        metrics["all_bpb"] = metrics[metrics.columns[3:]].mean(axis=1)
-        keep_runs = metrics.sort_values(by="all_bpb").run.values[: int(len(metrics) * select_top_k_runs)]
-        metrics = metrics[metrics.run.isin(keep_runs)]
-        ratios = ratios[ratios.run.isin(keep_runs)]
-
-    if metric_type == "primary_score":
-        logger.info("Doing z-score normalization on the primary scores...")
-        cols_to_normalize = metrics.columns[3:]
-        metrics[cols_to_normalize] = metrics[cols_to_normalize].apply(pd.to_numeric, errors="coerce")
-        metrics[cols_to_normalize] = metrics[cols_to_normalize].apply(lambda col: (col - col.mean()) / col.std(ddof=0))
-
     cols_to_check = metrics.columns[3:]
     bad_rows = metrics[metrics[cols_to_check].isna().any(axis=1)]
 
@@ -775,12 +601,6 @@ def fit(
         logger.warning(f"Found NaNs in the following rows, dropping them! {bad_rows.index.tolist()}")
         metrics = metrics.drop(index=bad_rows.index)
         ratios = ratios.drop(index=bad_rows.index)
-
-    """ cols_with_nans = metrics[cols_to_check].columns[metrics[cols_to_check].isna().any()].tolist()
-    if len(cols_with_nans) > 0:
-        logger.warning(f"Found NaNs in the following columns, dropping them! {cols_with_nans}")
-        metrics = metrics.drop(columns=cols_with_nans)
-        metrics_to_index = [m for m in metrics_to_index if m not in cols_with_nans] """
 
     if regression_type == "log_linear":
         if (metrics[metrics.columns[3:]] < 0).any().any():
@@ -855,37 +675,33 @@ def fit(
         train_split = tuple(int(t) if t > 1 else t for t in train_split)
         assert len(train_split) > 0
 
-        if neighborhood is None:
-            # we IID subselect training data
+        # we IID subselect training data
 
-            if len(train_split) > 1:
-                all_x = []
-                all_y = []
-                for i, t in enumerate(train_split):
-                    ratios_subset = ratios[ratios["name"].str.contains(full_group_names[i])]
-                    metrics_subset = metrics[metrics["name"].str.contains(full_group_names[i])]
+        if len(train_split) > 1:
+            all_x = []
+            all_y = []
+            for i, t in enumerate(train_split):
+                ratios_subset = ratios[ratios["name"].str.contains(full_group_names[i])]
+                metrics_subset = metrics[metrics["name"].str.contains(full_group_names[i])]
 
-                    X_train_subset = ratios_subset[ratios_subset.columns[3:]].values
-                    Y_train_subset = metrics_subset[metrics_subset.columns[3:]].values
+                X_train_subset = ratios_subset[ratios_subset.columns[3:]].values
+                Y_train_subset = metrics_subset[metrics_subset.columns[3:]].values
 
-                    X_train_subset, _, Y_train_subset, _ = train_test_split(
-                        X_train_subset, Y_train_subset, train_size=t, random_state=seed
-                    )
+                X_train_subset, _, Y_train_subset, _ = train_test_split(
+                    X_train_subset, Y_train_subset, train_size=t, random_state=seed
+                )
 
-                    all_x.append(X_train_subset)
-                    all_y.append(Y_train_subset)
-                X_train = np.concatenate(all_x)
-                Y_train = np.concatenate(all_y)
-            else:
-                if train_split[0] == len(Y_train):
-                    logger.info("Train split is the same as the dataset size, not subsampling...")
-                else:
-                    X_train, _, Y_train, _ = train_test_split(
-                        X_train, Y_train, train_size=train_split[0], random_state=seed
-                    )
+                all_x.append(X_train_subset)
+                all_y.append(Y_train_subset)
+            X_train = np.concatenate(all_x)
+            Y_train = np.concatenate(all_y)
         else:
-            assert len(train_split) == 1, "If neighborhood is not set, train_split must be a single float"
-            X_train, Y_train = compute_mixture_neighborhood(X_train, Y_train, ratios, neighborhood, train_split[0])
+            if train_split[0] == len(Y_train):
+                logger.info("Train split is the same as the dataset size, not subsampling...")
+            else:
+                X_train, _, Y_train, _ = train_test_split(
+                    X_train, Y_train, train_size=train_split[0], random_state=seed
+                )
 
     if n_test == 0 and (len(test_ratios_path) == 0 or len(test_metrics_path) == 0):
         X_test = deepcopy(X_train)
@@ -905,17 +721,6 @@ def fit(
         obj_weights = ObjectiveWeights[obj_weights]
         obj_weights = [obj_weights.value.get(metric, 1) for idx, metric in indexed_metrics]
         logger.info(f"Minimizing weighted average: {obj_weights}")
-
-
-    """ if regression_type=="lightgbm":
-        # debugging - just fit on first metric
-        drop_indices = np.arange(4, len(metrics.columns))
-        metrics = metrics.drop(columns=metrics.columns[drop_indices])
-        Y_train = np.delete(Y_train, drop_indices-3, axis=1)
-        Y_test = np.delete(Y_test, drop_indices-3, axis=1)
-        metrics_to_index = [m for i, m in indexed_metrics if i not in drop_indices-3]
-        indexed_metrics = list(enumerate(metrics_to_index))
-    """
 
     # caching logic for regression model. Note that one regression model can be used for many different proposed mixes,
     # which is why we need to cache based on a separate subconfig, regression_config
@@ -959,7 +764,7 @@ def fit(
         for idx, metric in indexed_metrics:
             predictors.append(
                 build_regression(
-                    idx, Y_train, X_train, regression_type, early_stopping, list(interactions) if interactions else None,
+                    idx, Y_train, X_train, regression_type, early_stopping,
                     requested_tokens if regression_type=="autoscale" else None, X_val=X_val if regression_type=="lightgbm" else None, Y_val=Y_val if regression_type=="lightgbm" else None))
             # save intermediate progress after each regression model
             if regression_type == "log_linear":
@@ -1003,7 +808,6 @@ def fit(
         ratios.columns[3:].tolist(),
         metrics.columns[3:].tolist(),
         ratios,
-        metric_type,
     )
     plot_interaction_matrix_signed_evidence(
         output_dir,
@@ -1012,7 +816,6 @@ def fit(
         ratios.columns[3:].tolist(),
         metrics.columns[3:].tolist(),
         ratios,
-        metric_type,
     )
     results = []
 
@@ -1032,7 +835,7 @@ def fit(
 
         else:
             reference_model_run_instance = get_runs_from_api(
-                api, workspace, [dro_reference_model_id], cache_path, True, num_samples, eval_metrics
+                api, workspace, [dro_reference_model_id], cache_path, True, eval_metrics
             )[0]
 
             if use_reference_model_predicted_scores:
@@ -1057,7 +860,6 @@ def fit(
                     "index": 0,
                     **mk_run_metrics(
                         history=reference_model_run_instance.samples,
-                        samples=num_samples,
                         metrics=(eval_metric_group_name, eval_metrics),
                         display_name=reference_model_run_instance.display_name,
                     ),
@@ -1080,181 +882,99 @@ def fit(
             regression_type=regression_type,
             n_test=n_test,
             split_seed=seed,
-            n_samples=num_samples,
             alpha=alpha,
             output_dir=output_dir,
             test_ratios_path=test_ratios_path
         )
 
-        if not opt_avg_metric and n_test == 0:
-            weights = PROPOSER_TYPES[proposer_type]().propose(
-                index=idx,
-                predictor=predictors,
-                prior_distributions=priors[0],
-                original_prior=original_priors[0],
-                num_samples=simulation_samples,
-                opt_avg_metric=opt_avg_metric,
-                constrain_objective=constrain_objective,
-                swarm_config=launch_configs[0] if constrain_objective else None,
-                obj_weights=obj_weights,
-                temperature=temperature,
-                reference_scores=reference_scores if dro_reference_model_id is not None else None,
-                fixed_weight=fixed_weight_dict if fixed_weight is not None else None,
-                metric_type=metric_type,
-                ratios=ratios,
-                tol=tol,
-                fixed_search_weight=fixed_search_weight,
-                reference_ratio=reference_ratio if use_reference_model_as_search_prior else None,
-                make_worst_mix=make_worst_mix,
-                min_weight_per_domain=min_weight_per_domain,
-                requested_tokens=requested_tokens,
-                manual_kl=natural_distribution[0] if natural_kl else None 
-            )
-
-            plot_and_log_weights(
-                prior=priors[0],
-                original_prior=original_priors[0],
-                prediction=weights,
-                metric_name=metric,
-                regression_type=regression_type,
-                train_split=train_split,
-                n_test=n_test,
-                split_seed=seed,
-                n_samples=num_samples,
-                alpha=alpha,
-                df_config=ratios,
-                output_dir=output_dir,
-                fixed_weight=fixed_weight_dict if fixed_weight is not None else None,
-                expand_collapsed_weights_fn=expand_collapsed_weights,
-                add_back_in_fixed_source_weights_fn=add_back_in_fixed_source_weights,
-            )
-
-            results.append((metric, weights))
-
-        plot_correlation(
-            Y_test,
-            X_test,
-            Y_train,
-            X_train,
-            idx,
-            predictors=predictors,
-            train_split=train_split,
-            metric_name=metric,
-            regression_type=regression_type,
-            n_test=n_test,
-            split_seed=seed,
-            n_samples=num_samples,
-            alpha=alpha,
-            output_dir=output_dir,
-            average_bpb=True,
-            test_ratios_path=test_ratios_path
-        )
+    plot_correlation(
+        Y_test,
+        X_test,
+        Y_train,
+        X_train,
+        idx,
+        predictors=predictors,
+        train_split=train_split,
+        metric_name=metric,
+        regression_type=regression_type,
+        n_test=n_test,
+        split_seed=seed,
+        alpha=alpha,
+        output_dir=output_dir,
+        average_bpb=True,
+        test_ratios_path=test_ratios_path
+    )
 
 
-    if fit_only:
-        logger.info("Fit only mode, not proposing a mix.")
+    if fit_only or n_test > 0:
+        logger.info("Either in fit only mode or n_test > 0, not proposing a mix.")
         return
 
-    if opt_avg_metric and n_test == 0:
-        weights = PROPOSER_TYPES[proposer_type]().propose(
-            index=-1,
-            predictor=predictors,
-            prior_distributions=priors[0],
-            original_prior=original_priors[0],
-            num_samples=simulation_samples,
-            opt_avg_metric=opt_avg_metric,
-            constrain_objective=constrain_objective,
-            swarm_config=launch_configs[0] if constrain_objective else None,
-            obj_weights=obj_weights,
-            temperature=temperature,
-            reference_scores=reference_scores if dro_reference_model_id is not None else None,
-            fixed_weight=fixed_weight_dict if fixed_weight is not None else None,
-            metric_type=metric_type,
-            ratios=ratios,
-            tol=tol,
-            fixed_search_weight=fixed_search_weight,
-            reference_ratio=reference_ratio
-            if use_reference_model_as_search_prior or reference_ratio is not None
-            else None,
-            make_worst_mix=make_worst_mix,
-            min_weight_per_domain=min_weight_per_domain,
-            kl_reg=kl_reg,
-            requested_tokens=requested_tokens,
-            manual_kl=natural_distribution[0] if natural_kl else None 
-        )
-        plot_and_log_weights(
-            prior=priors[0],
-            original_prior=original_priors[0],
-            prediction=weights,
-            metric_name="opt_avg_all_metrics",
-            regression_type=regression_type,
-            train_split=train_split,
-            n_test=n_test,
-            split_seed=seed,
-            n_samples=num_samples,
-            alpha=alpha,
-            df_config=ratios,
-            output_dir=output_dir,
-            fixed_weight=fixed_weight_dict if fixed_weight is not None else None,
-            expand_collapsed_weights_fn=expand_collapsed_weights,
-            add_back_in_fixed_source_weights_fn=add_back_in_fixed_source_weights,
-        )
+    weights = PROPOSER_TYPES[proposer_type]().propose(
+        index=-1,
+        predictor=predictors,
+        prior_distributions=priors[0],
+        original_prior=original_priors[0],
+        num_samples=simulation_samples,
+        opt_avg_metric=opt_avg_metric,
+        constrain_objective=constrain_objective,
+        swarm_config=launch_configs[0] if constrain_objective else None,
+        obj_weights=obj_weights,
+        temperature=temperature,
+        reference_scores=reference_scores if dro_reference_model_id is not None else None,
+        fixed_weight=fixed_weight_dict if fixed_weight is not None else None,
+        ratios=ratios,
+        tol=tol,
+        make_worst_mix=make_worst_mix,
+        kl_reg=kl_reg,
+        requested_tokens=requested_tokens,
+        manual_kl=natural_distribution[0] if natural_kl else None 
+    )
+    plot_and_log_weights(
+        prior=priors[0],
+        original_prior=original_priors[0],
+        prediction=weights,
+        metric_name="opt_avg_all_metrics",
+        regression_type=regression_type,
+        train_split=train_split,
+        n_test=n_test,
+        split_seed=seed,
+        alpha=alpha,
+        df_config=ratios,
+        output_dir=output_dir,
+        fixed_weight=fixed_weight_dict if fixed_weight is not None else None,
+        expand_collapsed_weights_fn=expand_collapsed_weights,
+        add_back_in_fixed_source_weights_fn=add_back_in_fixed_source_weights,
+    )
 
-        results.append(("opt_avg_all_metrics", weights))
+    results.append(("opt_avg_all_metrics", weights))
 
-    elif not opt_avg_metric and n_test == 0:
-        # If we're not optimizing for the average of the metric group, then we average the reweighted distributions after fitting
-        avg_name = f"avg_{eval_metric_group_name}"
-        average = np.mean([result[1] for result in results], axis=0)
-        plot_and_log_weights(
-            prior=priors[0],
-            original_prior=original_priors[0],
-            prediction=average,
-            metric_name=avg_name,
-            regression_type=regression_type,
-            train_split=train_split,
-            n_test=n_test,
-            split_seed=seed,
-            n_samples=num_samples,
-            alpha=alpha,
-            df_config=ratios,
-            output_dir=output_dir,
-            fixed_weight=fixed_weight_dict if fixed_weight is not None else None,
-            expand_collapsed_weights_fn=expand_collapsed_weights,
-            add_back_in_fixed_source_weights_fn=add_back_in_fixed_source_weights,
-        )
 
-        results.append((avg_name, average))
+    metric, weights = results[-1]
+    predictions = np.array([p.predict(weights[None])[0] for p in predictors])
+    if obj_weights is not None:
+        predicted_performance = np.average(predictions, axis=0, weights=obj_weights)
+    else:
+        predicted_performance = predictions.mean(axis=0)
+    logger.info(f"Metric: {metric}. Predicted performance using regression model: {predicted_performance}")
 
-    if n_test == 0:
-        metric, weights = results[-1]
-        predictions = np.array([p.predict(weights[None])[0] for p in predictors])
-        if obj_weights is not None:
-            predicted_performance = np.average(predictions, axis=0, weights=obj_weights)
-        else:
-            predicted_performance = predictions.mean(axis=0)
-        logger.info(f"Metric: {metric}. Predicted performance using regression model: {predicted_performance}")
+    with open(f"{output_dir}/predicted_performance.json", "w") as f:
+        json.dump(float(predicted_performance), f)
 
-        with open(f"{output_dir}/predicted_performance.json", "w") as f:
-            json.dump(float(predicted_performance), f)
+    if dro_reference_model_id is not None and use_reference_model_predicted_scores:
+        diff = reference_scores - predictions
+        colors = ["green" if val > 0 else "red" for val in diff]
+        x = np.arange(len(diff))
 
-        if dro_reference_model_id is not None and use_reference_model_predicted_scores:
-            if metric_type == "primary_score":
-                diff = predictions - reference_scores
-            else:
-                diff = reference_scores - predictions
-            colors = ["green" if val > 0 else "red" for val in diff]
-            x = np.arange(len(diff))
+        plt.figure(figsize=(10, 6))
+        plt.bar(x, diff, color=colors)
+        plt.title("Pareto Improvement")
 
-            plt.figure(figsize=(10, 6))
-            plt.bar(x, diff, color=colors)
-            plt.title("Pareto Improvement")
-
-            plt.ylabel("PREDICTED Improvements over reference model")
-            plt.axhline(0, color="black", linewidth=0.8)
-            plt.xticks(ticks=x, labels=metrics.columns[3:].tolist(), rotation=90)
-            plt.tight_layout()
-            plt.savefig(f"{output_dir}/predicted_pareto_improvement.png")
-            plt.close()
+        plt.ylabel("PREDICTED Improvements over reference model")
+        plt.axhline(0, color="black", linewidth=0.8)
+        plt.xticks(ticks=x, labels=metrics.columns[3:].tolist(), rotation=90)
+        plt.tight_layout()
+        plt.savefig(f"{output_dir}/predicted_pareto_improvement.png")
+        plt.close()
 
     logger.info(f"Results saved to {output_dir}")
