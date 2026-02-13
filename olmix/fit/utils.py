@@ -23,6 +23,10 @@ import torch.optim as optim
 import yaml
 from tqdm import tqdm
 from wandb.apis.public import Run
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import RBF, ConstantKernel, WhiteKernel
+from scipy.optimize import least_squares
+
 
 from olmix.aliases import ExperimentConfig, SourceConfig
 from olmix.fit.law import ScalingLaw
@@ -130,55 +134,6 @@ class LightGBMRegressor(Regressor):
         )
 
 
-class LinearRegressor(Regressor):
-    # def __init__(self, **kwargs):
-    #    self.model = LinearRegression(fit_intercept=False)
-
-    def __init__(self, **kwargs):
-        self.model = None
-
-    # def fit(self, x, y, idx, **kwargs):
-    #    target = y[:, idx]
-    #    self.model = self.model.fit(x, target)
-
-    def fit(self, x, y, idx, **kwargs):
-        target = y[:, idx]
-        # we do not add intercept because this would make X linearly dependent.
-        self.model = sm.OLS(target, x).fit()
-
-
-class QuadraticRegressor(Regressor):
-    def __init__(self, interactions, **kwargs):
-        self.model = None
-        assert interactions is not None, "Interactions must be provided for quadratic regression."
-        self.interactions = []
-        for interaction in interactions:
-            self.interactions.append(tuple([int(var) for var in interaction.split(",")]))
-
-    def _transform(self, x):
-        """Add interaction terms to x based on self.interactions"""
-        x = np.asarray(x)
-        interaction_terms = []
-        for i, j in self.interactions:
-            interaction = (x[:, i] * x[:, j]).reshape(-1, 1)
-            interaction_terms.append(interaction)
-        if interaction_terms:
-            interaction_matrix = np.hstack(interaction_terms)
-            x_augmented = np.hstack([x, interaction_matrix])
-        else:
-            x_augmented = x
-        return x_augmented
-
-    def fit(self, x, y, idx, **kwargs):
-        x_augmented = self._transform(x)
-        target = y[:, idx]
-        self.model = sm.OLS(target, x_augmented).fit()
-
-    def predict(self, x):
-        x_augmented = self._transform(x)
-        return self.model.predict(x_augmented)
-
-
 class LogLinearRegressor(Regressor):
     def __init__(self, params=None, **kwargs):
         np.random.seed(42)
@@ -204,46 +159,227 @@ class LogLinearRegressor(Regressor):
         return mixing_law(torch.tensor(x, dtype=torch.float), torch.tensor(self.model, dtype=torch.float)).numpy()
 
 
-class LogNonLinearRegressor(Regressor):
-    def __init__(self, params=None, B_mask=None, **kwargs):
-        np.random.seed(42)
-        random.seed(42)
-
-        self.B_mask = B_mask
-        if params is None:
-            self.model = ScalingLaw(nonlinear_mixing_law)
-        else:
-            self.model = params
-
-    def fit(self, x, y, idx, early_stopping=0.0, max_step=100, delta=0.02):
-        for i, params in enumerate(init_params_log_nonlinear_law(idx, self.B_mask, num_domains=x.shape[-1])):
-            print(
-                nonlinear_mixing_law(
-                    torch.tensor(x, dtype=torch.float),
-                    torch.tensor(params, dtype=torch.float),
-                    B_mask=self.B_mask,
-                )
-            )
-            if i == 0:
-                break
-
-        target = y[:, idx]
-        self.model = self.model.fit(
-            x,
-            target,
-            init_params_log_nonlinear_law(idx, self.B_mask, num_domains=x.shape[-1]),
-            B_mask=self.B_mask,
-            max_step=max_step,
-            delta=delta,
-            eps=early_stopping,
+class GPRegressor(Regressor):
+    def __init__(self, **kwargs):
+        # Default hyperparameters (can be overridden via kwargs)
+        length_scale = kwargs.get('length_scale', 1.0)
+        length_scale_bounds = kwargs.get('length_scale_bounds', (1e-2, 1e2))
+        constant_value = kwargs.get('constant_value', 1.0)
+        constant_value_bounds = kwargs.get('constant_value_bounds', (1e-3, 1e3))
+        noise_level = kwargs.get('noise_level', 0.1)
+        noise_level_bounds = kwargs.get('noise_level_bounds', (1e-5, 1e1))
+        n_restarts = kwargs.get('n_restarts_optimizer', 10)
+        normalize_y = kwargs.get('normalize_y', True)
+        
+        # Build kernel: λ * RBF(σ) + WhiteKernel(σ_ε)
+        kernel = (
+            ConstantKernel(constant_value, constant_value_bounds=constant_value_bounds) *
+            RBF(length_scale=length_scale, length_scale_bounds=length_scale_bounds) +
+            WhiteKernel(noise_level=noise_level, noise_level_bounds=noise_level_bounds)
         )
+        
+        self.model = GaussianProcessRegressor(
+            kernel=kernel,
+            n_restarts_optimizer=n_restarts,
+            normalize_y=normalize_y,
+            random_state=kwargs.get('random_state', None)
+        )
+    
+    def fit(self, x, y, idx, **kwargs):
+        target = y[:, idx]
+        self.model.fit(x, target)
+        
+        # Optionally print optimized hyperparameters
+        if kwargs.get('verbose', False):
+            print(f"Task {idx} - Optimized kernel: {self.model.kernel_}")
+            print(f"Task {idx} - Log marginal likelihood: {self.model.log_marginal_likelihood_value_:.3f}")
 
-    def predict(self, x):
-        return nonlinear_mixing_law(
-            torch.tensor(x, dtype=torch.float),
-            torch.tensor(self.model, dtype=torch.float),
-            B_mask=self.B_mask,
-        ).numpy()
+
+class AutoscaleRegressor(Regressor):
+    """
+    Fits y(p) = sum_i (N0_i + N * p_i)^(-gamma_i) + L. This equation is taken from the Autoscale paper.
+
+    The autoscale paper is a bit unclear about how it actually fits to OOD domains; its notebook only shows fitting domain i's mix to an aggregated validation loss, for each i.
+    But, we took the main equation of the paper and directly fit it, as a good-faith effort to implement their method for OOD evaluation.
+
+    x: (n_samples, m) probability vectors p (rows typically sum to 1)
+    y: (n_samples, n_targets) or (n_samples,)
+    idx: column index of y to fit when y is 2D
+    """
+
+    def __init__(self, requested_tokens, max_nfev=50000, verbose=False, params=None, **kwargs):
+        if requested_tokens is None:
+            raise ValueError("requested_tokens must be provided for AutoscaleRegressor.")
+        self.N = float(requested_tokens)
+        self.max_nfev = int(max_nfev)
+        self.verbose = bool(verbose)
+
+
+        if params is not None:
+            self.alpha_ = params.get("alpha", None)
+            self.N0_ = self.alpha_ * self.N if self.alpha_ is not None else None
+            self.gamma_ = params.get("gamma", None)
+            self.L_ = params.get("L", None)
+        else:
+            self.alpha_ = None   # learned N0/N, shape (m,)
+            self.N0_ = None      # learned N0, shape (m,)
+            self.gamma_ = None   # learned gamma, shape (m,)
+            self.L_ = None       # learned L, scalar
+        self.result_ = None  # scipy result
+
+    def _predict_given_params(self, X, alpha, gamma, L):
+        # base = N0 + N p = N(alpha + p)
+        base = self.N * (alpha[None, :] + X)
+        base = np.maximum(base, 1e-30)
+        return np.sum(base ** (-gamma[None, :]), axis=1) + L
+
+    def fit(self, x, y, idx, **kwargs):
+        X = np.asarray(x, dtype=float)
+        Y = np.asarray(y, dtype=float)
+
+        if X.ndim != 2:
+            raise ValueError(f"x must be 2D (n_samples, m). Got shape {X.shape}")
+
+        y_target = Y if Y.ndim == 1 else Y[:, idx]
+
+        n, m = X.shape
+        if y_target.shape[0] != n:
+            raise ValueError("x and y have inconsistent number of rows")
+
+        # --- init: alpha ~ 1/m, gamma positive, L free ---
+        alpha_init = np.full(m, 1.0 / m)
+        gamma_init = np.full(m, 0.5)
+        L_init = float(np.min(y_target) * 0.1)
+        p0 = np.concatenate([alpha_init, gamma_init, [L_init]])
+
+        # --- bounds: alpha>0, gamma>0, L unrestricted ---
+        lb = np.concatenate([np.full(m, 1e-12), np.full(m, 1e-12), [-np.inf]])
+        ub = np.concatenate([np.full(m, np.inf),  np.full(m, np.inf),  [ np.inf]])
+
+        L_ub = float(np.min(y_target))
+        lb[-1] = 0.0
+        ub[-1] = L_ub
+
+        def resid(params):
+            alpha = params[:m]
+            gamma = params[m:2*m]
+            L = params[-1]
+            return self._predict_given_params(X, alpha, gamma, L) - y_target
+
+        res = least_squares(resid, p0, bounds=(lb, ub), max_nfev=self.max_nfev)
+
+        params_hat = res.x
+        self.alpha_ = params_hat[:m]
+        self.gamma_ = params_hat[m:2*m]
+        self.L_ = float(params_hat[-1])
+        self.N0_ = self.alpha_ * self.N
+        self.result_ = res
+
+        if True: #self.verbose or kwargs.get("verbose", False):
+            yhat = self._predict_given_params(X, self.alpha_, self.gamma_, self.L_)
+            rmse = float(np.sqrt(np.mean((yhat - y_target) ** 2)))
+            print(f"[AutoscaleRegressor] idx={idx} success={res.success} rmse={rmse:.6g}")
+            print("  alpha (N0/N):", self.alpha_)
+            print("  N0:", self.N0_)
+            print("  gamma:", self.gamma_)
+            print("  L:", self.L_)
+
+        return self
+
+    def predict(self, x, **kwargs):
+        if self.alpha_ is None:
+            raise RuntimeError("Model is not fit yet.")
+        X = np.asarray(x, dtype=float)
+        if X.ndim != 2:
+            raise ValueError(f"x must be 2D (n_samples, m). Got shape {X.shape}")
+        return self._predict_given_params(X, self.alpha_, self.gamma_, self.L_)
+
+    def get_params(self):
+        return {
+            "alpha": self.alpha_,
+            "gamma": self.gamma_,
+            "L": self.L_,
+        }
+
+
+class BimixRegressor(Regressor):
+    """
+    Fits f(x) = sum_i F_i * x_i^(-alpha_i) --- this is derived from the BiMix paper. 
+    However, the bimix paper only fits validation loss of domain i vs mixture weight on domain i, so we add a summation to extend it to OOD evaluation.
+    Also, bimix models the number of steps. For our setup, we don't need to model this, so the equation collapses into a classical power law.
+
+    x: (n_samples, m) probability vectors (rows should sum to 1; all entries should be > 0)
+    y: (n_samples, n_targets) or (n_samples,)
+    idx: which column of y to fit when y is 2D
+    """
+
+    def __init__(self, eps=1e-12, max_nfev=50000, verbose=False, **kwargs):
+        self.eps = float(eps)
+        self.max_nfev = int(max_nfev)
+        self.verbose = bool(verbose)
+
+        self.F_ = None        # shape (m,)
+        self.alpha_ = None    # shape (m,)
+        self.result_ = None   # scipy result
+
+    def _predict_given_params(self, X, F, alpha):
+        X = np.asarray(X, dtype=float)
+        Xc = np.clip(X, self.eps, 1.0)  # avoid 0^(-alpha)
+        return np.sum(F[None, :] * (Xc ** (-alpha[None, :])), axis=1)
+
+    def fit(self, x, y, idx, **kwargs):
+        X = np.asarray(x, dtype=float)
+        Y = np.asarray(y, dtype=float)
+
+        if X.ndim != 2:
+            raise ValueError(f"x must be 2D (n_samples, m). Got shape {X.shape}")
+
+        y_target = Y if Y.ndim == 1 else Y[:, idx]
+
+        n, m = X.shape
+        if y_target.shape[0] != n:
+            raise ValueError("x and y have inconsistent number of rows")
+
+        # ---- init ----
+        # Simple, robust-ish defaults: F around mean(y)/m, alpha around 1
+        F_init = np.full(m, max(np.mean(y_target), self.eps) / m)
+        alpha_init = np.full(m, 1.0)
+        p0 = np.concatenate([F_init, alpha_init])
+
+        # ---- bounds ----
+        # F_i >= 0, alpha_i >= 0
+        lb = np.concatenate([np.zeros(m), np.zeros(m)])
+        ub = np.concatenate([np.full(m, np.inf), np.full(m, np.inf)])
+
+        def resid(params):
+            F = params[:m]
+            alpha = params[m:2*m]
+            yhat = self._predict_given_params(X, F, alpha)
+            return yhat - y_target
+
+        res = least_squares(resid, p0, bounds=(lb, ub), max_nfev=self.max_nfev)
+
+        params_hat = res.x
+        self.F_ = params_hat[:m]
+        self.alpha_ = params_hat[m:2*m]
+        self.result_ = res
+
+        if self.verbose or kwargs.get("verbose", False):
+            yhat = self._predict_given_params(X, self.F_, self.alpha_)
+            rmse = float(np.sqrt(np.mean((yhat - y_target) ** 2)))
+            print(f"[BimixRegressor] idx={idx} success={res.success} rmse={rmse:.6g}")
+            print("  F:", self.F_)
+            print("  alpha:", self.alpha_)
+
+        return self
+
+    def predict(self, x, **kwargs):
+        if self.F_ is None or self.alpha_ is None:
+            raise RuntimeError("Model is not fit yet.")
+        X = np.asarray(x, dtype=float)
+        if X.ndim != 2:
+            raise ValueError(f"x must be 2D (n_samples, m). Got shape {X.shape}")
+        return self._predict_given_params(X, self.F_, self.alpha_)
 
 
 class SearchRegressor(Regressor):
@@ -265,40 +401,6 @@ class SearchRegressor(Regressor):
 
     def get_searched_weights(self):
         return [np.array(weight) for weight, _ in self.model.items()]
-
-
-def nonlinear_mixing_law(x, param, B_mask=None):
-    """
-    Vectorized implementation of nonlinear mixing law:
-    Y = exp(log_c + x @ t + sum_k B_k * x_i_k * x_j_k)
-
-    Parameters:
-        x:       (batch_size, d) input data
-        param:   tensor of shape (1 + d + len(B_mask),)
-                 [log_c, t (d,), B_params (len(B_mask),)]
-        B_mask:  list of (i, j) tuples specifying quadratic terms
-
-    Returns:
-        Tensor of shape (batch_size,) with predicted outputs
-    """
-    log_c_i = param[0]
-    d = x.shape[1]
-    t_i = param[1 : 1 + d]  # Linear weights len(domains)
-    B_params = param[1 + d :]  # Quadratic weights len(B_mask)
-
-    lin_term = torch.matmul(x, t_i)  # (batch_size,)
-
-    quad_term = None
-    if B_mask is not None and len(B_mask) > 0:
-        B_mask = torch.tensor(B_mask, dtype=torch.long, device=x.device)  # (num_terms, 2)
-        x_i = x[:, B_mask[:, 0]]  # (batch_size, num_terms)
-        x_j = x[:, B_mask[:, 1]]  # (batch_size, num_terms)
-        quad_term = (x_i * x_j) @ B_params  # (batch_size,)
-
-    if quad_term is None:
-        return torch.exp(log_c_i) + torch.exp(lin_term)
-    else:
-        return torch.exp(log_c_i) + torch.exp(lin_term) + torch.exp(quad_term)
 
 
 def mixing_law(x, param, **kwargs):
@@ -325,11 +427,11 @@ def init_params_log_nonlinear_law(idx, B_mask, num_domains=3):
 
 REGRESSION_TYPES = {
     "lightgbm": LightGBMRegressor,
-    "linear": LinearRegressor,
     "log_linear": LogLinearRegressor,
-    "log_nonlinear": LogNonLinearRegressor,
     "search": SearchRegressor,
-    "quadratic": QuadraticRegressor,
+    "gp": GPRegressor,
+    "autoscale": AutoscaleRegressor,
+    "bimix": BimixRegressor,
 }
 
 
@@ -365,6 +467,7 @@ class SimulationProposer(Proposer):
         reference_ratio: float | None = None,
         make_worst_mix: bool = False,
         min_weight_per_domain: float = 0.0,
+        requested_tokens: int | None = None,
         **kwargs,
     ) -> np.ndarray:
         np.random.seed(seed)
@@ -405,6 +508,8 @@ class SimulationProposer(Proposer):
             desired_tokens, available_tokens_per_source, repetition_factor = compute_constraints_from_config(
                 swarm_config
             )
+            if requested_tokens is not None:
+                desired_tokens = requested_tokens
             # Ensure order of sources in simulations matches constraint dictionary
             available_tokens_per_source = {
                 source: available_tokens_per_source[source] for source, _ in prior_distributions.items()
@@ -551,6 +656,7 @@ class SearchProposer(Proposer):
         opt_avg_metric: bool = False,
         constrain_objective: bool = False,
         swarm_config: ExperimentConfig | None = None,
+        requested_tokens: int | None = None,
         **kwargs,
     ):
         if constrain_objective:
@@ -559,6 +665,8 @@ class SearchProposer(Proposer):
             desired_tokens, available_tokens_per_source, repetition_factor = compute_constraints_from_config(
                 swarm_config
             )
+            if requested_tokens is not None:
+                desired_tokens = requested_tokens
             # Ensure order matches prior_distributions
             available_tokens_per_source = {
                 source: available_tokens_per_source[source] for source, _ in prior_distributions.items()
@@ -598,6 +706,8 @@ class LogLinearExactProposer(Proposer):
         swarm_config: ExperimentConfig | None = None,
         kl_reg: float | None = 0.1,
         obj_weights: list | None = None,
+        requested_tokens: int | None = None,
+        manual_kl: dict | None = None,
         **kwargs,
     ):
         assert opt_avg_metric, "LogLinearExactProposer only supports opt_avg_metric=True"
@@ -611,6 +721,8 @@ class LogLinearExactProposer(Proposer):
             desired_tokens, available_tokens_per_source, repetition_factor = compute_constraints_from_config(
                 swarm_config
             )
+            if requested_tokens is not None:
+                desired_tokens = requested_tokens
             # Ensure order matches prior_distributions
             available_tokens_per_source = {
                 source: available_tokens_per_source[source] for source, _ in prior_distributions.items()
@@ -624,7 +736,13 @@ class LogLinearExactProposer(Proposer):
 
         x = cp.Variable(d)
 
-        q = np.array(list(prior_distributions.values()))
+        if manual_kl is not None:
+            logger.info(f"Using manual KL prior distribution: {manual_kl}")
+            q = np.array(list(manual_kl.values()))
+        else:
+            logger.info(f"Using prior distribution for KL: {prior_distributions}")
+            q = np.array(list(prior_distributions.values()))
+
         q = np.asarray(q, dtype=float)
         eps = 1e-12
         q = np.maximum(q, eps)  # ensure strictly positive
@@ -684,9 +802,10 @@ def build_regression(
     regression_type: str,
     early_stopping: float,
     interactions: list[str] | None = None,
+    requested_tokens: int | None = None,
 ) -> Regressor:
     logger.info(f"Building regression model, index: {idx}")
-    reg = REGRESSION_TYPES[regression_type](interactions=interactions)
+    reg = REGRESSION_TYPES[regression_type](interactions=interactions, requested_tokens=requested_tokens)
     reg.fit(X_train, Y_train, idx, early_stopping=early_stopping)
     return reg
 
