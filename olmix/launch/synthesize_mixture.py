@@ -485,13 +485,14 @@ def generate_weights_dirichlet(
 
 def mk_mixtures(
     config: ExperimentConfig, group_uuid: str, use_cache: bool = True
-) -> list[dict[str, tuple[float, float]]]:
+) -> tuple[list[dict[str, tuple[float, float]]], dict]:
     random.seed(config.seed)
     np.random.seed(config.seed)
 
     num_samples = config.variants
     sources = config.sources
     leaf_dist, available_tokens, leaf_tokens = calculate_priors(sources, config.dtype, use_cache=use_cache)
+    priors = {"relative_sizes": leaf_dist, "total_tokens": available_tokens, "token_counts": leaf_tokens}
     logger.info(f"Total tokens for config: {available_tokens:,}")
     logger.info(f"Using seed: {config.seed}")
 
@@ -585,7 +586,7 @@ def mk_mixtures(
         source_weights = np.array(source_weights)
         logger.info(f"Source {source}, min: {source_weights.min()}, max: {source_weights.max()}")
 
-    return weight_maps
+    return weight_maps, priors
 
 
 def _bytes_to_tokens(num_bytes: int, dtype: NumpyDatasetDType) -> int:
