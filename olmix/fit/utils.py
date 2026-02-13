@@ -461,12 +461,8 @@ class SimulationProposer(Proposer):
         temperature: float | None = None,
         reference_scores: np.ndarray | None = None,
         fixed_weight: dict[str, float] | None = None,
-        metric_type: str | None = None,
         tol: float | None = None,
-        fixed_search_weight: str | None = None,
-        reference_ratio: float | None = None,
         make_worst_mix: bool = False,
-        min_weight_per_domain: float = 0.0,
         requested_tokens: int | None = None,
         **kwargs,
     ) -> np.ndarray:
@@ -479,26 +475,13 @@ class SimulationProposer(Proposer):
         max_dirichlet = 100
         search_dirichlet_factor = 2.0
 
-        if reference_ratio is not None:
-            search_prior = np.array(reference_ratio)
-        else:
-            search_prior = np.array(list(prior_distributions.values()))
+        search_prior = np.array(list(prior_distributions.values()))
 
         if temperature is not None:
             search_prior = search_prior**temperature
             search_prior = search_prior / np.sum(search_prior)
 
-        if fixed_search_weight is not None:
-            fixed_dict = json.loads(fixed_search_weight)
-            fixed_indices = {
-                list(prior_distributions.keys()).index(domain): weight for domain, weight in fixed_dict.items()
-            }
-            free_indices = [i for i in range(len(search_prior)) if i not in fixed_indices]
-            free_prior = search_prior[free_indices]
-            free_prior /= np.sum(free_prior)
-            logger.info(f"Prior for sampling is {free_prior}")
-        else:
-            logger.info(f"Prior for sampling is {search_prior}")
+        logger.info(f"Prior for sampling is {search_prior}")
 
         best_weights = np.zeros(len(prior_distributions))
 
@@ -527,19 +510,9 @@ class SimulationProposer(Proposer):
             )
 
             # generate simulations by sampling from dirichlet distribution with parameter prior * alpha
-            if fixed_search_weight is not None:
-                free_indices_simulations = (
-                    torch.distributions.Dirichlet(torch.from_numpy(alphas[:, None] * free_prior)).sample().numpy()
-                )
-                simulations = np.zeros((num_samples, len(search_prior)))
-                simulations[:, free_indices] = free_indices_simulations * (1 - sum(list(fixed_indices.values())))
-                idx = np.array(list(fixed_indices.keys()))
-                vals = np.array(list(fixed_indices.values()))
-                simulations[:, idx] = vals  # broadcasts across rows
-            else:
-                simulations = (
-                    torch.distributions.Dirichlet(torch.from_numpy(alphas[:, None] * search_prior)).sample().numpy()
-                )
+            simulations = (
+                torch.distributions.Dirichlet(torch.from_numpy(alphas[:, None] * search_prior)).sample().numpy()
+            )
 
             if constrain_objective:
                 original_simulation_size = len(simulations)
@@ -562,14 +535,6 @@ class SimulationProposer(Proposer):
                 if len(simulations) == 0:
                     continue
 
-            if min_weight_per_domain > 0.0:
-                simulations = simulations[np.all(simulations >= min_weight_per_domain, axis=1)]
-                if len(simulations) == 0:
-                    logger.info(
-                        f"No simulations remain after enforcing min weight per domain of {min_weight_per_domain}."
-                    )
-                    continue
-
             predictions = np.array([reg.predict(simulations) for reg in predictor])
             if reference_scores is not None:
                 # If reference scores are provided, filter simulations based on them
@@ -580,13 +545,9 @@ class SimulationProposer(Proposer):
                 for t in tol_range:
                     # we allow for predicted scores to be within a tolerance of the reference scores
                     # if the current tol results in no remaining simulations, we increase tol
-                    if (metric_type == "primary_score" and not make_worst_mix) or (
-                        metric_type != "primary_score" and make_worst_mix
-                    ):
+                    if make_worst_mix:
                         pareto_idxs = np.where(np.all(predictions.T > reference_scores - t, axis=1))[0]
-                    elif (metric_type == "primary_score" and make_worst_mix) or (
-                        metric_type != "primary_score" and not make_worst_mix
-                    ):
+                    else:
                         pareto_idxs = np.where(np.all(predictions.T < reference_scores + t, axis=1))[0]
                     if len(pareto_idxs) != 0:
                         logger.info(f"Using eps={t} for enforcing pareto improvements")
@@ -610,14 +571,10 @@ class SimulationProposer(Proposer):
             else:
                 objs = predictor[index].predict(simulations)
 
-            if (metric_type == "primary_score" and not make_worst_mix) or (
-                metric_type != "primary_score" and make_worst_mix
-            ):
+            if make_worst_mix:
                 best_mask = (objs.max() - objs) < 1e-3
                 print(objs.max())
-            elif (metric_type == "primary_score" and make_worst_mix) or (
-                metric_type != "primary_score" and not make_worst_mix
-            ):
+            else:
                 best_mask = (objs - objs.min()) < 1e-3
                 print(objs.min())
             best_weights = simulations[best_mask].mean(0)
@@ -627,10 +584,6 @@ class SimulationProposer(Proposer):
             best_weights /= best_weights.sum()
 
             search_prior = (best_weights + search_prior) / 2
-
-            if fixed_search_weight is not None:
-                free_prior = search_prior[free_indices]
-                free_prior /= np.sum(free_prior)
 
             predicted_best_performance = sum([pred.predict([best_weights]) for pred in predictor])
             logger.info(
@@ -801,11 +754,10 @@ def build_regression(
     X_train: np.ndarray,
     regression_type: str,
     early_stopping: float,
-    interactions: list[str] | None = None,
     requested_tokens: int | None = None,
 ) -> Regressor:
     logger.info(f"Building regression model, index: {idx}")
-    reg = REGRESSION_TYPES[regression_type](interactions=interactions, requested_tokens=requested_tokens)
+    reg = REGRESSION_TYPES[regression_type](requested_tokens=requested_tokens)
     reg.fit(X_train, Y_train, idx, early_stopping=early_stopping)
     return reg
 
@@ -843,7 +795,6 @@ def get_runs_from_api(
     groups: list[str],
     cache_path: Path,
     no_cache: bool,
-    num_samples: int,
     eval_metrics: list[str],
 ) -> list[RunInstance]:
     wandb_runs = []
@@ -870,7 +821,7 @@ def get_runs_from_api(
             logger.warning(f"Run {run.display_name} is still running; NOT skipping though")
 
         if run is not None:
-            all_runs.append(mk_run_history(run, num_samples, eval_metrics))
+            all_runs.append(mk_run_history(run, eval_metrics))
 
     all_runs = sorted(all_runs, key=lambda run: run.display_name.lower())
     if not no_cache:
@@ -880,16 +831,9 @@ def get_runs_from_api(
     return all_runs
 
 
-def mk_run_history(run: Run, samples: int, eval_metrics: list[str]) -> Any:
-    if samples == 1:
-        try:
-            summary = [{metric: run.summary[metric] for metric in eval_metrics if metric in run.summary}]
-        except KeyError:
-            print(run.id)
-            print(run.summary.keys())
-        return mk_run_instance(run, summary, samples)
-    else:
-        return mk_run_instance(run, run.scan_history(keys=eval_metrics), samples)
+def mk_run_history(run: Run, eval_metrics: list[str]) -> Any:
+    summary = [{metric: run.summary[metric] for metric in eval_metrics if metric in run.summary}]
+    return mk_run_instance(run, summary)
 
 
 def mk_run_from_json(run: dict) -> RunInstance:
@@ -902,11 +846,8 @@ def mk_run_from_json(run: dict) -> RunInstance:
     )
 
 
-def mk_run_instance(run: Run, history: list[Any], n_samples: int) -> RunInstance:
-    samples = pd.DataFrame.from_records(history).tail(n_samples)
-    # logger.info(
-    #    f"Collected RunInstance for {run.display_name}:{run.id} with samples: {samples.shape}"
-    # )
+def mk_run_instance(run: Run, history: list[Any]) -> RunInstance:
+    samples = pd.DataFrame.from_records(history).tail(1)
     return RunInstance(
         id=run.id,
         display_name=run.display_name,
@@ -916,33 +857,12 @@ def mk_run_instance(run: Run, history: list[Any], n_samples: int) -> RunInstance
     )
 
 
-def compute_mixture_neighborhood(
-    X_train: np.ndarray,
-    Y_train: np.ndarray,
-    ratios: pd.DataFrame,
-    neighborhood: str,
-    train_split: float,
-) -> tuple[np.ndarray, np.ndarray]:
-    neighborhood_size = int(train_split * len(X_train))
-    logger.info(f"Computing neighborhood of size {neighborhood_size} for {neighborhood}")
-    centroid = ratios[ratios.name == neighborhood][ratios.columns[3:]].values[0]
-    distances = np.linalg.norm(X_train - centroid, axis=1)
-    # Get indices of k smallest distances
-    nearest_indices = np.argsort(distances)[:neighborhood_size]
-    X_train = X_train[nearest_indices]
-    Y_train = Y_train[nearest_indices]
-    return X_train, Y_train
-
-
 def mk_run_metrics(
     history,
-    samples: int,
     metrics: tuple[str, list[str]],
     display_name: str,
     average: bool = False,
     dashboard: list[str] | None = None,  # ["olmo-3-evals"]
-    metric_type: str | None = None,
-    pull_from_dashboard: bool = False,
 ) -> dict[str, float]:
     if dashboard is None:
         dashboard = ["regmixer"]
@@ -953,28 +873,20 @@ def mk_run_metrics(
     offline_tasks = [task for task in group_metrics if task not in in_loop_tasks]
     if average:
         raise NotImplementedError("Averaging the task is implemented but out of date!")
-        result = np.mean([df.loc[:, metric_name].tail(samples).mean() for metric_name in group_metrics])
+        result = np.mean([df.loc[:, metric_name].tail(1).mean() for metric_name in group_metrics])
         results[group_name] = result
     else:
-        if pull_from_dashboard:
-            assert metric_type == "primary_score", (
-                "Only primary_score metric type is supported for dashboard evaluation"
-            )
-            for d in dashboard:
-                offline_results = get_offline_evals_from_dashboard(display_name, offline_tasks, dashboard=d)
-                results.update(offline_results)
-        else:
-            for metric_name in in_loop_tasks:
-                results[metric_name] = df.loc[:, metric_name].tail(samples).mean()
+        for metric_name in in_loop_tasks:
+            results[metric_name] = df.loc[:, metric_name].tail(1).mean()
 
-            if len(offline_tasks) > 0:
-                # need to obtain offline results
-                for d in dashboard:
-                    logger.info(f"Getting offline results for {display_name} in {d} dashboard")
-                    offline_results = get_offline_evals(
-                        display_name, offline_tasks, group_name, dashboard=d, metric_type=metric_type
-                    )
-                    results.update(offline_results)
+        if len(offline_tasks) > 0:
+            # need to obtain offline results
+            for d in dashboard:
+                logger.info(f"Getting offline results for {display_name} in {d} dashboard")
+                offline_results = get_offline_evals(
+                    display_name, offline_tasks, group_name, dashboard=d,
+                )
+                results.update(offline_results)
 
     return results
 
@@ -1011,7 +923,7 @@ def get_offline_evals_from_dashboard(display_name, tasks, dashboard):
 
 
 def get_offline_evals(
-    display_name, tasks, group_name, dashboard="regmixer", metric_type=None
+    display_name, tasks, group_name, dashboard="regmixer",
 ):  # "olmo-3-evals"):# "regmixer"):
     bucket = "ai2-llm"
     prefix = f"evaluation/{dashboard}/{display_name}"
@@ -1104,39 +1016,28 @@ def get_offline_evals(
                     )
 
         data = task_data[0]
-        if metric_type is not None:
-            if metric_type not in data["metrics"]:
-                logger.warning(
-                    f"Metric type {metric_type} not found in task {data['task_name']} metrics. Available metrics: {data['metrics'].keys()}"
-                )
-                continue
-            else:
-                name = data["task_config"]["metadata"]["alias"].replace("bpb:", "").replace(":full", "")
-                metric_value = data["metrics"][metric_type]
-                offline_results[name] = metric_value
+        if "bits_per_byte_corr" in data["metrics"]:
+            name = data["task_config"]["metadata"]["alias"].replace("bpb:", "").replace(":full", "")
+            offline_results[name] = data["metrics"]["bits_per_byte_corr"]
+            # logger.info(
+            #    f"Task {name} found in JSONL data for {display_name} with bits_per_byte_corr {data['metrics']['bits_per_byte_corr']}"
+            # )
+        elif "bits_per_byte_corr_macro" in data["metrics"]:
+            name = data["task_config"]["metadata"]["alias"].replace("bpb:", "").replace(":full", "")
+            offline_results[name] = data["metrics"]["bits_per_byte_corr_macro"]
+            # logger.info(
+            #    f"Task {name} found in JSONL data for {display_name} with bits_per_byte_corr_macro {data['metrics']['bits_per_byte_corr_macro']}"
+            # )
+        elif "bits_per_byte" in data["metrics"]:
+            name = data["task_name"].replace("bpb:", "").replace(":full", "")
+            offline_results[name] = data["metrics"]["bits_per_byte"]
+            # logger.info(
+            #    f"Task {name} found in JSONL data for {display_name} with bits_per_byte {data['metrics']['bits_per_byte']}"
+            # )
         else:
-            if "bits_per_byte_corr" in data["metrics"]:
-                name = data["task_config"]["metadata"]["alias"].replace("bpb:", "").replace(":full", "")
-                offline_results[name] = data["metrics"]["bits_per_byte_corr"]
-                # logger.info(
-                #    f"Task {name} found in JSONL data for {display_name} with bits_per_byte_corr {data['metrics']['bits_per_byte_corr']}"
-                # )
-            elif "bits_per_byte_corr_macro" in data["metrics"]:
-                name = data["task_config"]["metadata"]["alias"].replace("bpb:", "").replace(":full", "")
-                offline_results[name] = data["metrics"]["bits_per_byte_corr_macro"]
-                # logger.info(
-                #    f"Task {name} found in JSONL data for {display_name} with bits_per_byte_corr_macro {data['metrics']['bits_per_byte_corr_macro']}"
-                # )
-            elif "bits_per_byte" in data["metrics"]:
-                name = data["task_name"].replace("bpb:", "").replace(":full", "")
-                offline_results[name] = data["metrics"]["bits_per_byte"]
-                # logger.info(
-                #    f"Task {name} found in JSONL data for {display_name} with bits_per_byte {data['metrics']['bits_per_byte']}"
-                # )
-            else:
-                logger.warning(
-                    f"{data['task_name']} does not have bits_per_byte_corr or bits_per_byte_corr_macro in metrics {data['metrics'].keys()}"
-                )
+            logger.warning(
+                f"{data['task_name']} does not have bits_per_byte_corr or bits_per_byte_corr_macro in metrics {data['metrics'].keys()}"
+            )
 
     return offline_results
 
@@ -1186,93 +1087,6 @@ def mk_weights_from_config(config: dict, priors: tuple, display_name: str, patch
             weights[domain] = source_configs.get(domain, {}).get("target_ratio", 0.0)
 
     return weights
-
-
-def solve_log_linear(
-    predictor: list[Any],
-    prior_distributions: np.ndarray,
-    df_config: pd.DataFrame,
-    metric_name: str,
-    regression_type: str,
-    train_split: tuple[float, ...],
-    n_test: int,
-    split_seed: int,
-    n_samples: int,
-    alpha: float = 1.0,
-    output_dir: str = BASE_OUTPUT_DIR,
-    seed: int = 1337,
-) -> np.ndarray:
-    torch.manual_seed(seed)
-
-    # Split params into biases (b) and t values
-    t = [p[2:] for p in predictor]
-    b = [p[1] for p in predictor]
-
-    t = torch.tensor(t, dtype=torch.float32)
-    b = torch.tensor(b, dtype=torch.float32)
-
-    # Initialize weights as a probability vector
-    weights = torch.rand(len(t[0]) - 1, requires_grad=True)
-    assert weights.sum() <= 1
-    # weights = torch.nn.Parameter(raw_weights / raw_weights.sum())
-
-    def objective(weights):
-        return torch.sum(torch.exp(b + t @ weights))
-
-    def project(w):
-        """
-        Projects a vector w (length n-1) so that:
-        - Each entry is in [0, 1]
-        - Sum of entries <= 1
-        Returns the full probability vector (length n), where the last element is 1 - sum(w)
-        """
-        w.data.clamp_(0, 1)  # clamp each entry between 0 and 1
-
-        total = w.sum()
-        if total > 1:
-            w.data.mul_(1 / total)  # rescale to make sum <= 1
-
-        last = 1.0 - w.sum()
-        last = torch.clamp(last, min=0.0, max=1.0)  # ensure numerical safety
-
-        return torch.cat([w, last.unsqueeze(0)], dim=0)  # final full probability vector
-
-    # Optimization
-    optimizer = optim.Adam([weights], lr=0.001)
-    n_iterations = 1000
-    for i in range(n_iterations):
-        optimizer.zero_grad()
-        loss = objective(weights)
-        loss.backward()
-        optimizer.step()
-
-        # Project onto the probability simplex
-        with torch.no_grad():
-            weights.data = project(weights.data)
-
-        if (i + 1) % 100 == 0:
-            print(f"Iteration {i + 1}/{n_iterations}, Loss: {loss.item():.4f}")
-
-    best_weights = weights.detach().cpu().numpy()
-
-    plot_and_log_weights(
-        prior=prior_distributions,
-        original_prior=prior_distributions,
-        prediction=best_weights,
-        metric_name=metric_name,
-        regression_type=regression_type,
-        train_split=train_split,
-        n_test=n_test,
-        split_seed=split_seed,
-        n_samples=n_samples,
-        alpha=alpha,
-        df_config=df_config,
-        output_dir=output_dir,
-        expand_collapsed_weights_fn=expand_collapsed_weights,
-        add_back_in_fixed_source_weights_fn=add_back_in_fixed_source_weights,
-    )
-
-    return best_weights
 
 
 def expand_collapsed_weights(
@@ -1555,19 +1369,15 @@ def aggregate_mmlu(metrics: pd.DataFrame, metrics_to_index: list):
     return metrics, metrics_to_index
 
 
-def swarm_config_from_path(config: Path, use_cookbook: bool = False) -> ExperimentConfig:
+def swarm_config_from_path(config: Path) -> ExperimentConfig:
     """
     Load configuration from a config file path.
 
     Args:
         config: Path to the YAML config file
-        use_cookbook: Deprecated parameter, kept for backward compatibility
-
     Returns:
         ExperimentConfig loaded from the file
     """
-    if use_cookbook:
-        logger.warning("use_cookbook parameter is deprecated. Please migrate to using olmix ExperimentConfig directly.")
     with open(config) as f:
         data = yaml.safe_load(f)
     return ExperimentConfig(**data)
