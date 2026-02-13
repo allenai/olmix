@@ -118,11 +118,12 @@ def fit(config_path: str, output_dir_arg: str):
         make_worst_mix=cfg.proposer.make_worst_mix,
         kl_reg=cfg.proposer.kl_reg,
         workspace="",
-        requested_tokens=cfg.constraints.target_tokens,
         target_tokens=cfg.constraints.target_tokens,
         repetition_factor=cfg.constraints.repetition_factor,
+        token_counts=cfg.priors.token_counts,
         natural_kl=None,
         test_ratios_path=(),
         test_metrics_path=(),
         aggregate_task_families=cfg.regression.aggregate_task_families,
+        obj_weights=cfg.filtering.obj_weights,
     )

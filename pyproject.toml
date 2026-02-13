@@ -28,6 +28,7 @@ dependencies = [
     "click",
     "cvxpy",
     "datasets>=3,<4",
+    "ecos",
     "gcsfs",
     "lightgbm",
     "matplotlib",
