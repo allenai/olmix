@@ -17,21 +17,18 @@ import cvxpy as cp
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
-import statsmodels.api as sm
 import torch
-import torch.optim as optim
 import yaml
-from tqdm import tqdm
-from wandb.apis.public import Run
+from scipy.optimize import least_squares
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF, ConstantKernel, WhiteKernel
-from scipy.optimize import least_squares
-
+from tqdm import tqdm
+from wandb.apis.public import Run
 
 from olmix.aliases import ExperimentConfig, SourceConfig
 from olmix.fit.law import ScalingLaw
 from olmix.launch.synthesize_mixture import calculate_priors
-from olmix.plots import BASE_OUTPUT_DIR, plot_and_log_weights
+from olmix.plots import BASE_OUTPUT_DIR
 
 logger = logging.getLogger(__name__)
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -162,35 +159,33 @@ class LogLinearRegressor(Regressor):
 class GPRegressor(Regressor):
     def __init__(self, **kwargs):
         # Default hyperparameters (can be overridden via kwargs)
-        length_scale = kwargs.get('length_scale', 1.0)
-        length_scale_bounds = kwargs.get('length_scale_bounds', (1e-2, 1e2))
-        constant_value = kwargs.get('constant_value', 1.0)
-        constant_value_bounds = kwargs.get('constant_value_bounds', (1e-3, 1e3))
-        noise_level = kwargs.get('noise_level', 0.1)
-        noise_level_bounds = kwargs.get('noise_level_bounds', (1e-5, 1e1))
-        n_restarts = kwargs.get('n_restarts_optimizer', 10)
-        normalize_y = kwargs.get('normalize_y', True)
-        
+        length_scale = kwargs.get("length_scale", 1.0)
+        length_scale_bounds = kwargs.get("length_scale_bounds", (1e-2, 1e2))
+        constant_value = kwargs.get("constant_value", 1.0)
+        constant_value_bounds = kwargs.get("constant_value_bounds", (1e-3, 1e3))
+        noise_level = kwargs.get("noise_level", 0.1)
+        noise_level_bounds = kwargs.get("noise_level_bounds", (1e-5, 1e1))
+        n_restarts = kwargs.get("n_restarts_optimizer", 10)
+        normalize_y = kwargs.get("normalize_y", True)
+
         # Build kernel: λ * RBF(σ) + WhiteKernel(σ_ε)
-        kernel = (
-            ConstantKernel(constant_value, constant_value_bounds=constant_value_bounds) *
-            RBF(length_scale=length_scale, length_scale_bounds=length_scale_bounds) +
-            WhiteKernel(noise_level=noise_level, noise_level_bounds=noise_level_bounds)
-        )
-        
+        kernel = ConstantKernel(constant_value, constant_value_bounds=constant_value_bounds) * RBF(
+            length_scale=length_scale, length_scale_bounds=length_scale_bounds
+        ) + WhiteKernel(noise_level=noise_level, noise_level_bounds=noise_level_bounds)
+
         self.model = GaussianProcessRegressor(
             kernel=kernel,
             n_restarts_optimizer=n_restarts,
             normalize_y=normalize_y,
-            random_state=kwargs.get('random_state', None)
+            random_state=kwargs.get("random_state", None),
         )
-    
+
     def fit(self, x, y, idx, **kwargs):
         target = y[:, idx]
         self.model.fit(x, target)
-        
+
         # Optionally print optimized hyperparameters
-        if kwargs.get('verbose', False):
+        if kwargs.get("verbose", False):
             print(f"Task {idx} - Optimized kernel: {self.model.kernel_}")
             print(f"Task {idx} - Log marginal likelihood: {self.model.log_marginal_likelihood_value_:.3f}")
 
@@ -214,17 +209,16 @@ class AutoscaleRegressor(Regressor):
         self.max_nfev = int(max_nfev)
         self.verbose = bool(verbose)
 
-
         if params is not None:
             self.alpha_ = params.get("alpha", None)
             self.N0_ = self.alpha_ * self.N if self.alpha_ is not None else None
             self.gamma_ = params.get("gamma", None)
             self.L_ = params.get("L", None)
         else:
-            self.alpha_ = None   # learned N0/N, shape (m,)
-            self.N0_ = None      # learned N0, shape (m,)
-            self.gamma_ = None   # learned gamma, shape (m,)
-            self.L_ = None       # learned L, scalar
+            self.alpha_ = None  # learned N0/N, shape (m,)
+            self.N0_ = None  # learned N0, shape (m,)
+            self.gamma_ = None  # learned gamma, shape (m,)
+            self.L_ = None  # learned L, scalar
         self.result_ = None  # scipy result
 
     def _predict_given_params(self, X, alpha, gamma, L):
@@ -254,7 +248,7 @@ class AutoscaleRegressor(Regressor):
 
         # --- bounds: alpha>0, gamma>0, L unrestricted ---
         lb = np.concatenate([np.full(m, 1e-12), np.full(m, 1e-12), [-np.inf]])
-        ub = np.concatenate([np.full(m, np.inf),  np.full(m, np.inf),  [ np.inf]])
+        ub = np.concatenate([np.full(m, np.inf), np.full(m, np.inf), [np.inf]])
 
         L_ub = float(np.min(y_target))
         lb[-1] = 0.0
@@ -262,7 +256,7 @@ class AutoscaleRegressor(Regressor):
 
         def resid(params):
             alpha = params[:m]
-            gamma = params[m:2*m]
+            gamma = params[m : 2 * m]
             L = params[-1]
             return self._predict_given_params(X, alpha, gamma, L) - y_target
 
@@ -270,12 +264,12 @@ class AutoscaleRegressor(Regressor):
 
         params_hat = res.x
         self.alpha_ = params_hat[:m]
-        self.gamma_ = params_hat[m:2*m]
+        self.gamma_ = params_hat[m : 2 * m]
         self.L_ = float(params_hat[-1])
         self.N0_ = self.alpha_ * self.N
         self.result_ = res
 
-        if True: #self.verbose or kwargs.get("verbose", False):
+        if True:  # self.verbose or kwargs.get("verbose", False):
             yhat = self._predict_given_params(X, self.alpha_, self.gamma_, self.L_)
             rmse = float(np.sqrt(np.mean((yhat - y_target) ** 2)))
             print(f"[AutoscaleRegressor] idx={idx} success={res.success} rmse={rmse:.6g}")
@@ -304,7 +298,7 @@ class AutoscaleRegressor(Regressor):
 
 class BimixRegressor(Regressor):
     """
-    Fits f(x) = sum_i F_i * x_i^(-alpha_i) --- this is derived from the BiMix paper. 
+    Fits f(x) = sum_i F_i * x_i^(-alpha_i) --- this is derived from the BiMix paper.
     However, the bimix paper only fits validation loss of domain i vs mixture weight on domain i, so we add a summation to extend it to OOD evaluation.
     Also, bimix models the number of steps. For our setup, we don't need to model this, so the equation collapses into a classical power law.
 
@@ -318,9 +312,9 @@ class BimixRegressor(Regressor):
         self.max_nfev = int(max_nfev)
         self.verbose = bool(verbose)
 
-        self.F_ = None        # shape (m,)
-        self.alpha_ = None    # shape (m,)
-        self.result_ = None   # scipy result
+        self.F_ = None  # shape (m,)
+        self.alpha_ = None  # shape (m,)
+        self.result_ = None  # scipy result
 
     def _predict_given_params(self, X, F, alpha):
         X = np.asarray(X, dtype=float)
@@ -353,7 +347,7 @@ class BimixRegressor(Regressor):
 
         def resid(params):
             F = params[:m]
-            alpha = params[m:2*m]
+            alpha = params[m : 2 * m]
             yhat = self._predict_given_params(X, F, alpha)
             return yhat - y_target
 
@@ -361,7 +355,7 @@ class BimixRegressor(Regressor):
 
         params_hat = res.x
         self.F_ = params_hat[:m]
-        self.alpha_ = params_hat[m:2*m]
+        self.alpha_ = params_hat[m : 2 * m]
         self.result_ = res
 
         if self.verbose or kwargs.get("verbose", False):
@@ -854,7 +848,10 @@ def mk_run_metrics(
             for d in dashboard:
                 logger.info(f"Getting offline results for {display_name} in {d} dashboard")
                 offline_results = get_offline_evals(
-                    display_name, offline_tasks, group_name, dashboard=d,
+                    display_name,
+                    offline_tasks,
+                    group_name,
+                    dashboard=d,
                 )
                 results.update(offline_results)
 
@@ -893,7 +890,10 @@ def get_offline_evals_from_dashboard(display_name, tasks, dashboard):
 
 
 def get_offline_evals(
-    display_name, tasks, group_name, dashboard="regmixer",
+    display_name,
+    tasks,
+    group_name,
+    dashboard="regmixer",
 ):  # "olmo-3-evals"):# "regmixer"):
     bucket = "ai2-llm"
     prefix = f"evaluation/{dashboard}/{display_name}"
