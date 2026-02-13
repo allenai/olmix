@@ -5,10 +5,13 @@ from olmix.fit.core import run_fit
 from olmix.fit.law import ScalingLaw
 from olmix.fit.loaders import load_from_csv, load_from_wandb
 from olmix.fit.utils import (
+    AutoscaleRegressor,
+    BimixRegressor,
+    GPRegressor,
     LightGBMRegressor,
-    LinearRegressor,
     LogLinearRegressor,
     Regressor,
+    SearchRegressor,
     build_regression,
     calculate_priors_with_manual,
     get_output_dir,
@@ -19,12 +22,15 @@ from olmix.fit.utils import (
 __all__ = [
     "ALL_OLMO_EVAL_METRICS",
     "ALL_WANDB_METRICS",
+    "AutoscaleRegressor",
+    "BimixRegressor",
+    "GPRegressor",
     "LightGBMRegressor",
-    "LinearRegressor",
     "LogLinearRegressor",
     "OlmoEvalMetrics",
     "Regressor",
     "ScalingLaw",
+    "SearchRegressor",
     "WandbMetrics",
     "build_regression",
     "calculate_priors_with_manual",

@@ -101,6 +101,9 @@ class WandbMetrics(Enum):
 ALL_WANDB_METRICS = [m.value for m in WandbMetrics]
 
 
+
+# add in the all task families aggregation
+
 class OlmoEvalMetrics(Enum):
     """Offline BPB metrics for olmo-cookbook-eval.
 
@@ -112,7 +115,8 @@ class OlmoEvalMetrics(Enum):
     arc_challenge_bpb = "arc_challenge:bpb::olmes:full"
     arc_easy_bpb = "arc_easy:bpb::olmes:full"
 
-    # Basic skills (6)
+    # Basic skills (7)
+    basic_skills = "basic_skills:bpb::olmes"
     basic_skills_arithmetic = "basic_skills_arithmetic:bpb::olmes"
     basic_skills_coding = "basic_skills_coding:bpb::olmes"
     basic_skills_common_knowledge = "basic_skills_common_knowledge:bpb::olmes"
@@ -238,3 +242,66 @@ class OlmoEvalMetrics(Enum):
 
 # List of all OlmoEval metric values for convenience
 ALL_OLMO_EVAL_METRICS = [m.value for m in OlmoEvalMetrics]
+
+
+
+class ObjectiveWeights(Enum):
+    task_families = {
+        "math": 7.0/52,
+        "code": 19.0/52,
+        "qa": 26.0/52,
+    }
+
+
+ALL_TASK_FAMILIES = {
+    "math": [
+        # 7 tasks --> 1/7 need to be weighted by 7/52
+       'minerva_math_algebra::olmes',
+       'minerva_math_counting_and_probability::olmes',
+       'minerva_math_geometry::olmes',
+       'minerva_math_intermediate_algebra::olmes',
+       'minerva_math_number_theory::olmes',
+       'minerva_math_prealgebra::olmes',
+       'minerva_math_precalculus::olmes',
+    ],
+    "code": [
+        # 19 tasks --> 1/19 need to be weighted by 19/52
+        'codex_humaneval:3shot::none',
+        'mbpp:3shot::none',
+        'mt_mbpp_v2fix:bash',
+        'mt_mbpp_v2fix:c', 
+        'mt_mbpp_v2fix:cpp', 
+        'mt_mbpp_v2fix:csharp',
+        'mt_mbpp_v2fix:go', 
+        'mt_mbpp_v2fix:haskell', 
+        'mt_mbpp_v2fix:java',
+        'mt_mbpp_v2fix:javascript', 
+        'mt_mbpp_v2fix:matlab',
+        'mt_mbpp_v2fix:php', 
+        'mt_mbpp_v2fix:python', 
+        'mt_mbpp_v2fix:r',
+        'mt_mbpp_v2fix:ruby', 
+        'mt_mbpp_v2fix:rust', 
+        'mt_mbpp_v2fix:scala',
+        'mt_mbpp_v2fix:swift', 
+        'mt_mbpp_v2fix:typescript',
+    ],
+    "qa": [ # 26 tasks --> 1/26 need to be weighted by 26/52
+        'arc_challenge:rc::olmes', 'arc_easy:rc::olmes',
+        'basic_skills:rc::olmes', 'basic_skills_arithmetic:rc::olmes',
+        'basic_skills_coding:rc::olmes',
+        'basic_skills_common_knowledge:rc::olmes',
+        'basic_skills_logical_reasoning:rc::olmes',
+        'basic_skills_pattern:rc::olmes',
+        'basic_skills_string_operations:rc::olmes',
+        'coqa:rc::gen2mc', 'csqa:rc::olmes',
+        'drop:rc::gen2mc', 'hellaswag:rc::olmes', 'jeopardy:rc::gen2mc',
+        'lambada',
+        'medmcqa:rc::none', 
+        'naturalqs:rc::gen2mc', 'piqa:rc::olmes', 
+        'sciq:rc::olmo3', 
+        'socialiqa:rc::olmes',
+        'squad:rc::gen2mc', 'winogrande:rc::olmes',
+        'mmlu_stem', 'mmlu_other', 'mmlu_social_sciences', 'mmlu_humanities',
+    ]
+}

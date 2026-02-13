@@ -48,12 +48,12 @@ class TestRegressors:
         mse = np.mean((predictions - Y[:, 0]) ** 2)
         assert mse < 0.1, f"MSE {mse} too high"
 
-    def test_linear_regressor_fits(self, synthetic_data):
-        """Test Linear regressor fits without error."""
-        from olmix.fit.utils import LinearRegressor
+    def test_log_linear_regressor_fits(self, synthetic_data):
+        """Test LogLinear regressor fits without error."""
+        from olmix.fit.utils import LogLinearRegressor
 
         X, Y = synthetic_data
-        reg = LinearRegressor()
+        reg = LogLinearRegressor()
         reg.fit(X, Y, idx=0)
 
         predictions = reg.predict(X)
