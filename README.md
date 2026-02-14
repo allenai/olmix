@@ -153,20 +153,27 @@ That's it. All settings come from the YAML config. The two required CLI flags ar
 
 ### Output
 
-All results are written to a subdirectory under `output/`. The directory name is derived from a hash of the eval config, so different configurations produce separate output folders.
+All results are written to a hashed subdirectory under the `--output-dir` you specify. The subdirectory name is derived from a hash of the config, so different configurations produce separate output folders.
 
 | File | Description |
 |------|-------------|
 | `config.json` | Full configuration used for this fit (for reproducibility) |
 | `interaction_matrix.png` | Heatmap of regression coefficients: rows are domains, columns are metrics. Shows which domains help or hurt each metric. |
 | `interaction_matrix_signed_evidence.png` | Same matrix colored by statistical significance. Green = significant positive effect, red = significant negative effect. |
+| `interaction_matrix.npy` | Raw interaction matrix as a NumPy array (for downstream analysis). |
 | `{metric}_*_fit.png` | Per-metric regression plot: predicted vs. actual values. Tight clustering along the diagonal means the model fits well. |
+| `{metric}_*_correlations.json` | Correlation metrics (e.g. R²) for each regression fit. |
+| `path_to_regression_model.txt` | Path to the cached regression model (pickle). Reused on subsequent fits with the same regression config. |
+
+When `fit_only: false`, the proposer step also produces:
+
+| File | Description |
+|------|-------------|
 | `{metric}_*_optimal.json` | Proposed optimal weights for this metric (list of `{"domain": ..., "weight": ...}`). |
 | `{metric}_*_optimal.png` | Bar chart comparing the natural prior (corpus distribution) to the proposed optimal weights. |
 | `predicted_performance.json` | Predicted average metric value at the proposed optimal weights. |
-| `path_to_regression_model.txt` | Path to the cached regression model (pickle). Reused on subsequent fits with the same regression config. |
 
-When `--opt-avg-metric` is set, the key output is `opt_avg_all_metrics_*_optimal.json` — the single set of weights that optimizes the average across all metrics.
+When `opt_avg_metric: true` is set, the key output is `opt_avg_all_metrics_*_optimal.json` — the single set of weights that optimizes the average across all metrics.
 
 ---
 
@@ -209,7 +216,7 @@ Submits one Beaker job per variant (steps 1-2 happen automatically if no pre-gen
 olmix launch run --config configs/experiments/data_proportions/mix_baseline.yaml
 ```
 
-Use `--dry-run` to generate the metadata JSON (including priors) without launching any jobs. This is useful for preparing a `--priors` file for CSV fitting without needing Beaker.
+Use `--dry-run` to generate the metadata JSON (including priors) without launching any jobs. The priors from the metadata can be copied into a fit YAML config's `priors` section.
 
 ### Step 4: Export to CSV and fit
 
