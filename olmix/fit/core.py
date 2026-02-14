@@ -60,9 +60,7 @@ def run_fit(
     seed: int = 0,
     early_stopping: float = 0.0,
     # Proposer options
-    opt_avg_metric: bool = False,
     proposer_type: str = "exact",
-    simulation_samples: int = 100_000,
     constrain_objective: bool = False,
     temperature: float | None = None,
     # Filtering options
@@ -72,7 +70,6 @@ def run_fit(
     fixed_weight: str | None = None,
     obj_weights: dict[str, float] | None = None,
     # Other options
-    alpha: float = 1.0,
     fit_only: bool = False,
     make_worst_mix: bool = False,
     kl_reg: float | None = None,
@@ -103,16 +100,13 @@ def run_fit(
         n_test: Number of test samples
         seed: Random state for train-test split
         early_stopping: Epsilon for early stopping
-        opt_avg_metric: Optimize average of all metrics
         proposer_type: Proposer type (simulation, search, exact)
-        simulation_samples: Number of simulation samples
         constrain_objective: Constrain proposal by token budget
         temperature: Dirichlet temperature
         keep_sources: Only use runs with nonzero weight on these sources
         support_domains: Only use runs where these domains sum to 1
         drop_metrics: Metrics to exclude from fitting
         fixed_weight: JSON string of fixed domain weights
-        alpha: Alpha for simulated distributions
         fit_only: Only fit regression, don't propose
         make_worst_mix: Invert objective for counterfactual
         kl_reg: KL regularization lambda for log-linear exact proposer
@@ -408,7 +402,6 @@ def run_fit(
         metrics.columns[3:].tolist(),
         ratios,
     )
-    results = []
 
     for idx, metric in indexed_metrics:
         plot_correlation(
@@ -423,7 +416,6 @@ def run_fit(
             regression_type=regression_type,
             n_test=n_test,
             split_seed=seed,
-            alpha=alpha,
             output_dir=output_dir,
         )
 
@@ -440,7 +432,6 @@ def run_fit(
         regression_type=regression_type,
         n_test=n_test,
         split_seed=seed,
-        alpha=alpha,
         output_dir=output_dir,
         average_bpb=True,
         test_ratios_path=test_ratios_path,
@@ -448,47 +439,42 @@ def run_fit(
 
     if fit_only or n_test > 0:
         logger.info("Either fit only mode or n_test>0, not proposing a mix.")
+        logger.info(f"Results saved to {output_dir}")
         return
 
-    if opt_avg_metric:
-        weights = PROPOSER_TYPES[proposer_type]().propose(
-            index=-1,
-            predictor=predictors,
-            prior_distributions=priors[0],
-            num_samples=simulation_samples,
-            opt_avg_metric=opt_avg_metric,
-            constrain_objective=constrain_objective,
-            swarm_config=launch_configs[0] if constrain_objective and launch_configs else None,
-            obj_weights=obj_weights,
-            temperature=temperature,
-            fixed_weight=fixed_weight_dict if fixed_weight is not None else None,
-            make_worst_mix=make_worst_mix,
-            kl_reg=kl_reg,
-            target_tokens=target_tokens,
-            repetition_factor=repetition_factor,
-            token_counts=token_counts,
-            manual_kl=natural_kl,
-        )
-        plot_and_log_weights(
-            prior=priors[0],
-            original_prior=original_priors[0],
-            prediction=weights,
-            metric_name="opt_avg_all_metrics",
-            regression_type=regression_type,
-            train_split=train_split,
-            n_test=n_test,
-            split_seed=seed,
-            alpha=alpha,
-            df_config=ratios,
-            output_dir=output_dir,
-            fixed_weight=fixed_weight_dict if fixed_weight is not None else None,
-            expand_collapsed_weights_fn=expand_collapsed_weights,
-            add_back_in_fixed_source_weights_fn=add_back_in_fixed_source_weights,
-        )
+    weights = PROPOSER_TYPES[proposer_type]().propose(
+        index=-1,
+        predictor=predictors,
+        prior_distributions=priors[0],
+        constrain_objective=constrain_objective,
+        swarm_config=launch_configs[0] if constrain_objective and launch_configs else None,
+        obj_weights=obj_weights,
+        temperature=temperature,
+        fixed_weight=fixed_weight_dict if fixed_weight is not None else None,
+        make_worst_mix=make_worst_mix,
+        kl_reg=kl_reg,
+        target_tokens=target_tokens,
+        repetition_factor=repetition_factor,
+        token_counts=token_counts,
+        manual_kl=natural_kl,
+    )
+    plot_and_log_weights(
+        prior=priors[0],
+        original_prior=original_priors[0],
+        prediction=weights,
+        metric_name="opt_avg_all_metrics",
+        regression_type=regression_type,
+        train_split=train_split,
+        n_test=n_test,
+        split_seed=seed,
+        df_config=ratios,
+        output_dir=output_dir,
+        fixed_weight=fixed_weight_dict if fixed_weight is not None else None,
+        expand_collapsed_weights_fn=expand_collapsed_weights,
+        add_back_in_fixed_source_weights_fn=add_back_in_fixed_source_weights,
+    )
 
-        results.append(("opt_avg_all_metrics", weights))
-
-    metric, weights = results[-1]
+    metric = "opt_avg_all_metrics"
     predictions = np.array([p.predict(weights[None])[0] for p in predictors])
     if obj_weights is not None:
         predicted_performance = np.average(predictions, axis=0, weights=obj_weights)

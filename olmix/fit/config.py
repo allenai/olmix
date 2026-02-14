@@ -3,13 +3,12 @@
 Defines the YAML-driven configuration for `olmix fit --config <yaml>`.
 """
 
-import ast
 from os import PathLike
 from pathlib import Path
 from typing import Any, Union
 
 import yaml
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel
 
 PathType = Union[Path, PathLike[Any], str]
 
@@ -25,7 +24,7 @@ class PriorsConfig(BaseModel):
     """Token distribution across domains (inline priors)."""
 
     relative_sizes: dict[str, float]
-    total_tokens: int
+    total_tokens: int | None = None # we don't actually use this for now
     token_counts: dict[str, int]
 
     def to_tuple(self) -> tuple[dict[str, float], int, dict[str, int]]:
@@ -37,12 +36,9 @@ class RegressionConfig(BaseModel):
     """Regression model settings."""
 
     type: str = "log_linear"
-    alpha: float = 1.0
     seed: int = 0
     n_test: int = 0
     train_split: list[float] = [1.0]
-    simulation_samples: int = 100_000
-    opt_avg_metric: bool = False
     aggregate_task_families: bool = False
 
 

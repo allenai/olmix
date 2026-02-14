@@ -469,10 +469,8 @@ class SimulationProposer(Proposer):
         predictor: list[Regressor],
         prior_distributions: dict,
         token_counts: dict[str, int],
-        num_samples: int = 1_000_000,
         seed: int = 1337,
         search_iterations: int = 10,
-        opt_avg_metric: bool = False,
         constrain_objective: bool = False,
         swarm_config: ExperimentConfig | None = None,
         obj_weights: list | None = None,
@@ -486,10 +484,12 @@ class SimulationProposer(Proposer):
         torch.manual_seed(seed)
         random.seed(seed)
 
+        # we never touch these simulation hyperparams
         min_weight = 1e-5
         min_dirichlet = 1
         max_dirichlet = 100
         search_dirichlet_factor = 2.0
+        num_samples=100_000
 
         search_prior = np.array(list(prior_distributions.values()))
 
@@ -546,14 +546,11 @@ class SimulationProposer(Proposer):
                     continue
 
             predictions = np.array([reg.predict(simulations) for reg in predictor])
-            if opt_avg_metric:
-                if obj_weights is not None:
-                    objs = np.average(predictions, axis=0, weights=obj_weights)
-                    logger.info(f"Computing weighted average of predictions using {obj_weights}")
-                else:
-                    objs = predictions.mean(axis=0)
+            if obj_weights is not None:
+                objs = np.average(predictions, axis=0, weights=obj_weights)
+                logger.info(f"Computing weighted average of predictions using {obj_weights}")
             else:
-                objs = predictor[index].predict(simulations)
+                objs = predictions.mean(axis=0)
 
             if make_worst_mix:
                 best_mask = (objs.max() - objs) < 1e-3
@@ -591,7 +588,6 @@ class SearchProposer(Proposer):
         predictor: list[SearchRegressor],
         prior_distributions: dict,
         token_counts: dict[str, int],
-        opt_avg_metric: bool = False,
         constrain_objective: bool = False,
         swarm_config: ExperimentConfig | None = None,
         target_tokens: int | None = None,
@@ -609,10 +605,7 @@ class SearchProposer(Proposer):
         best_performance = np.inf
         best_weights = np.zeros(len(searched_weights[0]))
         for weight in searched_weights:
-            if opt_avg_metric:
-                pred = np.array([reg.predict(weight[None]) for reg in predictor]).mean(axis=0)[0]
-            else:
-                pred = predictor[index].predict(weight[None])[0]
+            pred = np.array([reg.predict(weight[None]) for reg in predictor]).mean(axis=0)[0]
 
             if constrain_objective:
                 token_usage = weight * desired_tokens
@@ -635,7 +628,6 @@ class LogLinearExactProposer(Proposer):
         predictor: list[SearchRegressor],
         prior_distributions: dict,
         token_counts: dict[str, int],
-        opt_avg_metric: bool = False,
         constrain_objective: bool = False,
         swarm_config: ExperimentConfig | None = None,
         kl_reg: float | None = 0.1,
@@ -645,7 +637,6 @@ class LogLinearExactProposer(Proposer):
         repetition_factor: float = 5.0,
         **kwargs,
     ):
-        assert opt_avg_metric, "LogLinearExactProposer only supports opt_avg_metric=True"
         if kl_reg is None:
             raise ValueError("kl_reg must be provided for LogLinearExactProposer")
 
