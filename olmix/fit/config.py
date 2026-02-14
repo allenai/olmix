@@ -3,12 +3,13 @@
 Defines the YAML-driven configuration for `olmix fit --config <yaml>`.
 """
 
+import ast
 from os import PathLike
 from pathlib import Path
 from typing import Any, Union
 
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator, model_validator
 
 PathType = Union[Path, PathLike[Any], str]
 
@@ -85,8 +86,37 @@ class FitConfig(BaseModel):
     filtering: FilteringConfig = FilteringConfig()
 
     @classmethod
+    def _evaluate_fraction(cls, value: str) -> float:
+        """Safely evaluate fraction strings like '7/52.0' to floats."""
+        # Try to parse as a simple division expression
+        if "/" in value:
+            try:
+                parts = value.split("/")
+                if len(parts) == 2:
+                    numerator = float(parts[0].strip())
+                    denominator = float(parts[1].strip())
+                    return numerator / denominator
+            except (ValueError, ZeroDivisionError):
+                pass
+        # Fallback to direct float conversion
+        return float(value)
+
+    @classmethod
     def from_yaml(cls, path: PathType) -> "FitConfig":
         """Load a FitConfig from a YAML file."""
         with open(path) as f:
             data = yaml.safe_load(f)
+
+        # Preprocess fraction strings in filtering.obj_weights and filtering.fixed_weight
+        if "filtering" in data and isinstance(data["filtering"], dict):
+            for field_name in ["obj_weights", "fixed_weight"]:
+                if field_name in data["filtering"] and isinstance(data["filtering"][field_name], dict):
+                    result = {}
+                    for key, value in data["filtering"][field_name].items():
+                        if isinstance(value, str):
+                            result[key] = cls._evaluate_fraction(value)
+                        else:
+                            result[key] = float(value)
+                    data["filtering"][field_name] = result
+
         return cls(**data)

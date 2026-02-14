@@ -691,8 +691,6 @@ class LogLinearExactProposer(Proposer):
         if constrain_objective:
             constraints.append(x <= caps)
 
-        breakpoint()
-
         prob = cp.Problem(cp.Minimize(obj), constraints)
         prob.solve(solver="ECOS", verbose=True)  # ECOS or SCS are good
 
