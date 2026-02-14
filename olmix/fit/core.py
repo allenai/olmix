@@ -329,17 +329,21 @@ def run_fit(
         # look in output_dir
         with open(os.path.join(output_dir, "path_to_regression_model.txt")) as f:
             regression_model_cache_path = pathlib.Path(f.read().strip())
-        if os.path.exists(regression_model_cache_path):
-            logger.info(f"Using log-linear regression model at {regression_model_cache_path}")
-            with open(regression_model_cache_path, "rb") as f:
-                params = pickle.load(f)
 
-            # initialize the regression models using the cached parameters
-            for idx, metric in indexed_metrics:
-                reg = REGRESSION_TYPES[regression_type](
-                    params=params[metric], requested_tokens=target_tokens if regression_type == "autoscale" else None
-                )
-                predictors.append(reg)
+        if not os.path.exists(regression_model_cache_path):
+            raise ValueError(f"You may have deleted the cached regression model since the last run, but the output directory still links to it. Please delete {os.path.join(output_dir, 'path_to_regression_model.txt')}.")
+
+        logger.info(f"Using log-linear regression model at {regression_model_cache_path}")
+        with open(regression_model_cache_path, "rb") as f:
+            params = pickle.load(f)
+
+        # initialize the regression models using the cached parameters
+        for idx, metric in indexed_metrics:
+            reg = REGRESSION_TYPES[regression_type](
+                params=params[metric], requested_tokens=target_tokens if regression_type == "autoscale" else None
+            )
+            predictors.append(reg)
+
     else:
         logger.info(f"Will save regression model to {regression_model_cache_path}")
         for idx, metric in indexed_metrics:
