@@ -18,7 +18,6 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 
 from olmix.aliases import ExperimentConfig
-from olmix.fit.constants import ALL_TASK_FAMILIES
 from olmix.fit.utils import (
     PROPOSER_TYPES,
     REGRESSION_TYPES,
@@ -82,6 +81,7 @@ def run_fit(
     test_ratios_path: tuple[str, ...] = (),
     test_metrics_path: tuple[str, ...] = (),
     aggregate_task_families: bool = False,
+    task_families: dict[str, list[str]] | None = None,
 ) -> None:
     """Run the regression fitting and mixture proposing pipeline.
 
@@ -183,11 +183,13 @@ def run_fit(
             metrics[metrics.columns[3:]] = metrics[metrics.columns[3:]].subtract(metrics[metrics.columns[3:]].min())
 
     if aggregate_task_families:
+        if task_families is None:
+            raise ValueError("task_families must be provided when aggregate_task_families=True")
         meta_cols = metrics.columns[:3]
         task_cols = metrics.columns[3:]
         metrics_new = metrics.loc[:, meta_cols].copy()
 
-        for family, tasks in ALL_TASK_FAMILIES.items():
+        for family, tasks in task_families.items():
             # Only keep tasks that actually exist in the dataframe
             existing = [t for t in tasks if t in task_cols]
 
@@ -197,7 +199,7 @@ def run_fit(
             # Row-wise mean across the family
             metrics_new[family] = metrics[existing].mean(axis=1)
         metrics = metrics_new
-        metrics_to_index = list(ALL_TASK_FAMILIES.keys())
+        metrics_to_index = list(task_families.keys())
 
     # X = Domain weights
     X_train = ratios[ratios.columns[3:]].values
@@ -213,12 +215,13 @@ def run_fit(
                 tm, _ = aggregate_mmlu(tm, metrics_to_index)
 
             if aggregate_task_families:
+                assert task_families is not None
                 # we need to aggregate the test set metrics as well
                 meta_cols = tm.columns[:3]
                 task_cols = tm.columns[3:]
                 metrics_new = tm.loc[:, meta_cols].copy()
 
-                for family, tasks in ALL_TASK_FAMILIES.items():
+                for family, tasks in task_families.items():
                     # Only keep tasks that actually exist in the dataframe
                     existing = [t for t in tasks if t in task_cols]
 
@@ -289,9 +292,10 @@ def run_fit(
     logger.info(f"Fitting {regression_type} regression for metrics:")
     logger.info(indexed_metrics)
 
+    obj_weights_list: list[float] | None = None
     if obj_weights:
-        obj_weights = [obj_weights.get(metric, 1) for idx, metric in indexed_metrics]
-        logger.info(f"Minimizing weighted average: {obj_weights}")
+        obj_weights_list = [obj_weights.get(metric, 1) for idx, metric in indexed_metrics]
+        logger.info(f"Minimizing weighted average: {obj_weights_list}")
 
     # Caching logic for regression model
     experiment_groups_key = "_".join(experiment_groups) if experiment_groups else "csv"
@@ -325,7 +329,9 @@ def run_fit(
             regression_model_cache_path = pathlib.Path(f.read().strip())
 
         if not os.path.exists(regression_model_cache_path):
-            raise ValueError(f"You may have deleted the cached regression model since the last run, but the output directory still links to it. Please delete {os.path.join(output_dir, 'path_to_regression_model.txt')}.")
+            raise ValueError(
+                f"You may have deleted the cached regression model since the last run, but the output directory still links to it. Please delete {os.path.join(output_dir, 'path_to_regression_model.txt')}."
+            )
 
         logger.info(f"Using log-linear regression model at {regression_model_cache_path}")
         with open(regression_model_cache_path, "rb") as f:
@@ -448,7 +454,7 @@ def run_fit(
         prior_distributions=priors[0],
         constrain_objective=constrain_objective,
         swarm_config=launch_configs[0] if constrain_objective and launch_configs else None,
-        obj_weights=obj_weights,
+        obj_weights=obj_weights_list,
         temperature=temperature,
         fixed_weight=fixed_weight_dict if fixed_weight is not None else None,
         make_worst_mix=make_worst_mix,
@@ -476,8 +482,8 @@ def run_fit(
 
     metric = "opt_avg_all_metrics"
     predictions = np.array([p.predict(weights[None])[0] for p in predictors])
-    if obj_weights is not None:
-        predicted_performance = np.average(predictions, axis=0, weights=obj_weights)
+    if obj_weights_list is not None:
+        predicted_performance = np.average(predictions, axis=0, weights=obj_weights_list)
     else:
         predicted_performance = predictions.mean(axis=0)
     logger.info(f"Metric: {metric}. Predicted performance using regression model: {predicted_performance}")

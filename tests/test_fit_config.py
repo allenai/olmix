@@ -7,6 +7,8 @@ from olmix.fit.config import (
     ConstraintsConfig,
     FilteringConfig,
     FitConfig,
+    InLoopEvalConfig,
+    OfflineEvalConfig,
     PriorsConfig,
     ProposerConfig,
     RegressionConfig,
@@ -26,6 +28,13 @@ def sample_config_dict():
             "relative_sizes": {"domain_a": 0.6, "domain_b": 0.4},
             "total_tokens": 1_000_000,
             "token_counts": {"domain_a": 600_000, "domain_b": 400_000},
+        },
+        "eval": {
+            "type": "offline",
+            "tasks": {
+                "math": ["metric_a", "metric_b"],
+                "code": ["metric_c"],
+            },
         },
     }
 
@@ -96,7 +105,10 @@ class TestFitConfig:
             FitConfig()
 
         with pytest.raises(ValueError):
-            FitConfig(swarm={"ratios": "r.csv", "metrics": "m.csv"})
+            FitConfig(
+                swarm={"ratios": "r.csv", "metrics": "m.csv"},
+                eval={"type": "offline", "tasks": {"qa": ["m1"]}},
+            )
 
     def test_full_config_yaml(self, tmp_path):
         """Test loading a fully-specified YAML (all sections)."""
@@ -106,6 +118,13 @@ class TestFitConfig:
                 "relative_sizes": {"a": 0.5, "b": 0.5},
                 "total_tokens": 2_000_000,
                 "token_counts": {"a": 1_000_000, "b": 1_000_000},
+            },
+            "eval": {
+                "type": "offline",
+                "tasks": {
+                    "math": ["metric_a"],
+                    "code": ["metric_b", "metric_c"],
+                },
             },
             "regression": {
                 "type": "log_linear",
@@ -216,6 +235,84 @@ class TestFilteringConfig:
         assert cfg.fixed_weight["domain_a"] == 0.3
 
 
+class TestInLoopEvalConfig:
+    def test_basic(self):
+        cfg = InLoopEvalConfig(
+            tasks={
+                "math": {"gsm8k_gold_bpb_5shot": "eval/downstream/gsm8k_gold_bpb_5shot (BPB v2)"},
+                "code": {"codex_humaneval_gold_bpb_3shot": "eval/downstream/codex_humaneval_gold_bpb_3shot (BPB v2)"},
+            }
+        )
+        assert cfg.type == "inloop"
+        assert len(cfg.task_ids) == 2
+        assert len(cfg.metric_names) == 2
+        assert "gsm8k_gold_bpb_5shot" in cfg.task_ids
+        assert "eval/downstream/gsm8k_gold_bpb_5shot (BPB v2)" in cfg.metric_names
+
+    def test_task_families(self):
+        cfg = InLoopEvalConfig(
+            tasks={
+                "math": {"task_a": "metric_a", "task_b": "metric_b"},
+                "code": {"task_c": "metric_c"},
+            }
+        )
+        families = cfg.task_families
+        assert set(families.keys()) == {"math", "code"}
+        assert families["math"] == ["metric_a", "metric_b"]
+        assert families["code"] == ["metric_c"]
+
+
+class TestOfflineEvalConfig:
+    def test_basic(self):
+        cfg = OfflineEvalConfig(
+            tasks={
+                "math": ["minerva_math_algebra::olmes"],
+                "code": ["codex_humaneval:3shot::none", "mbpp:3shot::none"],
+            }
+        )
+        assert cfg.type == "offline"
+        assert len(cfg.metric_names) == 3
+        assert "minerva_math_algebra::olmes" in cfg.metric_names
+
+    def test_task_families(self):
+        cfg = OfflineEvalConfig(
+            tasks={
+                "math": ["m1", "m2"],
+                "code": ["m3"],
+            }
+        )
+        families = cfg.task_families
+        assert families["math"] == ["m1", "m2"]
+        assert families["code"] == ["m3"]
+
+
+class TestEvalDiscriminator:
+    def test_offline_default(self):
+        """When type is omitted, should default to offline."""
+        cfg = FitConfig(
+            swarm={"ratios": "r.csv", "metrics": "m.csv"},
+            priors={
+                "relative_sizes": {"a": 0.5, "b": 0.5},
+                "total_tokens": 1_000_000,
+                "token_counts": {"a": 500_000, "b": 500_000},
+            },
+            eval={"tasks": {"qa": ["metric1"]}},
+        )
+        assert cfg.eval.type == "offline"
+
+    def test_inloop_explicit(self):
+        cfg = FitConfig(
+            swarm={"ratios": "r.csv", "metrics": "m.csv"},
+            priors={
+                "relative_sizes": {"a": 0.5, "b": 0.5},
+                "total_tokens": 1_000_000,
+                "token_counts": {"a": 500_000, "b": 500_000},
+            },
+            eval={"type": "inloop", "tasks": {"qa": {"task_a": "metric_a"}}},
+        )
+        assert cfg.eval.type == "inloop"
+
+
 class TestDCLMBaselineConfig:
     def test_loads_example_config(self):
         """Verify the shipped example config loads and validates."""
@@ -226,3 +323,14 @@ class TestDCLMBaselineConfig:
         assert cfg.regression.type == "log_linear"
         assert cfg.proposer.type == "exact"
         assert cfg.proposer.kl_reg == 0.1
+
+    def test_eval_config(self):
+        """Verify the eval section of the shipped config."""
+        cfg = FitConfig.from_yaml("configs/fits/dclm_baseline.yaml")
+        assert cfg.eval.type == "offline"
+        assert len(cfg.eval.metric_names) == 110
+        families = cfg.eval.task_families
+        assert set(families.keys()) == {"math", "code", "qa"}
+        assert len(families["math"]) == 7
+        assert len(families["code"]) == 19
+        assert len(families["qa"]) == 84

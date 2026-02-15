@@ -42,7 +42,6 @@ from olmo_core.train.common import LoadStrategy
 
 from olmix.aliases import SourceInstance, TrainType
 from olmix.model.aliases import ModelTrainConfig
-from olmix.model.evaluators import DEFAULT_EVAL_TASKS
 from olmix.utils.cloud import expand_cloud_globs
 
 logger = logging.getLogger(__name__)
@@ -169,7 +168,7 @@ class TransformerConfigBuilder:
         self.load_path = load_path
         self.device_batch_size = device_batch_size
         self.global_batch_size = global_batch_size
-        self.eval_tasks = eval_tasks if eval_tasks is not None else DEFAULT_EVAL_TASKS
+        self.eval_tasks = eval_tasks if eval_tasks is not None else []
         self.eval_interval = eval_interval
 
         # Use olmo-core directly for tokenizer

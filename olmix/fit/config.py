@@ -5,10 +5,10 @@ Defines the YAML-driven configuration for `olmix fit --config <yaml>`.
 
 from os import PathLike
 from pathlib import Path
-from typing import Any, Union
+from typing import Annotated, Any, Literal, Union
 
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, Discriminator, Tag
 
 PathType = Union[Path, PathLike[Any], str]
 
@@ -24,10 +24,10 @@ class PriorsConfig(BaseModel):
     """Token distribution across domains (inline priors)."""
 
     relative_sizes: dict[str, float]
-    total_tokens: int | None = None # we don't actually use this for now
+    total_tokens: int | None = None  # we don't actually use this for now
     token_counts: dict[str, int]
 
-    def to_tuple(self) -> tuple[dict[str, float], int, dict[str, int]]:
+    def to_tuple(self) -> tuple[dict[str, float], int | None, dict[str, int]]:
         """Return the (relative_sizes, total_tokens, token_counts) tuple expected by run_fit."""
         return (dict(self.relative_sizes), self.total_tokens, dict(self.token_counts))
 
@@ -71,11 +71,74 @@ class FilteringConfig(BaseModel):
     obj_weights: dict[str, float] = {}
 
 
+class InLoopEvalConfig(BaseModel):
+    """Eval config for in-loop (WandB) metrics.
+
+    Tasks are nested by family: {family: {task_id: wandb_metric_name}}.
+    Used by ``olmix launch`` (task_ids) and ``olmix fit`` (metric_names).
+    """
+
+    type: Literal["inloop"] = "inloop"
+    tasks: dict[str, dict[str, str]]
+
+    @property
+    def metric_names(self) -> list[str]:
+        """Flattened list of WandB metric names (CSV column names)."""
+        return [name for family in self.tasks.values() for name in family.values()]
+
+    @property
+    def task_ids(self) -> list[str]:
+        """Flattened list of olmo-core task IDs."""
+        return [tid for family in self.tasks.values() for tid in family.keys()]
+
+    @property
+    def task_families(self) -> dict[str, list[str]]:
+        """Family → list of metric names."""
+        return {family: list(mapping.values()) for family, mapping in self.tasks.items()}
+
+
+class OfflineEvalConfig(BaseModel):
+    """Eval config for offline (cookbook-eval) metrics.
+
+    Tasks are nested by family: {family: [metric_name, ...]}.
+    Used by ``olmix fit`` only.
+    """
+
+    type: Literal["offline"] = "offline"
+    tasks: dict[str, list[str]]
+
+    @property
+    def metric_names(self) -> list[str]:
+        """Flattened list of metric names (CSV column names)."""
+        return [name for names in self.tasks.values() for name in names]
+
+    @property
+    def task_families(self) -> dict[str, list[str]]:
+        """Family → list of metric names."""
+        return dict(self.tasks)
+
+
+def _eval_discriminator(v: Any) -> str:
+    if isinstance(v, dict):
+        return v.get("type", "offline")
+    return getattr(v, "type", "offline")
+
+
+EvalConfig = Annotated[
+    Union[
+        Annotated[InLoopEvalConfig, Tag("inloop")],
+        Annotated[OfflineEvalConfig, Tag("offline")],
+    ],
+    Discriminator(_eval_discriminator),
+]
+
+
 class FitConfig(BaseModel):
     """Top-level fit configuration, composed of all sub-configs."""
 
     swarm: SwarmDataConfig
     priors: PriorsConfig
+    eval: EvalConfig
     regression: RegressionConfig = RegressionConfig()
     proposer: ProposerConfig = ProposerConfig()
     constraints: ConstraintsConfig = ConstraintsConfig()
