@@ -109,15 +109,3 @@ eval:
       medqa_en_rc_5shot: "eval/downstream/medqa_en_rc_5shot (BPB v2)"
       qasper_yesno_rc_5shot: "eval/downstream/qasper_yesno_rc_5shot (BPB v2)"
       sciriff_yesno_rc_5shot: "eval/downstream/sciriff_yesno_rc_5shot (BPB v2)"
-
-priors:
-  token_counts:
-    arxiv: 21377485731
-    dclm:education_and_jobs: 20771836713
-    dclm:science_math_and_technology: 84526121193
-    dclm:software_development: 23878302458
-    wikipedia: 3692487830
-
-swarm:
-  seed: 42
-  variants: 1
