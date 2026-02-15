@@ -7,6 +7,8 @@ import yaml
 from olmo_core.data.types import NumpyDatasetDType
 from pydantic import BaseModel
 
+from olmix.fit.config import InLoopEvalConfig
+
 PathType = Union[Path, PathLike[Any], str]
 
 # Constants for Chinchilla scaling
@@ -163,7 +165,6 @@ class TrainingConfig(BaseModel):
     checkpoint_path: str | None = None
     train_type: TrainType = TrainType.pretrain
     eval_interval: int = 1000  # Steps between evaluations
-    eval_tasks: list[str] | None = None  # Custom eval tasks (None uses DEFAULT_EVAL_TASKS)
     no_eval: bool = False  # Disable downstream evaluations
     instance_filter: InstanceFilterConfig | None = None  # Optional quality filter for repetitive sequences
 
@@ -216,6 +217,7 @@ class ExperimentConfig(BaseModel):
     infra: InfraConfig
     training: TrainingConfig
     data: DataConfig
+    eval: InLoopEvalConfig
     swarm: SwarmConfig = SwarmConfig()
 
     @classmethod

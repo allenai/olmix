@@ -21,6 +21,12 @@ from olmix.aliases import (
     config_from_path,
     get_model_num_params,
 )
+from olmix.fit.config import InLoopEvalConfig
+
+# Minimal InLoopEvalConfig for tests
+_MINIMAL_EVAL = InLoopEvalConfig(
+    tasks={"qa": {"arc_challenge_test_rc_5shot": "eval/downstream/arc_challenge_test_rc_5shot (BPB v2)"}},
+)
 
 
 class TestSourceConfig:
@@ -100,6 +106,12 @@ class TestExperimentConfig:
                     {"name": "wikipedia", "paths": ["s3://bucket/wiki/**/*.npy"]},
                     {"name": "dclm", "paths": ["s3://bucket/dclm/**/*.npy"]},
                 ],
+            },
+            "eval": {
+                "type": "inloop",
+                "tasks": {
+                    "qa": {"arc_challenge_test_rc_5shot": "eval/downstream/arc_challenge_test_rc_5shot (BPB v2)"},
+                },
             },
             "swarm": {
                 "seed": 42,
@@ -207,6 +219,7 @@ class TestExperimentGroup:
                     SourceConfig(name="wiki", paths=["s3://bucket/wiki/*.npy"]),
                 ],
             ),
+            eval=_MINIMAL_EVAL,
             swarm=SwarmConfig(
                 seed=42,
                 variants=2,
@@ -281,6 +294,7 @@ class TestExperimentConfigChinchilla:
                 seed=42,
             ),
             data=DataConfig(sources=[SourceConfig(name="wiki", paths=["test.npy"])]),
+            eval=_MINIMAL_EVAL,
             swarm=SwarmConfig(seed=42, variants=1),
         )
 
@@ -299,6 +313,7 @@ class TestExperimentConfigChinchilla:
                 seed=42,
             ),
             data=DataConfig(sources=[SourceConfig(name="wiki", paths=["test.npy"])]),
+            eval=_MINIMAL_EVAL,
             swarm=SwarmConfig(seed=42, variants=1),
         )
 
@@ -334,6 +349,7 @@ class TestInstanceFilterConfig:
         config = ExperimentConfig(
             name="test",
             infra=InfraConfig(budget="test", workspace="test", cluster="test"),
+            eval=_MINIMAL_EVAL,
             training=TrainingConfig(
                 proxy_model_id="olmo2_30m",
                 tokenizer="dolma2",

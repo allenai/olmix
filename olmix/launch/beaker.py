@@ -109,9 +109,8 @@ def mk_instance_cmd(
         cmd_list.append("--no-eval")
     else:
         cmd_list.append(f"-E {config.training.eval_interval}")
-        if config.training.eval_tasks:
-            for task in config.training.eval_tasks:
-                cmd_list.append(f'-e "{task}"')
+        for task in config.eval.task_ids:
+            cmd_list.append(f'-e "{task}"')
 
     cmd_list.extend(sources)
 

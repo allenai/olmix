@@ -39,7 +39,7 @@ class TestPackageImports:
 
     def test_fit_module_imports(self):
         """Test fit module imports."""
-        from olmix.fit.constants import ALL_OLMO_EVAL_METRICS, ALL_WANDB_METRICS, OlmoEvalMetrics, WandbMetrics
+        from olmix.fit.config import InLoopEvalConfig, OfflineEvalConfig
         from olmix.fit.law import ScalingLaw
         from olmix.fit.utils import (
             LightGBMRegressor,
@@ -47,10 +47,8 @@ class TestPackageImports:
             Regressor,
         )
 
-        assert ALL_WANDB_METRICS is not None
-        assert ALL_OLMO_EVAL_METRICS is not None
-        assert OlmoEvalMetrics is not None
-        assert WandbMetrics is not None
+        assert InLoopEvalConfig is not None
+        assert OfflineEvalConfig is not None
         assert ScalingLaw is not None
         assert LightGBMRegressor is not None
         assert LogLinearRegressor is not None
@@ -106,16 +104,8 @@ class TestPackageImports:
     def test_model_module_imports(self):
         """Test model module imports."""
         from olmix.model.aliases import ModelTrainConfig
-        from olmix.model.evaluators import (
-            CodeTasks,
-            DownstreamEvaluators,
-            DownstreamEvaluatorsSmall,
-        )
 
         assert ModelTrainConfig is not None
-        assert CodeTasks is not None
-        assert DownstreamEvaluators is not None
-        assert DownstreamEvaluatorsSmall is not None
 
     def test_utils_module_imports(self):
         """Test utils module imports."""

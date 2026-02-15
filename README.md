@@ -61,6 +61,16 @@ priors:                              # Required — token distribution across do
     domain_a: 600000000
     domain_b: 400000000
 
+eval:                                 # Required — evaluation task definitions
+  type: offline                       # offline | inloop
+  tasks:
+    math:
+      - "minerva_math_algebra::olmes"
+    code:
+      - "codex_humaneval:3shot::none"
+    qa:
+      - "arc_challenge:rc::olmes"
+
 regression:
   type: log_linear                   # log_linear | lightgbm | search | gp | autoscale | bimix
   seed: 0
@@ -91,6 +101,13 @@ filtering:
 
 The **priors** section defines the natural token distribution across your domains inline — no S3 access or external JSON files needed.
 
+The **eval** section defines which evaluation tasks to use, grouped by family. Two types are supported:
+
+- **`offline`** — for cookbook-eval metrics (used by `olmix fit` with CSV data). Tasks are metric names matching CSV column headers.
+- **`inloop`** — for WandB in-loop metrics (used by `olmix launch` and `olmix fit`). Tasks map olmo-core task IDs to WandB metric names: `{task_id: "eval/downstream/task_id (BPB v2)"}`.
+
+Task families are defined by the nesting structure (e.g., `math`, `code`, `qa`) and are used by `aggregate_task_families`.
+
 ### Running a fit
 
 ```bash
@@ -105,6 +122,13 @@ That's it. All settings come from the YAML config. The two required CLI flags ar
 | `--output-dir` | Directory for saving fit outputs |
 
 ### Config reference
+
+#### `eval` section
+
+| Field | What it does |
+|-------|-------------|
+| `type` | Eval type: `offline` (cookbook-eval metrics for CSV-based fitting) or `inloop` (WandB in-loop metrics for launch + fitting) |
+| `tasks` | Tasks grouped by family. For `offline`: `{family: [metric_name, ...]}`. For `inloop`: `{family: {task_id: wandb_metric_name}}`. |
 
 #### `regression` section
 
