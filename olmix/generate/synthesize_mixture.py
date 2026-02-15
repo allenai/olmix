@@ -25,7 +25,7 @@ logging.getLogger("botocore").setLevel(logging.WARNING)
 import hashlib
 import json
 
-from olmix.aliases import ExperimentConfig, SourceConfig
+from olmix.aliases import GenerationConfig, SourceConfig
 
 
 class ConfigDefaults:
@@ -192,7 +192,6 @@ def generate_weights_dirichlet(
     if enable_bound:
         # weight bounds are at the leaf level and computed using the number of available tokens per source/topic.
         weight_bounds = [(0.0, min(prior_dist[idx] * token_scale, 1.0)) for idx in range(len(prior_dist))]
-        # raise ValueError("WARNING: need to make sure keys are aligned here and with other places. In cookbook implementation, just removed sorted() everywhere, and seems to be fine?")
         grouped_bounds = {domain: weight_bounds[idx] for idx, domain in enumerate(domains)}
         logger.info("Weight bounds:")
         logger.info(grouped_bounds)
@@ -484,7 +483,7 @@ def generate_weights_dirichlet(
 
 
 def mk_mixtures(
-    config: ExperimentConfig,
+    config: GenerationConfig,
 ) -> list[dict[str, tuple[float, float]]]:
     random.seed(config.swarm.seed)
     np.random.seed(config.swarm.seed)
@@ -550,7 +549,7 @@ def mk_mixtures(
         min_topic_strength=min_topic_strength,
         max_topic_strength=max_topic_strength,
         allow_repetition=swarm.allow_repetition,
-        max_tokens=config.training.get_max_tokens(),
+        max_tokens=config.max_tokens,
         available_tokens=available_tokens,
         enable_bound=True,
         nonzero_weight=swarm.nonzero_weight,

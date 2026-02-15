@@ -61,9 +61,8 @@ def _save_launch_metadata(
     config_path: Path,
     group_uuid: str,
     beaker_user: str,
-    mixes: list[dict],
+    variants_dir: str,
     results: list,
-    priors: dict | None = None,
 ) -> None:
     """Save launch metadata to the mix file for reproducibility tracking."""
     output_path = _get_output_path_from_config(config_path, group_uuid)
@@ -90,6 +89,7 @@ def _save_launch_metadata(
         "metadata": {
             "timestamp": datetime.now(UTC).isoformat(),
             "config_path": str(config_path),
+            "variants_dir": variants_dir,
             "beaker_user": beaker_user,
             "group_id": group_uuid,
             "wandb_url": f"https://wandb.ai/ai2-llm/olmix?group={group_uuid}",
@@ -97,10 +97,7 @@ def _save_launch_metadata(
         },
         "config": config_contents,
         "experiments": experiments,
-        "mixes": mixes,
     }
-    if priors is not None:
-        metadata["priors"] = priors
 
     # Write to file
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -110,6 +107,25 @@ def _save_launch_metadata(
     logger.info(f"Launch metadata saved to {output_path}")
 
 
+def _load_variants(variants_dir: str):
+    """Load all VariantConfig YAML files from a directory."""
+    from olmix.aliases import VariantConfig
+
+    variants_path = Path(variants_dir)
+    if not variants_path.is_dir():
+        raise click.BadParameter(f"Variants path is not a directory: {variants_dir}")
+
+    variant_files = sorted(variants_path.glob("*.yaml")) + sorted(variants_path.glob("*.yml"))
+    if not variant_files:
+        raise click.BadParameter(f"No YAML files found in variants directory: {variants_dir}")
+
+    variants = []
+    for vf in variant_files:
+        variants.append(VariantConfig.from_yaml(vf))
+
+    return variants
+
+
 @click.group()
 def cli():
     """OLMix - Data mixture optimization for OLMo training."""
@@ -117,35 +133,51 @@ def cli():
 
 
 # ============================================================================
-# Mix subcommands
+# Generate command (top-level)
 # ============================================================================
 
 
-@cli.group()
-def mix():
-    """Commands for generating and managing mixture configurations."""
-    pass
-
-
-@mix.command("generate")
+@cli.command("generate")
 @click.option(
     "-c",
     "--config",
     type=click.Path(exists=True),
     required=True,
-    help="Path to the experiment configuration file.",
+    help="Path to the generation configuration file.",
 )
 @click.option(
     "-o",
     "--output",
     type=click.Path(),
-    help="Output file path for the generated mixes.",
+    required=True,
+    help="Output directory for variant YAML files.",
 )
-def generate_mixes(config: Path, output: Path | None = None):
-    """Generate a set of mixtures based on a provided config."""
-    from olmix.launch.launch_utils import mk_mixes
+def generate(config: str, output: str):
+    """Generate a set of mixture variants from a generation config."""
+    from olmix.aliases import GenerationConfig, VariantConfig
+    from olmix.generate.utils import mk_mixes
 
-    mk_mixes(config, output)
+    gen_config = GenerationConfig.from_yaml(config)
+    group_uuid = generate_uuid()[:8]
+
+    mixes = mk_mixes(gen_config)
+
+    # Write each mix as a VariantConfig YAML file
+    output_path = Path(output)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    name = gen_config.name or Path(config).stem
+
+    for idx, mix in enumerate(mixes):
+        variant_name = f"{name}-{group_uuid}-{idx:04}"
+        variant = VariantConfig(name=variant_name, mix=mix)
+        variant_file = output_path / f"{variant_name}.yaml"
+        with open(variant_file, "w") as f:
+            yaml.dump(variant.model_dump(), f, default_flow_style=False, sort_keys=False)
+
+    click.echo(f"Generated {len(mixes)} variant(s) in {output_path}/")
+    for vf in sorted(output_path.glob("*.yaml")):
+        click.echo(f"  {vf.name}")
 
 
 # ============================================================================
@@ -165,14 +197,14 @@ def launch():
     "--config",
     type=click.Path(exists=True),
     required=True,
-    help="Path to the experiment configuration file.",
+    help="Path to the launch configuration file.",
 )
 @click.option(
-    "-m",
-    "--mixture-file",
-    help="(Optional) Path to a mixture configuration file.",
+    "-v",
+    "--variants",
     type=click.Path(exists=True),
-    required=False,
+    required=True,
+    help="Directory containing variant YAML files (output of olmix generate).",
 )
 @click.option(
     "--dry-run",
@@ -180,90 +212,60 @@ def launch():
     default=False,
     help="Print the experiment group configurations without launching.",
 )
-def launch_run(config: Path, mixture_file: Path | None, dry_run: bool):
+def launch_run(config: str, variants: str, dry_run: bool):
     """Launch an experiment group to Beaker."""
     from beaker import Beaker
 
-    from olmix.aliases import ExperimentConfig
+    from olmix.aliases import LaunchConfig
     from olmix.launch.beaker import mk_experiment_group, mk_launch_configs
-    from olmix.launch.launch_utils import mk_mixes
 
-    with open(config) as f:
-        data = yaml.safe_load(f)
-
-    experiment_config = ExperimentConfig(**data)
+    launch_config = LaunchConfig.from_yaml(config)
+    variant_configs = _load_variants(variants)
     group_uuid = generate_uuid()[:8]
 
     beaker_user = Beaker.from_env().user_name.upper()
     logger.info(f"Launching experiment group '{group_uuid}' as user '{beaker_user}'")
 
     logger.info("Generating experiment group from the following config...")
-    logger.info(experiment_config)
+    logger.info(launch_config)
+    logger.info(f"With {len(variant_configs)} variant(s) from {variants}")
 
     if not click.confirm("Proceed with this configuration?", default=False):
         logger.info("Launch cancelled!")
         return
 
-    launch_configs = None
-    mixes = None
-    priors_dict = experiment_config.priors.model_dump()
-
-    if mixture_file:
-        with open(mixture_file) as f:
-            predefined_mixes = json.load(f)
-
-        mixes = predefined_mixes["mixes"]
-        logger.info(predefined_mixes)
-        if click.confirm(f"Launch experiment {group_uuid} with this set of mixtures?", default=False):
-            with yaspin(text="Building experiment group...", color="yellow") as spinner:
-                launch_configs = mk_launch_configs(
-                    group=mk_experiment_group(
-                        config=experiment_config,
-                        mixes=mixes,
-                        group_uuid=group_uuid,
-                    ),
-                    beaker_user=beaker_user,
-                )
-                spinner.ok("Done")
-    else:
-        mixes = mk_mixes(config, group_uuid=group_uuid, save=False)
-        if click.confirm(f"Launch experiment {group_uuid} with this set of mixtures?", default=False):
-            with yaspin(text="Building experiment group...", color="yellow") as spinner:
-                launch_configs = mk_launch_configs(
-                    group=mk_experiment_group(experiment_config, mixes=mixes, group_uuid=group_uuid),
-                    beaker_user=beaker_user,
-                )
-                spinner.ok("Done")
-        else:
-            logger.info("Launch cancelled!")
-            return
-
-    if not launch_configs:
-        logger.info("Launch cancelled!")
-        return
+    with yaspin(text="Building experiment group...", color="yellow") as spinner:
+        launch_configs = mk_launch_configs(
+            group=mk_experiment_group(
+                config=launch_config,
+                variants=variant_configs,
+                group_uuid=group_uuid,
+            ),
+            beaker_user=beaker_user,
+        )
+        spinner.ok("Done")
 
     with yaspin(text="Launching experiment group...", color="yellow") as spinner:
         try:
             if dry_run:
                 logger.info("Dry run mode enabled. Running dry-run for each experiment...")
-                torchrun = experiment_config.infra.gpus > 1
+                torchrun = launch_config.infra.gpus > 1
                 for lc in launch_configs:
                     logger.info(f"Dry run for {lc.name}:")
                     lc.dry_run(torchrun=torchrun)
 
                 # Save launch metadata (without beaker experiment IDs)
                 _save_launch_metadata(
-                    config_path=config,
+                    config_path=Path(config),
                     group_uuid=group_uuid,
                     beaker_user=beaker_user,
-                    mixes=mixes,
+                    variants_dir=variants,
                     results=[],
-                    priors=priors_dict,
                 )
                 return
 
             results = []
-            torchrun = experiment_config.infra.gpus > 1
+            torchrun = launch_config.infra.gpus > 1
             for lc in tqdm(launch_configs, desc="Launching experiments"):
                 results.append(lc.launch(torchrun=torchrun))
 
@@ -271,12 +273,11 @@ def launch_run(config: Path, mixture_file: Path | None, dry_run: bool):
 
             # Save launch metadata for reproducibility tracking
             _save_launch_metadata(
-                config_path=config,
+                config_path=Path(config),
                 group_uuid=group_uuid,
                 beaker_user=beaker_user,
-                mixes=mixes,
+                variants_dir=variants,
                 results=results,
-                priors=priors_dict,
             )
 
             logger.info(results)
@@ -299,25 +300,25 @@ def launch_run(config: Path, mixture_file: Path | None, dry_run: bool):
     "--config",
     type=click.Path(exists=True),
     required=True,
-    help="Path to the experiment configuration file.",
+    help="Path to the launch configuration file.",
 )
-def launch_status(config: Path, group_id: str):
+def launch_status(config: str, group_id: str):
     """Get the status of a launched experiment group."""
     from beaker import Beaker
     from beaker.services.job import JobClient
 
-    from olmix.aliases import config_from_path
+    from olmix.aliases import LaunchConfig
 
     beaker = Beaker.from_env()
     client = JobClient(beaker=beaker)
-    exp_config = config_from_path(config)
-    cluster = beaker.cluster.get(exp_config.infra.cluster)
+    launch_cfg = LaunchConfig.from_yaml(config)
+    cluster = beaker.cluster.get(launch_cfg.infra.cluster)
     jobs = client.list(cluster=cluster)
 
     statuses = [
         {"status": job.status, "display_name": job.display_name}
         for job in jobs
-        if job.display_name.startswith(f"{exp_config.name}-{group_id}")
+        if job.display_name.startswith(f"{launch_cfg.name}-{group_id}")
     ]
     statuses.sort(key=lambda x: x["display_name"])
     logger.info(statuses)
@@ -335,23 +336,23 @@ def launch_status(config: Path, group_id: str):
     "--config",
     type=click.Path(exists=True),
     required=True,
-    help="Path to the experiment configuration file.",
+    help="Path to the launch configuration file.",
 )
-def launch_cancel(config: Path, group_id: str):
+def launch_cancel(config: str, group_id: str):
     """Cancel all running jobs for an experiment group."""
     from beaker import Beaker
     from beaker.services.job import JobClient
 
-    from olmix.aliases import config_from_path
+    from olmix.aliases import LaunchConfig
 
     beaker = Beaker.from_env()
     client = JobClient(beaker=beaker)
-    exp_config = config_from_path(config)
-    cluster = beaker.cluster.get(exp_config.infra.cluster)
+    launch_cfg = LaunchConfig.from_yaml(config)
+    cluster = beaker.cluster.get(launch_cfg.infra.cluster)
     jobs = [
         {"id": job.id, "display_name": job.display_name, "status": job.status}
         for job in client.list(cluster=cluster)
-        if job.display_name.startswith(f"{exp_config.name}-{group_id}")
+        if job.display_name.startswith(f"{launch_cfg.name}-{group_id}")
     ]
 
     if len(jobs) == 0:
@@ -373,19 +374,25 @@ def launch_cancel(config: Path, group_id: str):
     "--config",
     type=click.Path(exists=True),
     required=True,
-    help="Path to the experiment configuration file.",
+    help="Path to the launch configuration file.",
 )
-def launch_preview(config: Path):
-    """Preview sampled mixtures and training commands without launching."""
-    from olmix.aliases import ExperimentConfig
+@click.option(
+    "-v",
+    "--variants",
+    type=click.Path(exists=True),
+    required=True,
+    help="Directory containing variant YAML files (output of olmix generate).",
+)
+def launch_preview(config: str, variants: str):
+    """Preview training commands without launching."""
+    from olmix.aliases import LaunchConfig
     from olmix.launch.beaker import mk_experiment_group, mk_instance_cmd
-    from olmix.launch.launch_utils import mk_mixes
 
-    with open(config) as f:
-        data = yaml.safe_load(f)
+    launch_config = LaunchConfig.from_yaml(config)
+    variant_configs = _load_variants(variants)
+    group_uuid = generate_uuid()[:8]
 
-    mixes = mk_mixes(config)
-    experiment_group = mk_experiment_group(ExperimentConfig(**data), mixes, generate_uuid()[:8])
+    experiment_group = mk_experiment_group(launch_config, variant_configs, group_uuid)
 
     for experiment in experiment_group.instances:
         logger.info(mk_instance_cmd(experiment, experiment_group.config, experiment_group.group_id, "preview"))
@@ -408,7 +415,7 @@ def priors():
     "--config",
     type=click.Path(exists=True),
     required=True,
-    help="Path to the experiment configuration file.",
+    help="Path to a configuration file with data.sources.",
 )
 @click.option(
     "--no-cache",
@@ -423,19 +430,19 @@ def priors():
     type=click.Path(),
     help="Output file path. Defaults to stdout.",
 )
-def priors_compute(config: Path, no_cache: bool, output: Path | None):
+def priors_compute(config: str, no_cache: bool, output: str | None):
     """Compute token counts for a config by scanning data sources."""
-    from olmix.aliases import ExperimentConfig
-    from olmix.launch.synthesize_mixture import calculate_priors
+    from olmix.aliases import DataConfig
+    from olmix.generate.synthesize_mixture import calculate_priors
 
     with open(config) as f:
         data = yaml.safe_load(f)
 
-    # Parse just enough to get data.sources (priors not required yet)
-    experiment_config = ExperimentConfig.model_validate({**data, "priors": {"token_counts": {"_placeholder": 1}}})
-    _, _, token_counts = calculate_priors(
-        experiment_config.data.sources, experiment_config.data.dtype, use_cache=not no_cache
-    )
+    # Extract data section — works with any config type that has a data field
+    data_section = data.get("data", data)
+    data_config = DataConfig(**data_section)
+
+    _, _, token_counts = calculate_priors(data_config.sources, data_config.dtype, use_cache=not no_cache)
 
     result = yaml.dump({"priors": {"token_counts": token_counts}}, default_flow_style=False, sort_keys=True)
 
