@@ -25,7 +25,7 @@ logging.getLogger("botocore").setLevel(logging.WARNING)
 import hashlib
 import json
 
-from olmix.aliases import GenerationConfig, SourceConfig
+from olmix.aliases import GenerationConfig, MixEntry, SourceConfig
 
 
 class ConfigDefaults:
@@ -484,7 +484,7 @@ def generate_weights_dirichlet(
 
 def mk_mixtures(
     config: GenerationConfig,
-) -> list[dict[str, tuple[float, float]]]:
+) -> list[dict[str, MixEntry]]:
     random.seed(config.swarm.seed)
     np.random.seed(config.swarm.seed)
 
@@ -563,7 +563,7 @@ def mk_mixtures(
     for mix in mixtures:
         weight_map = {}
         for idx in range(len(domains)):
-            weight_map[domains[idx]] = (mix[0][idx], mix[1][idx])
+            weight_map[domains[idx]] = MixEntry(weight=mix[0][idx], repetition_factor=mix[1][idx])
 
         weight_maps.append(weight_map)
 

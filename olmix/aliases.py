@@ -246,11 +246,18 @@ class LaunchConfig(BaseModel):
         return cls(**data)
 
 
+class MixEntry(BaseModel):
+    """A single domain entry in a mixture variant."""
+
+    weight: float
+    repetition_factor: float = 1.0
+
+
 class VariantConfig(BaseModel):
     """Output of ``olmix generate``. One per variant."""
 
     name: str
-    mix: dict[str, tuple[float, float]]
+    mix: dict[str, MixEntry]
 
     @classmethod
     def from_yaml(cls, path: PathType) -> "VariantConfig":

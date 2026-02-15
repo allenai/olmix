@@ -11,6 +11,7 @@ from olmix.aliases import (
     InfraConfig,
     InstanceFilterConfig,
     LaunchConfig,
+    MixEntry,
     Priority,
     SourceConfig,
     SourceInstance,
@@ -203,12 +204,17 @@ class TestVariantConfig:
         """Test creating a variant config."""
         variant = VariantConfig(
             name="test-abc123-0000",
-            mix={"wiki": (0.6, 1.0), "code": (0.4, 1.5)},
+            mix={
+                "wiki": MixEntry(weight=0.6, repetition_factor=1.0),
+                "code": MixEntry(weight=0.4, repetition_factor=1.5),
+            },
         )
 
         assert variant.name == "test-abc123-0000"
         assert len(variant.mix) == 2
-        assert variant.mix["wiki"] == (0.6, 1.0)
+        assert variant.mix["wiki"].weight == 0.6
+        assert variant.mix["wiki"].repetition_factor == 1.0
+        assert variant.mix["code"].repetition_factor == 1.5
 
     def test_variant_from_yaml(self, tmp_path):
         """Test loading variant config from YAML file."""
@@ -216,7 +222,10 @@ class TestVariantConfig:
 
         variant_data = {
             "name": "test-abc123-0000",
-            "mix": {"wiki": [0.6, 1.0], "code": [0.4, 1.5]},
+            "mix": {
+                "wiki": {"weight": 0.6, "repetition_factor": 1.0},
+                "code": {"weight": 0.4, "repetition_factor": 1.5},
+            },
         }
         variant_file = tmp_path / "variant.yaml"
         with open(variant_file, "w") as f:
@@ -224,6 +233,7 @@ class TestVariantConfig:
 
         variant = VariantConfig.from_yaml(variant_file)
         assert variant.name == "test-abc123-0000"
+        assert variant.mix["wiki"].weight == 0.6
 
 
 class TestExperimentInstance:
