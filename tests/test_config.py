@@ -21,12 +21,15 @@ from olmix.aliases import (
     config_from_path,
     get_model_num_params,
 )
-from olmix.fit.config import InLoopEvalConfig
+from olmix.fit.config import InLoopEvalConfig, PriorsConfig
 
 # Minimal InLoopEvalConfig for tests
 _MINIMAL_EVAL = InLoopEvalConfig(
     tasks={"qa": {"arc_challenge_test_rc_5shot": "eval/downstream/arc_challenge_test_rc_5shot (BPB v2)"}},
 )
+
+# Minimal PriorsConfig for tests
+_MINIMAL_PRIORS = PriorsConfig(token_counts={"wiki": 1_000_000, "code": 500_000})
 
 
 class TestSourceConfig:
@@ -112,6 +115,9 @@ class TestExperimentConfig:
                 "tasks": {
                     "qa": {"arc_challenge_test_rc_5shot": "eval/downstream/arc_challenge_test_rc_5shot (BPB v2)"},
                 },
+            },
+            "priors": {
+                "token_counts": {"wikipedia": 1_000_000, "dclm": 500_000},
             },
             "swarm": {
                 "seed": 42,
@@ -220,6 +226,7 @@ class TestExperimentGroup:
                 ],
             ),
             eval=_MINIMAL_EVAL,
+            priors=_MINIMAL_PRIORS,
             swarm=SwarmConfig(
                 seed=42,
                 variants=2,
@@ -295,6 +302,7 @@ class TestExperimentConfigChinchilla:
             ),
             data=DataConfig(sources=[SourceConfig(name="wiki", paths=["test.npy"])]),
             eval=_MINIMAL_EVAL,
+            priors=_MINIMAL_PRIORS,
             swarm=SwarmConfig(seed=42, variants=1),
         )
 
@@ -314,6 +322,7 @@ class TestExperimentConfigChinchilla:
             ),
             data=DataConfig(sources=[SourceConfig(name="wiki", paths=["test.npy"])]),
             eval=_MINIMAL_EVAL,
+            priors=_MINIMAL_PRIORS,
             swarm=SwarmConfig(seed=42, variants=1),
         )
 
@@ -350,6 +359,7 @@ class TestInstanceFilterConfig:
             name="test",
             infra=InfraConfig(budget="test", workspace="test", cluster="test"),
             eval=_MINIMAL_EVAL,
+            priors=_MINIMAL_PRIORS,
             training=TrainingConfig(
                 proxy_model_id="olmo2_30m",
                 tokenizer="dolma2",

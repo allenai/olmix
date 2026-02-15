@@ -25,8 +25,6 @@ def sample_config_dict():
             "metrics": "metrics.csv",
         },
         "priors": {
-            "relative_sizes": {"domain_a": 0.6, "domain_b": 0.4},
-            "total_tokens": 1_000_000,
             "token_counts": {"domain_a": 600_000, "domain_b": 400_000},
         },
         "eval": {
@@ -45,6 +43,7 @@ class TestFitConfig:
         assert cfg.swarm.ratios == "ratios.csv"
         assert cfg.swarm.metrics == "metrics.csv"
         assert cfg.priors.total_tokens == 1_000_000
+        assert cfg.priors.relative_sizes == {"domain_a": 0.6, "domain_b": 0.4}
 
     def test_defaults(self, sample_config_dict):
         cfg = FitConfig(**sample_config_dict)
@@ -79,6 +78,7 @@ class TestFitConfig:
         cfg = FitConfig.from_yaml(config_file)
         assert cfg.swarm.ratios == "ratios.csv"
         assert cfg.priors.total_tokens == 1_000_000
+        assert cfg.priors.token_counts == {"domain_a": 600_000, "domain_b": 400_000}
 
     def test_from_yaml_with_overrides(self, sample_config_dict, tmp_path):
         sample_config_dict["regression"] = {"type": "lightgbm"}
@@ -115,8 +115,6 @@ class TestFitConfig:
         full = {
             "swarm": {"ratios": "r.csv", "metrics": "m.csv"},
             "priors": {
-                "relative_sizes": {"a": 0.5, "b": 0.5},
-                "total_tokens": 2_000_000,
                 "token_counts": {"a": 1_000_000, "b": 1_000_000},
             },
             "eval": {
@@ -167,29 +165,39 @@ class TestFitConfig:
 
 
 class TestPriorsConfig:
-    def test_to_tuple(self):
-        priors = PriorsConfig(
-            relative_sizes={"a": 0.6, "b": 0.4},
-            total_tokens=1_000_000,
-            token_counts={"a": 600_000, "b": 400_000},
-        )
-        rel, total, counts = priors.to_tuple()
-        assert rel == {"a": 0.6, "b": 0.4}
-        assert total == 1_000_000
-        assert counts == {"a": 600_000, "b": 400_000}
+    def test_computed_properties(self):
+        priors = PriorsConfig(token_counts={"a": 600_000, "b": 400_000})
+        assert priors.total_tokens == 1_000_000
+        assert priors.relative_sizes == {"a": 0.6, "b": 0.4}
 
-    def test_to_tuple_returns_copies(self):
-        """Mutating the returned dicts should not affect the original."""
+    def test_backward_compat_strips_derived_fields(self):
+        """Old configs with relative_sizes and total_tokens should still parse."""
         priors = PriorsConfig(
             relative_sizes={"a": 0.6, "b": 0.4},
             total_tokens=1_000_000,
             token_counts={"a": 600_000, "b": 400_000},
         )
-        rel, _, counts = priors.to_tuple()
-        rel["c"] = 0.0
-        counts["c"] = 0
-        assert "c" not in priors.relative_sizes
-        assert "c" not in priors.token_counts
+        assert priors.token_counts == {"a": 600_000, "b": 400_000}
+        assert priors.total_tokens == 1_000_000
+
+    def test_model_dump_only_has_token_counts(self):
+        """model_dump should only contain token_counts (no derived fields)."""
+        priors = PriorsConfig(token_counts={"a": 600_000, "b": 400_000})
+        dumped = priors.model_dump()
+        assert set(dumped.keys()) == {"token_counts"}
+        assert dumped["token_counts"] == {"a": 600_000, "b": 400_000}
+
+    def test_round_trip(self):
+        """model_dump -> re-parse should be identical."""
+        priors = PriorsConfig(token_counts={"a": 600_000, "b": 400_000})
+        priors2 = PriorsConfig(**priors.model_dump())
+        assert priors == priors2
+
+    def test_zero_tokens(self):
+        """Edge case: all zeros should produce zero relative_sizes."""
+        priors = PriorsConfig(token_counts={"a": 0, "b": 0})
+        assert priors.total_tokens == 0
+        assert priors.relative_sizes == {"a": 0.0, "b": 0.0}
 
 
 class TestSwarmDataConfig:
@@ -291,11 +299,7 @@ class TestEvalDiscriminator:
         """When type is omitted, should default to offline."""
         cfg = FitConfig(
             swarm={"ratios": "r.csv", "metrics": "m.csv"},
-            priors={
-                "relative_sizes": {"a": 0.5, "b": 0.5},
-                "total_tokens": 1_000_000,
-                "token_counts": {"a": 500_000, "b": 500_000},
-            },
+            priors={"token_counts": {"a": 500_000, "b": 500_000}},
             eval={"tasks": {"qa": ["metric1"]}},
         )
         assert cfg.eval.type == "offline"
@@ -303,11 +307,7 @@ class TestEvalDiscriminator:
     def test_inloop_explicit(self):
         cfg = FitConfig(
             swarm={"ratios": "r.csv", "metrics": "m.csv"},
-            priors={
-                "relative_sizes": {"a": 0.5, "b": 0.5},
-                "total_tokens": 1_000_000,
-                "token_counts": {"a": 500_000, "b": 500_000},
-            },
+            priors={"token_counts": {"a": 500_000, "b": 500_000}},
             eval={"type": "inloop", "tasks": {"qa": {"task_a": "metric_a"}}},
         )
         assert cfg.eval.type == "inloop"
@@ -319,6 +319,7 @@ class TestDCLMBaselineConfig:
         cfg = FitConfig.from_yaml("configs/fits/dclm_baseline.yaml")
         assert cfg.swarm.ratios == "dclm_ratios.csv"
         assert cfg.swarm.metrics == "dclm_metrics.csv"
+        assert len(cfg.priors.token_counts) == 24
         assert len(cfg.priors.relative_sizes) == 24
         assert cfg.regression.type == "log_linear"
         assert cfg.proposer.type == "exact"

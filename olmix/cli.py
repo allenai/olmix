@@ -141,18 +141,11 @@ def mix():
     type=click.Path(),
     help="Output file path for the generated mixes.",
 )
-@click.option(
-    "--no-cache",
-    "-n",
-    is_flag=True,
-    default=False,
-    help="Do not cache sources for this experiment group.",
-)
-def generate_mixes(config: Path, output: Path | None = None, no_cache: bool = False):
+def generate_mixes(config: Path, output: Path | None = None):
     """Generate a set of mixtures based on a provided config."""
     from olmix.launch.launch_utils import mk_mixes
 
-    mk_mixes(config, output, use_cache=not no_cache)  # priors returned but not needed here
+    mk_mixes(config, output)
 
 
 # ============================================================================
@@ -187,14 +180,7 @@ def launch():
     default=False,
     help="Print the experiment group configurations without launching.",
 )
-@click.option(
-    "--no-cache",
-    "-n",
-    is_flag=True,
-    default=False,
-    help="Do not cache sources for this experiment group.",
-)
-def launch_run(config: Path, mixture_file: Path | None, dry_run: bool, no_cache: bool):
+def launch_run(config: Path, mixture_file: Path | None, dry_run: bool):
     """Launch an experiment group to Beaker."""
     from beaker import Beaker
 
@@ -220,7 +206,7 @@ def launch_run(config: Path, mixture_file: Path | None, dry_run: bool, no_cache:
 
     launch_configs = None
     mixes = None
-    priors = None
+    priors_dict = experiment_config.priors.model_dump()
 
     if mixture_file:
         with open(mixture_file) as f:
@@ -240,7 +226,7 @@ def launch_run(config: Path, mixture_file: Path | None, dry_run: bool, no_cache:
                 )
                 spinner.ok("Done")
     else:
-        mixes, priors = mk_mixes(config, use_cache=(no_cache is False), group_uuid=group_uuid, save=False)
+        mixes = mk_mixes(config, group_uuid=group_uuid, save=False)
         if click.confirm(f"Launch experiment {group_uuid} with this set of mixtures?", default=False):
             with yaspin(text="Building experiment group...", color="yellow") as spinner:
                 launch_configs = mk_launch_configs(
@@ -272,7 +258,7 @@ def launch_run(config: Path, mixture_file: Path | None, dry_run: bool, no_cache:
                     beaker_user=beaker_user,
                     mixes=mixes,
                     results=[],
-                    priors=priors,
+                    priors=priors_dict,
                 )
                 return
 
@@ -290,7 +276,7 @@ def launch_run(config: Path, mixture_file: Path | None, dry_run: bool, no_cache:
                 beaker_user=beaker_user,
                 mixes=mixes,
                 results=results,
-                priors=priors,
+                priors=priors_dict,
             )
 
             logger.info(results)
@@ -398,11 +384,68 @@ def launch_preview(config: Path):
     with open(config) as f:
         data = yaml.safe_load(f)
 
-    mixes, _priors = mk_mixes(config)
+    mixes = mk_mixes(config)
     experiment_group = mk_experiment_group(ExperimentConfig(**data), mixes, generate_uuid()[:8])
 
     for experiment in experiment_group.instances:
         logger.info(mk_instance_cmd(experiment, experiment_group.config, experiment_group.group_id, "preview"))
+
+
+# ============================================================================
+# Priors subcommands
+# ============================================================================
+
+
+@cli.group()
+def priors():
+    """Commands for computing and managing data priors."""
+    pass
+
+
+@priors.command("compute")
+@click.option(
+    "-c",
+    "--config",
+    type=click.Path(exists=True),
+    required=True,
+    help="Path to the experiment configuration file.",
+)
+@click.option(
+    "--no-cache",
+    "-n",
+    is_flag=True,
+    default=False,
+    help="Do not use cached token counts.",
+)
+@click.option(
+    "-o",
+    "--output",
+    type=click.Path(),
+    help="Output file path. Defaults to stdout.",
+)
+def priors_compute(config: Path, no_cache: bool, output: Path | None):
+    """Compute token counts for a config by scanning data sources."""
+    from olmix.aliases import ExperimentConfig
+    from olmix.launch.synthesize_mixture import calculate_priors
+
+    with open(config) as f:
+        data = yaml.safe_load(f)
+
+    # Parse just enough to get data.sources (priors not required yet)
+    experiment_config = ExperimentConfig.model_validate({**data, "priors": {"token_counts": {"_placeholder": 1}}})
+    _, _, token_counts = calculate_priors(
+        experiment_config.data.sources, experiment_config.data.dtype, use_cache=not no_cache
+    )
+
+    result = yaml.dump({"priors": {"token_counts": token_counts}}, default_flow_style=False, sort_keys=True)
+
+    if output:
+        Path(output).parent.mkdir(parents=True, exist_ok=True)
+        with open(output, "w") as f:
+            f.write(result)
+        logger.info(f"Priors written to {output}")
+    else:
+        click.echo(result)
 
 
 # ============================================================================
