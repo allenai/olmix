@@ -213,25 +213,3 @@ eval:
       medqa_en_rc_5shot: "eval/downstream/medqa_en_rc_5shot (BPB v2)"
       qasper_yesno_rc_5shot: "eval/downstream/qasper_yesno_rc_5shot (BPB v2)"
       sciriff_yesno_rc_5shot: "eval/downstream/sciriff_yesno_rc_5shot (BPB v2)"
-
-priors:
-  token_counts:
-    all_dressed:adult_content:10-30pct: 26058194945
-    all_dressed:adult_content:top10pct: 8889341991
-    all_dressed:art_and_design:10-30pct: 40498827290
-    all_dressed:art_and_design:top10pct: 28009369632
-    all_dressed:education_and_jobs:10-30pct: 87305637062
-    all_dressed:education_and_jobs:top10pct: 55814387477
-    all_dressed:politics:10-30pct: 156681369035
-    all_dressed:politics:top10pct: 99244993275
-    all_dressed:science_math_and_technology:10-30pct: 121950543689
-    all_dressed:science_math_and_technology:top10pct: 73845556815
-    all_dressed:software_development:10-30pct: 44574637758
-    all_dressed:software_development:top10pct: 28270076579
-    arxiv: 21377485731
-    wikipedia: 3692487830
-
-swarm:
-  seed: 42
-  variants: 1
-  minimum_weight: 0.0001
