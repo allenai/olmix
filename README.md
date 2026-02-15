@@ -53,10 +53,6 @@ swarm:
   metrics: path/to/metrics.csv      # Required — CSV with eval metrics per run
 
 priors:                              # Required — token distribution across domains
-  relative_sizes:
-    domain_a: 0.6
-    domain_b: 0.4
-  total_tokens: 1000000000
   token_counts:
     domain_a: 600000000
     domain_b: 400000000
@@ -99,7 +95,7 @@ filtering:
   obj_weights: {}
 ```
 
-The **priors** section defines the natural token distribution across your domains inline — no S3 access or external JSON files needed.
+The **priors** section defines the natural token distribution across your domains via `token_counts`. Relative sizes and total tokens are computed automatically. Use `olmix priors compute` to scan S3 sources and generate the token counts for a config.
 
 The **eval** section defines which evaluation tasks to use, grouped by family. Two types are supported:
 
@@ -210,9 +206,19 @@ Start from one of the configs in [`configs/experiments/`](configs/experiments/):
 | [`quality_upsampling/`](configs/experiments/quality_upsampling/) | Weighting quality buckets within topics |
 | [`training_duration/`](configs/experiments/training_duration/) | Effect of training length on mixture quality |
 
+### Step 0: Compute priors (token counts)
+
+Before launching, compute the token counts for your data sources. This scans S3 paths and outputs the `priors` block for your config:
+
+```bash
+olmix priors compute --config configs/experiments/data_proportions/mix_baseline.yaml
+```
+
+Copy the output into your experiment config's `priors:` section. Use `--output priors.yaml` to write to a file instead. Results are cached in `cache/` for subsequent runs; use `--no-cache` to force a fresh scan.
+
 ### Step 1: Sample candidate mixtures
 
-The input config defines sources hierarchically (source → topic → quality bucket) with S3 paths. This step scans those paths to count available tokens, uses the token counts as Dirichlet priors, and samples `variants` mixture configurations. Each mix flattens the hierarchy into fully-qualified leaf keys (e.g. `"dclm:software_development"`) with a `[weight, repetition_factor]` pair. Repetition factors are computed from how many tokens are needed vs. available. Output is written to `output/mixes/`.
+The input config defines sources hierarchically (source → topic → quality bucket) with S3 paths. The `priors` section provides the token counts per domain, which are used as Dirichlet priors to sample `variants` mixture configurations. Each mix flattens the hierarchy into fully-qualified leaf keys (e.g. `"dclm:software_development"`) with a `[weight, repetition_factor]` pair. Repetition factors are computed from how many tokens are needed vs. available. Output is written to `output/mixes/`.
 
 ```bash
 olmix mix generate --config configs/experiments/data_proportions/mix_baseline.yaml
@@ -228,13 +234,13 @@ olmix launch preview --config configs/experiments/data_proportions/mix_baseline.
 
 ### Step 3: Launch a swarm
 
-Submits one Beaker job per variant (steps 1-2 happen automatically if no pre-generated mix file is provided). Each job trains a proxy model on its mixture and logs eval metrics to W&B under a shared group ID. Launch metadata (Beaker experiment IDs, W&B group link, git commit, **priors**) is saved alongside the mix JSON in `output/mixes/`.
+Submits one Beaker job per variant (steps 1-2 happen automatically if no pre-generated mix file is provided). Each job trains a proxy model on its mixture and logs eval metrics to W&B under a shared group ID. Launch metadata (Beaker experiment IDs, W&B group link, git commit, priors) is saved alongside the mix JSON in `output/mixes/`.
 
 ```bash
 olmix launch run --config configs/experiments/data_proportions/mix_baseline.yaml
 ```
 
-Use `--dry-run` to generate the metadata JSON (including priors) without launching any jobs. The priors from the metadata can be copied into a fit YAML config's `priors` section.
+Use `--dry-run` to generate the metadata JSON without launching any jobs.
 
 ### Step 4: Export to CSV and fit
 
@@ -243,8 +249,6 @@ Once the swarm runs complete, export the ratios and metrics to CSV files (e.g. f
 ```bash
 olmix fit --config configs/fits/my_config.yaml --output-dir output/my_fit
 ```
-
-The priors saved in the launch metadata JSON (from step 3) can be copied directly into the YAML config's `priors` section.
 
 ## Development
 

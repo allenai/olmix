@@ -51,25 +51,24 @@ def fit(config_path: str, output_dir_arg: str):
     ratios, metrics = load_from_csv(cfg.swarm.ratios, cfg.swarm.metrics)
 
     # ── Priors ────────────────────────────────────────────────────────────
-    priors_data = cfg.priors.to_tuple()
     from copy import deepcopy
 
-    original_priors_data = deepcopy(priors_data)
+    relative_sizes = dict(cfg.priors.relative_sizes)
+    original_relative_sizes = deepcopy(relative_sizes)
 
     # Apply fixed_weight adjustments to priors and ratios
     fixed_weight_dict = cfg.filtering.fixed_weight if cfg.filtering.fixed_weight else None
     if fixed_weight_dict:
-        new_priors = {k: v for k, v in priors_data[0].items() if k not in fixed_weight_dict}
-        total = sum(new_priors.values())
-        new_priors = {k: v / total for k, v in new_priors.items()}
-        priors_data[0].clear()
-        priors_data[0].update(new_priors)
+        new_sizes = {k: v for k, v in relative_sizes.items() if k not in fixed_weight_dict}
+        total = sum(new_sizes.values())
+        new_sizes = {k: v / total for k, v in new_sizes.items()}
+        relative_sizes = new_sizes
 
         domains = ratios.columns[3:]
         ratios[domains] = ratios[domains].div(ratios[domains].sum(axis=1), axis=0)
 
     logger.info("Source weights:")
-    logger.info(priors_data[0])
+    logger.info(relative_sizes)
 
     # ── Validate constraints ─────────────────────────────────────────────
     if cfg.constraints.enabled and cfg.constraints.target_tokens is None:
@@ -92,8 +91,8 @@ def fit(config_path: str, output_dir_arg: str):
     run_fit(
         ratios,
         metrics,
-        priors_data,
-        original_priors_data,
+        relative_sizes,
+        original_relative_sizes,
         output_dir,
         eval_metrics=cfg.eval.metric_names,
         task_families=cfg.eval.task_families,
