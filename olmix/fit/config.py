@@ -27,7 +27,7 @@ class PriorsConfig(BaseModel):
     total_tokens: int | None = None  # we don't actually use this for now
     token_counts: dict[str, int]
 
-    def to_tuple(self) -> tuple[dict[str, float], int, dict[str, int]]:
+    def to_tuple(self) -> tuple[dict[str, float], int | None, dict[str, int]]:
         """Return the (relative_sizes, total_tokens, token_counts) tuple expected by run_fit."""
         return (dict(self.relative_sizes), self.total_tokens, dict(self.token_counts))
 
