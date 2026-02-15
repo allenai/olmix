@@ -73,12 +73,9 @@ eval:                                 # Required — evaluation task definitions
 
 regression:
   type: log_linear                   # log_linear | lightgbm | search | gp | autoscale | bimix
-  alpha: 1.0
   seed: 0
   n_test: 0
   train_split: [1.0]
-  simulation_samples: 100000
-  opt_avg_metric: true
   aggregate_task_families: false
 
 proposer:
@@ -138,11 +135,8 @@ That's it. All settings come from the YAML config. The two required CLI flags ar
 | Field | What it does |
 |-------|-------------|
 | `type` | Model type: `log_linear` (default, parametric scaling law), `lightgbm` (gradient-boosted trees), `gp` (Gaussian process), `autoscale` (power-law autoscaling), `bimix` (BiMix-style power law) |
-| `opt_avg_metric` | Optimize the average across all metrics jointly. Without this, each metric is optimized independently. |
 | `aggregate_task_families` | Fit one model per task family (math, code, QA) instead of per individual task. Much faster with many metrics. |
 | `train_split` | Fraction of runs used for training. Default `[1.0]` uses all runs for both training and evaluation. |
-| `simulation_samples` | Number of Monte Carlo samples for the simulation proposer. |
-| `alpha` | Alpha to apply to simulated distributions. |
 | `n_test` | Number of held-out test samples for evaluating the regression model. |
 | `seed` | Random state for train-test split. |
 
@@ -197,7 +191,7 @@ When `fit_only: false`, the proposer step also produces:
 | `{metric}_*_optimal.png` | Bar chart comparing the natural prior (corpus distribution) to the proposed optimal weights. |
 | `predicted_performance.json` | Predicted average metric value at the proposed optimal weights. |
 
-When `opt_avg_metric: true` is set, the key output is `opt_avg_all_metrics_*_optimal.json` — the single set of weights that optimizes the average across all metrics.
+The key output is `opt_avg_all_metrics_*_optimal.json` — the single set of weights that optimizes the average across all metrics.
 
 ---
 

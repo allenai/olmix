@@ -49,12 +49,9 @@ class TestFitConfig:
     def test_defaults(self, sample_config_dict):
         cfg = FitConfig(**sample_config_dict)
         assert cfg.regression.type == "log_linear"
-        assert cfg.regression.alpha == 1.0
         assert cfg.regression.seed == 0
         assert cfg.regression.n_test == 0
         assert cfg.regression.train_split == [1.0]
-        assert cfg.regression.simulation_samples == 100_000
-        assert cfg.regression.opt_avg_metric is False
         assert cfg.regression.aggregate_task_families is False
 
         assert cfg.proposer.type == "exact"
@@ -84,7 +81,7 @@ class TestFitConfig:
         assert cfg.priors.total_tokens == 1_000_000
 
     def test_from_yaml_with_overrides(self, sample_config_dict, tmp_path):
-        sample_config_dict["regression"] = {"type": "lightgbm", "alpha": 2.0}
+        sample_config_dict["regression"] = {"type": "lightgbm"}
         sample_config_dict["proposer"] = {"type": "simulation", "fit_only": True}
 
         config_file = tmp_path / "fit.yaml"
@@ -93,7 +90,6 @@ class TestFitConfig:
 
         cfg = FitConfig.from_yaml(config_file)
         assert cfg.regression.type == "lightgbm"
-        assert cfg.regression.alpha == 2.0
         assert cfg.proposer.type == "simulation"
         assert cfg.proposer.fit_only is True
 
@@ -132,12 +128,9 @@ class TestFitConfig:
             },
             "regression": {
                 "type": "log_linear",
-                "alpha": 1.5,
                 "seed": 42,
                 "n_test": 10,
                 "train_split": [0.8],
-                "simulation_samples": 50_000,
-                "opt_avg_metric": True,
                 "aggregate_task_families": True,
             },
             "proposer": {
@@ -166,7 +159,6 @@ class TestFitConfig:
             yaml.dump(full, f)
 
         cfg = FitConfig.from_yaml(config_file)
-        assert cfg.regression.alpha == 1.5
         assert cfg.regression.seed == 42
         assert cfg.constraints.enabled is True
         assert cfg.constraints.target_tokens == 1_000_000_000
