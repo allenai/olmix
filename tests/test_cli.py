@@ -68,6 +68,22 @@ class TestCLI:
         assert result.exit_code == 0
         assert "--group-id" in result.output
 
+    def test_priors_group_help(self, runner):
+        """Test priors subcommand group shows help."""
+        from olmix.cli import cli
+
+        result = runner.invoke(cli, ["priors", "--help"])
+        assert result.exit_code == 0
+        assert "compute" in result.output.lower()
+
+    def test_priors_compute_help(self, runner):
+        """Test priors compute subcommand shows help."""
+        from olmix.cli import cli
+
+        result = runner.invoke(cli, ["priors", "compute", "--help"])
+        assert result.exit_code == 0
+        assert "--config" in result.output
+
 
 class TestFitCLI:
     """Test fit CLI commands."""

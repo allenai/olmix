@@ -7,7 +7,7 @@ import yaml
 from olmo_core.data.types import NumpyDatasetDType
 from pydantic import BaseModel
 
-from olmix.fit.config import InLoopEvalConfig
+from olmix.fit.config import InLoopEvalConfig, PriorsConfig
 
 PathType = Union[Path, PathLike[Any], str]
 
@@ -218,6 +218,7 @@ class ExperimentConfig(BaseModel):
     training: TrainingConfig
     data: DataConfig
     eval: InLoopEvalConfig
+    priors: PriorsConfig
     swarm: SwarmConfig = SwarmConfig()
 
     @classmethod
