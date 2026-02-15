@@ -8,7 +8,6 @@ from olmix.plots.plotting import (
     plot_correlation,
     plot_interaction_matrix,
     plot_interaction_matrix_signed_evidence,
-    plot_simulations,
 )
 
 __all__ = [
@@ -19,5 +18,4 @@ __all__ = [
     "plot_correlation",
     "plot_interaction_matrix",
     "plot_interaction_matrix_signed_evidence",
-    "plot_simulations",
 ]

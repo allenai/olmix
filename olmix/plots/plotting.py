@@ -57,7 +57,6 @@ def mk_output_prefix(
     train_split: tuple[float, ...],
     n_test: int,
     split_seed: int,
-    alpha: float | None = None,
 ) -> str:
     """Generate a standardized output file prefix for plots and results."""
 
@@ -67,50 +66,11 @@ def mk_output_prefix(
     train_split_str = [str(t) for t in train_split]
     return (
         os.path.join(output_dir, sanitize(metric))
-        + (f"_alpha_{str(alpha).replace('.', '_')}" if alpha and alpha != 1.0 else "")
         + (f"_{regression_type}_reg" if regression_type != "lightgbm" else "")
         + (f"_trainsplit_{'_'.join(train_split_str)}" if train_split[0] != 1.0 else "")
         + (f"_ntest_{n_test}" if n_test != 0 else "")
         + (f"_seed_{split_seed}" if split_seed != 0 else "")
     )
-
-
-def plot_simulations(
-    prior_distributions: np.ndarray,
-    samples,
-    columns: list[str],
-    metric_name: str,
-    regression_type: str,
-    train_split: tuple[float, ...],
-    n_test: int,
-    split_seed: int,
-    alpha: float,
-    output_dir: str = BASE_OUTPUT_DIR,
-):
-    """Create a grid of bar plots showing simulation weight distributions."""
-    plt.close()
-    df = pd.DataFrame(
-        data=np.concatenate([np.array([prior_distributions]), samples], axis=0),
-        columns=columns,
-    )
-    df["sample"] = df.index
-    melted_df = df.melt(id_vars=["sample"], var_name="Domain", value_name="Weight")
-    g = sns.FacetGrid(melted_df, col="sample", col_wrap=4, aspect=2)
-    g.map_dataframe(sns.barplot, x="Domain", y="Weight", palette="viridis", hue="Domain")
-    g.set(ylim=(0, 0.75))
-    g.set_axis_labels("Domain", "Weight")
-
-    for ax in g.axes.flat:
-        for label in ax.get_xticklabels():
-            label.set_rotation(90)
-        ax.yaxis.grid(True, linestyle="--", which="both", color="gray", alpha=0.7)
-
-    plt.savefig(
-        f"{mk_output_prefix(output_dir, metric_name, regression_type, train_split, n_test, split_seed, alpha=alpha)}_sim_grid.png",
-        bbox_inches="tight",
-        pad_inches=0.1,
-    )
-    plt.close()
 
 
 def plot_correlation(
@@ -125,7 +85,6 @@ def plot_correlation(
     split_seed: int,
     metric_name: str,
     regression_type: str,
-    alpha: float | None = None,
     output_dir: str = BASE_OUTPUT_DIR,
     average_bpb: bool = False,
     test_ratios_path: tuple[str, ...] = (),
@@ -226,12 +185,12 @@ def plot_correlation(
 
     # Save figure
     plt.savefig(
-        f"{mk_output_prefix(output_dir, metric_name, regression_type, train_split, n_test, split_seed, alpha)}_fit.png"
+        f"{mk_output_prefix(output_dir, metric_name, regression_type, train_split, n_test, split_seed)}_fit.png"
     )
     plt.close()
 
     with open(
-        f"{mk_output_prefix(output_dir, metric_name, regression_type, train_split, n_test, split_seed, alpha=alpha)}_correlations.json",
+        f"{mk_output_prefix(output_dir, metric_name, regression_type, train_split, n_test, split_seed)}_correlations.json",
         "w",
     ) as f:
         f.write(json.dumps(corr_results))
@@ -489,7 +448,6 @@ def plot_and_log_weights(
     train_split: tuple[float, ...],
     n_test: int,
     split_seed: int,
-    alpha: float,
     df_config: pd.DataFrame,
     output_dir: str = BASE_OUTPUT_DIR,
     fixed_weight: dict[str, float] | None = None,
@@ -521,7 +479,7 @@ def plot_and_log_weights(
         logger.info(raw_weights)
 
     with open(
-        f"{mk_output_prefix(output_dir, metric_name, regression_type, train_split, n_test, split_seed, alpha=alpha)}_optimal.json",
+        f"{mk_output_prefix(output_dir, metric_name, regression_type, train_split, n_test, split_seed)}_optimal.json",
         "w",
     ) as f:
         logger.info(out)
@@ -591,7 +549,7 @@ def plot_and_log_weights(
     )
 
     plt.savefig(
-        f"{mk_output_prefix(output_dir, metric_name, regression_type, train_split, n_test, split_seed, alpha=alpha)}_optimal.png",
+        f"{mk_output_prefix(output_dir, metric_name, regression_type, train_split, n_test, split_seed)}_optimal.png",
         bbox_inches="tight",
         pad_inches=0.1,
     )

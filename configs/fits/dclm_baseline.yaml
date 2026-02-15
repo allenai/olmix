@@ -177,12 +177,9 @@ eval:
 
 regression:
   type: log_linear
-  alpha: 1.0
   seed: 0
   n_test: 0
   train_split: [1.0]
-  simulation_samples: 100000
-  opt_avg_metric: true
   aggregate_task_families: true
 
 proposer:
