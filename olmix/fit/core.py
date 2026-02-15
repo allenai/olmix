@@ -221,6 +221,7 @@ def run_fit(
                 tm, _ = aggregate_mmlu(tm, metrics_to_index)
 
             if aggregate_task_families:
+                assert task_families is not None
                 # we need to aggregate the test set metrics as well
                 meta_cols = tm.columns[:3]
                 task_cols = tm.columns[3:]
@@ -297,9 +298,10 @@ def run_fit(
     logger.info(f"Fitting {regression_type} regression for metrics:")
     logger.info(indexed_metrics)
 
+    obj_weights_list: list[float] | None = None
     if obj_weights:
-        obj_weights = [obj_weights.get(metric, 1) for idx, metric in indexed_metrics]
-        logger.info(f"Minimizing weighted average: {obj_weights}")
+        obj_weights_list = [obj_weights.get(metric, 1) for idx, metric in indexed_metrics]
+        logger.info(f"Minimizing weighted average: {obj_weights_list}")
 
     # Caching logic for regression model
     experiment_groups_key = "_".join(experiment_groups) if experiment_groups else "csv"
@@ -457,7 +459,7 @@ def run_fit(
             opt_avg_metric=opt_avg_metric,
             constrain_objective=constrain_objective,
             swarm_config=launch_configs[0] if constrain_objective and launch_configs else None,
-            obj_weights=obj_weights,
+            obj_weights=obj_weights_list,
             temperature=temperature,
             fixed_weight=fixed_weight_dict if fixed_weight is not None else None,
             make_worst_mix=make_worst_mix,
@@ -488,8 +490,8 @@ def run_fit(
 
     metric, weights = results[-1]
     predictions = np.array([p.predict(weights[None])[0] for p in predictors])
-    if obj_weights is not None:
-        predicted_performance = np.average(predictions, axis=0, weights=obj_weights)
+    if obj_weights_list is not None:
+        predicted_performance = np.average(predictions, axis=0, weights=obj_weights_list)
     else:
         predicted_performance = predictions.mean(axis=0)
     logger.info(f"Metric: {metric}. Predicted performance using regression model: {predicted_performance}")

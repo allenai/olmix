@@ -504,9 +504,7 @@ class SimulationProposer(Proposer):
         if constrain_objective:
             desired_tokens = target_tokens
             # Ensure order of sources in simulations matches constraint dictionary
-            available_tokens_per_source = {
-                source: token_counts[source] for source, _ in prior_distributions.items()
-            }
+            available_tokens_per_source = {source: token_counts[source] for source, _ in prior_distributions.items()}
 
         # Multi-step search leveraging iterative prior results
         for search_step in tqdm(range(search_iterations), desc=f"Searching in {num_samples} candidate samples"):
@@ -577,7 +575,7 @@ class SimulationProposer(Proposer):
         if constrain_objective:
             # Verify best weights satisfy constraints
             token_usage = best_weights * desired_tokens
-            token_limits = np.array(list(available_tokens_per_source.values())) * rep_factor
+            token_limits = np.array(list(available_tokens_per_source.values())) * repetition_factor
             if not all(token_usage <= token_limits):
                 raise ValueError("Best weights are out of bounds!")
 
@@ -601,9 +599,7 @@ class SearchProposer(Proposer):
         if constrain_objective:
             desired_tokens = target_tokens
             # Ensure order matches prior_distributions
-            available_tokens_per_source = {
-                source: token_counts[source] for source, _ in prior_distributions.items()
-            }
+            available_tokens_per_source = {source: token_counts[source] for source, _ in prior_distributions.items()}
 
         searched_weights = predictor[0].get_searched_weights()
         best_performance = np.inf
@@ -653,9 +649,7 @@ class LogLinearExactProposer(Proposer):
         if constrain_objective:
             desired_tokens = target_tokens
             # Ensure order matches prior_distributions
-            available_tokens_per_source = {
-                source: token_counts[source] for source, _ in prior_distributions.items()
-            }
+            available_tokens_per_source = {source: token_counts[source] for source, _ in prior_distributions.items()}
             caps = np.array(list(available_tokens_per_source.values())) * repetition_factor / desired_tokens
 
         np.array([p.model[0] for p in predictor])  # (n,)
@@ -690,8 +684,6 @@ class LogLinearExactProposer(Proposer):
         constraints = [x >= 0, cp.sum(x) == 1]
         if constrain_objective:
             constraints.append(x <= caps)
-
-        breakpoint()
 
         prob = cp.Problem(cp.Minimize(obj), constraints)
         prob.solve(solver="ECOS", verbose=True)  # ECOS or SCS are good
