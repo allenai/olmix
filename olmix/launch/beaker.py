@@ -6,47 +6,46 @@ from beaker import Beaker
 from olmo_core.launch.beaker import BeakerEnvSecret, BeakerEnvVar, BeakerLaunchConfig, BeakerWekaBucket
 
 from olmix.aliases import (
-    ExperimentConfig,
     ExperimentGroup,
     ExperimentInstance,
+    LaunchConfig,
+    VariantConfig,
 )
-from olmix.launch.launch_utils import mk_source_instances
+from olmix.launch.utils import mk_source_instances
 
 logger = logging.getLogger(__name__)
 
 
 def mk_experiments(
-    config: ExperimentConfig, mixes: list[dict[str, tuple[float, float]]], group_uuid: str
+    config: LaunchConfig,
+    variants: list[VariantConfig],
 ) -> list[ExperimentInstance]:
     """
-    Generate experiment instances from a config and mixture samples.
+    Generate experiment instances from a config and variant configs.
 
     Args:
-        config: Experiment configuration
-        mixes: List of mixture weight dictionaries
-        group_uuid: Unique identifier for this experiment group
+        config: Launch configuration
+        variants: List of variant configurations (output of olmix generate)
 
     Returns:
         List of ExperimentInstance objects
     """
     return [
         ExperimentInstance(
-            name=f"{config.name}-{group_uuid}-{idx:04}",
-            sources=mk_source_instances(config.data.sources, mix),
+            name=variant.name,
+            sources=mk_source_instances(config.data.sources, variant.mix),
         )
-        for idx, mix in enumerate(mixes)
+        for variant in variants
     ]
 
 
-def mk_experiment_group(
-    config: ExperimentConfig, mixes: list[dict[str, tuple[float, float]]], group_uuid: str
-) -> ExperimentGroup:
+def mk_experiment_group(config: LaunchConfig, variants: list[VariantConfig], group_uuid: str) -> ExperimentGroup:
     """
-    Build an experiment group from an experiment config.
+    Build an experiment group from a launch config and variant configs.
 
     Args:
-        config: Experiment configuration
-        mixes: List of mixture weight dictionaries
+        config: Launch configuration
+        variants: List of variant configurations (output of olmix generate)
         group_uuid: Unique identifier for this experiment group
 
     Returns:
@@ -55,19 +54,17 @@ def mk_experiment_group(
     return ExperimentGroup(
         config=config,
         group_id=group_uuid,
-        instances=mk_experiments(config, mixes, group_uuid),
+        instances=mk_experiments(config, variants),
     )
 
 
-def mk_instance_cmd(
-    instance: ExperimentInstance, config: ExperimentConfig, group_id: str, beaker_user: str
-) -> list[str]:
+def mk_instance_cmd(instance: ExperimentInstance, config: LaunchConfig, group_id: str, beaker_user: str) -> list[str]:
     """
     Build a command for launching an experiment instance.
 
     Args:
         instance: Experiment instance to launch
-        config: Experiment configuration
+        config: Launch configuration
         group_id: Unique identifier for the experiment group
         beaker_user: Beaker username for the job
 
