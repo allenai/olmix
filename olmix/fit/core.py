@@ -18,7 +18,6 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 
 from olmix.aliases import ExperimentConfig
-from olmix.fit.constants import ALL_TASK_FAMILIES
 from olmix.fit.utils import (
     PROPOSER_TYPES,
     REGRESSION_TYPES,
@@ -85,6 +84,7 @@ def run_fit(
     test_ratios_path: tuple[str, ...] = (),
     test_metrics_path: tuple[str, ...] = (),
     aggregate_task_families: bool = False,
+    task_families: dict[str, list[str]] | None = None,
 ) -> None:
     """Run the regression fitting and mixture proposing pipeline.
 
@@ -189,11 +189,13 @@ def run_fit(
             metrics[metrics.columns[3:]] = metrics[metrics.columns[3:]].subtract(metrics[metrics.columns[3:]].min())
 
     if aggregate_task_families:
+        if task_families is None:
+            raise ValueError("task_families must be provided when aggregate_task_families=True")
         meta_cols = metrics.columns[:3]
         task_cols = metrics.columns[3:]
         metrics_new = metrics.loc[:, meta_cols].copy()
 
-        for family, tasks in ALL_TASK_FAMILIES.items():
+        for family, tasks in task_families.items():
             # Only keep tasks that actually exist in the dataframe
             existing = [t for t in tasks if t in task_cols]
 
@@ -203,7 +205,7 @@ def run_fit(
             # Row-wise mean across the family
             metrics_new[family] = metrics[existing].mean(axis=1)
         metrics = metrics_new
-        metrics_to_index = list(ALL_TASK_FAMILIES.keys())
+        metrics_to_index = list(task_families.keys())
 
     # X = Domain weights
     X_train = ratios[ratios.columns[3:]].values
@@ -224,7 +226,7 @@ def run_fit(
                 task_cols = tm.columns[3:]
                 metrics_new = tm.loc[:, meta_cols].copy()
 
-                for family, tasks in ALL_TASK_FAMILIES.items():
+                for family, tasks in task_families.items():
                     # Only keep tasks that actually exist in the dataframe
                     existing = [t for t in tasks if t in task_cols]
 
