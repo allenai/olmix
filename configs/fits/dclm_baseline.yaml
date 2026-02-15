@@ -6,32 +6,6 @@ swarm:
   metrics: dclm_metrics.csv
 
 priors:
-  relative_sizes:
-    adult_content: 0.015
-    art_and_design: 0.035
-    crime_and_law: 0.030
-    education_and_jobs: 0.045
-    electronics_and_hardware: 0.025
-    entertainment: 0.080
-    fashion_and_beauty: 0.020
-    finance_and_business: 0.060
-    food_and_dining: 0.025
-    games: 0.030
-    health: 0.050
-    history_and_geography: 0.035
-    home_and_hobbies: 0.030
-    industrial: 0.015
-    literature: 0.040
-    politics: 0.045
-    religion: 0.020
-    science_math_and_technology: 0.070
-    social_life: 0.060
-    software: 0.050
-    software_development: 0.060
-    sports_and_fitness: 0.040
-    transportation: 0.020
-    travel_and_tourism: 0.030
-  total_tokens: 3_000_000_000_000
   token_counts:
     adult_content: 45_000_000_000
     art_and_design: 105_000_000_000
