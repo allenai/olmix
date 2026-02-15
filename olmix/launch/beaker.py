@@ -110,7 +110,7 @@ def mk_instance_cmd(
     else:
         cmd_list.append(f"-E {config.training.eval_interval}")
         for task in config.eval.task_ids:
-            cmd_list.append(f"-e {task}")
+            cmd_list.extend(["-e", task])
 
     cmd_list.extend(sources)
 
