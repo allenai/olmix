@@ -172,8 +172,11 @@ def generate(config: str, output: str):
         variant_name = f"{name}-{group_uuid}-{idx:04}"
         variant = VariantConfig(name=variant_name, mix=mix)
         variant_file = output_path / f"{variant_name}.yaml"
+        # Convert tuples to lists for clean YAML output (avoids !!python/tuple tags)
+        dump_data = variant.model_dump()
+        dump_data["mix"] = {k: list(v) for k, v in dump_data["mix"].items()}
         with open(variant_file, "w") as f:
-            yaml.dump(variant.model_dump(), f, default_flow_style=False, sort_keys=False)
+            yaml.dump(dump_data, f, default_flow_style=False, sort_keys=False)
 
     click.echo(f"Generated {len(mixes)} variant(s) in {output_path}/")
     for vf in sorted(output_path.glob("*.yaml")):
