@@ -76,17 +76,20 @@ def _save_launch_metadata(
     logger.info(f"Launch metadata saved to {output_path}")
 
 
-def _load_launch_configs(variants_dir: str) -> list[LaunchConfig]:
-    """Load all LaunchConfig YAML files from a directory."""
+def _load_launch_configs(variants_path: str) -> list[LaunchConfig]:
+    """Load LaunchConfig YAML files from a file or directory."""
     from olmix.aliases import LaunchConfig
 
-    variants_path = Path(variants_dir)
-    if not variants_path.is_dir():
-        raise click.BadParameter(f"Variants path is not a directory: {variants_dir}")
+    p = Path(variants_path)
+    if p.is_file():
+        return [LaunchConfig.from_yaml(p)]
 
-    variant_files = sorted(variants_path.glob("*.yaml")) + sorted(variants_path.glob("*.yml"))
+    if not p.is_dir():
+        raise click.BadParameter(f"Variants path is not a file or directory: {variants_path}")
+
+    variant_files = sorted(p.glob("*.yaml")) + sorted(p.glob("*.yml"))
     if not variant_files:
-        raise click.BadParameter(f"No YAML files found in variants directory: {variants_dir}")
+        raise click.BadParameter(f"No YAML files found in variants directory: {variants_path}")
 
     configs = []
     for vf in variant_files:
@@ -173,7 +176,7 @@ def launch():
     "--variants",
     type=click.Path(exists=True),
     required=True,
-    help="Directory containing self-contained launch config YAML files (output of olmix generate).",
+    help="Path to a launch config file or directory of launch config files.",
 )
 @click.option(
     "--dry-run",
@@ -350,7 +353,7 @@ def launch_cancel(config: str, group_id: str | None):
     "--variants",
     type=click.Path(exists=True),
     required=True,
-    help="Directory containing self-contained launch config YAML files (output of olmix generate).",
+    help="Path to a launch config file or directory of launch config files.",
 )
 def launch_preview(variants: str):
     """Preview training commands without launching."""

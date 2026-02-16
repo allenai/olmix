@@ -19,6 +19,7 @@ from olmix.aliases import (
     TrainingConfig,
     TrainType,
     compute_max_tokens,
+    flatten_mix,
     get_model_num_params,
 )
 from olmix.fit.config import InLoopEvalConfig, PriorsConfig
@@ -44,8 +45,26 @@ class TestSourceConfig:
 
         assert source.name == "wikipedia"
         assert len(source.paths) == 1
-        assert source.max_repetition_factor == 1.0
         assert source.topics is None
+
+    def test_source_with_weight(self):
+        """Test source config with weight field."""
+        source = SourceConfig(
+            name="wikipedia",
+            paths=["s3://bucket/wiki/**/*.npy"],
+            weight=2.5,
+        )
+
+        assert source.weight == 2.5
+
+    def test_source_weight_default_none(self):
+        """Test source config weight defaults to None."""
+        source = SourceConfig(
+            name="wikipedia",
+            paths=["s3://bucket/wiki/**/*.npy"],
+        )
+
+        assert source.weight is None
 
     def test_source_with_topics(self):
         """Test source config with topics."""
@@ -255,6 +274,180 @@ class TestLaunchConfigMix:
         assert config.mix is not None
         assert config.mix["wiki"].weight == 0.6
         assert config.group_id == "abc12345"
+
+
+class TestNestedMix:
+    """Test nested mix format auto-flattening."""
+
+    def test_flat_mix_passthrough(self):
+        """Test that flat mix entries pass through unchanged."""
+        flat = flatten_mix(
+            {
+                "dclm:code": {"weight": 0.5, "repetition_factor": 1.0},
+                "wiki": {"weight": 0.5, "repetition_factor": 2.0},
+            }
+        )
+        assert flat == {
+            "dclm:code": {"weight": 0.5, "repetition_factor": 1.0},
+            "wiki": {"weight": 0.5, "repetition_factor": 2.0},
+        }
+
+    def test_nested_two_levels(self):
+        """Test source:topic nesting flattens correctly."""
+        flat = flatten_mix(
+            {
+                "dclm": {
+                    "weight": 1.0,
+                    "code": {"weight": 0.6},
+                    "science": {"weight": 0.4},
+                },
+            }
+        )
+        assert flat["dclm:code"]["weight"] == pytest.approx(0.6)
+        assert flat["dclm:science"]["weight"] == pytest.approx(0.4)
+
+    def test_nested_three_levels(self):
+        """Test source:topic:quality nesting flattens with product weights."""
+        flat = flatten_mix(
+            {
+                "all_dressed": {
+                    "weight": 0.98,
+                    "science": {
+                        "weight": 0.20,
+                        "high": {"weight": 0.70},
+                        "low": {"weight": 0.30},
+                    },
+                },
+                "arxiv": {"weight": 0.02, "repetition_factor": 1.5},
+            }
+        )
+        assert flat["all_dressed:science:high"]["weight"] == pytest.approx(0.98 * 0.20 * 0.70)
+        assert flat["all_dressed:science:low"]["weight"] == pytest.approx(0.98 * 0.20 * 0.30)
+        assert flat["arxiv"]["weight"] == pytest.approx(0.02)
+        assert flat["arxiv"]["repetition_factor"] == 1.5
+
+    def test_repetition_factor_inherited(self):
+        """Test that repetition_factor is inherited from parent."""
+        flat = flatten_mix(
+            {
+                "wiki": {
+                    "weight": 1.0,
+                    "repetition_factor": 2.0,
+                    "topic_a": {"weight": 0.6},
+                    "topic_b": {"weight": 0.4, "repetition_factor": 3.0},
+                },
+            }
+        )
+        assert flat["wiki:topic_a"]["repetition_factor"] == 2.0  # inherited
+        assert flat["wiki:topic_b"]["repetition_factor"] == 3.0  # overridden
+
+    def test_default_weight_is_one(self):
+        """Test that omitting weight defaults to 1.0."""
+        flat = flatten_mix(
+            {
+                "dclm": {
+                    "code": {"weight": 0.5},
+                    "science": {"weight": 0.3},
+                },
+            }
+        )
+        # dclm has no weight key → defaults to 1.0
+        assert flat["dclm:code"]["weight"] == pytest.approx(0.5)
+        assert flat["dclm:science"]["weight"] == pytest.approx(0.3)
+
+    def test_nested_mix_in_launch_config(self):
+        """Test that LaunchConfig accepts nested mix and flattens it."""
+        config = LaunchConfig(
+            name="test",
+            infra=InfraConfig(budget="test", workspace="test", cluster="test"),
+            training=TrainingConfig(proxy_model_id="olmo2_30m", tokenizer="dolma2"),
+            data=DataConfig(sources=[SourceConfig(name="wiki", paths=["test.npy"])]),
+            eval=_MINIMAL_EVAL,
+            mix={
+                "dclm": {
+                    "weight": 0.8,
+                    "code": {"weight": 0.6},
+                    "science": {"weight": 0.4},
+                },
+                "wiki": {"weight": 0.2, "repetition_factor": 2.0},
+            },
+        )
+        assert config.mix is not None
+        assert "dclm:code" in config.mix
+        assert "dclm:science" in config.mix
+        assert "wiki" in config.mix
+        assert config.mix["dclm:code"].weight == pytest.approx(0.48)
+        assert config.mix["dclm:science"].weight == pytest.approx(0.32)
+        assert config.mix["wiki"].weight == pytest.approx(0.2)
+        assert config.mix["wiki"].repetition_factor == 2.0
+
+    def test_nested_mix_from_yaml(self, tmp_path):
+        """Test loading nested mix from YAML file."""
+        import yaml
+
+        config_data = {
+            "name": "test",
+            "infra": {"budget": "test", "workspace": "test", "cluster": "test"},
+            "training": {"proxy_model_id": "olmo2_30m", "tokenizer": "dolma2"},
+            "data": {"sources": [{"name": "wiki", "paths": ["test.npy"]}]},
+            "eval": {"type": "inloop", "tasks": {"qa": {"arc": "eval/arc (BPB v2)"}}},
+            "mix": {
+                "all_dressed": {
+                    "weight": 0.98,
+                    "science": {
+                        "weight": 0.5,
+                        "high": {"weight": 0.7},
+                        "low": {"weight": 0.3},
+                    },
+                    "code": {
+                        "weight": 0.5,
+                        "high": {"weight": 0.7},
+                        "low": {"weight": 0.3},
+                    },
+                },
+                "arxiv": {"weight": 0.02, "repetition_factor": 1.5},
+            },
+        }
+        config_file = tmp_path / "nested.yaml"
+        with open(config_file, "w") as f:
+            yaml.dump(config_data, f)
+
+        config = LaunchConfig.from_yaml(config_file)
+        assert config.mix is not None
+        assert config.mix["all_dressed:science:high"].weight == pytest.approx(0.98 * 0.5 * 0.7)
+        assert config.mix["all_dressed:code:low"].weight == pytest.approx(0.98 * 0.5 * 0.3)
+        assert config.mix["arxiv"].weight == pytest.approx(0.02)
+        assert config.mix["arxiv"].repetition_factor == 1.5
+
+
+class TestHandWrittenConfigsWithMix:
+    """Test that migrated hand-written configs parse with mix field."""
+
+    def test_data_proportions_config(self):
+        """Test a data_proportions config loads with normalized mix."""
+        config = LaunchConfig.from_yaml("configs/experiments/data_proportions/mix_heavy_code.yaml")
+        assert config.mix is not None
+        assert "dclm:software_development" in config.mix
+        assert config.mix["dclm:software_development"].weight == 0.5
+        assert config.mix["wikipedia"].repetition_factor == 2.0
+        total = sum(e.weight for e in config.mix.values())
+        assert abs(total - 1.0) < 1e-4
+
+    def test_quality_upsampling_config(self):
+        """Test a quality_upsampling config loads with normalized mix."""
+        config = LaunchConfig.from_yaml("configs/experiments/quality_upsampling/heavy_code/aggressive.yaml")
+        assert config.mix is not None
+        assert "all_dressed:science_math_and_technology:high" in config.mix
+        # Weights are normalized to sum to 1.0
+        total = sum(e.weight for e in config.mix.values())
+        assert abs(total - 1.0) < 1e-4
+
+    def test_training_duration_config(self):
+        """Test a training_duration config loads with equal weights."""
+        config = LaunchConfig.from_yaml("configs/experiments/training_duration/duration_0.5x.yaml")
+        assert config.mix is not None
+        assert config.mix["dclm:science_math_and_technology"].weight == pytest.approx(0.2, abs=1e-4)
+        assert config.mix["arxiv"].repetition_factor == 1.5
 
 
 class TestExperimentInstance:
