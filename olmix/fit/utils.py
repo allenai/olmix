@@ -25,9 +25,9 @@ from sklearn.gaussian_process.kernels import RBF, ConstantKernel, WhiteKernel
 from tqdm import tqdm
 from wandb.apis.public import Run
 
-from olmix.aliases import ExperimentConfig, SourceConfig, compute_max_tokens, get_model_num_params
+from olmix.aliases import LaunchConfig, SourceConfig, compute_max_tokens, get_model_num_params
 from olmix.fit.law import ScalingLaw
-from olmix.launch.synthesize_mixture import calculate_priors
+from olmix.generate.synthesize_mixture import calculate_priors
 from olmix.plots import BASE_OUTPUT_DIR
 
 
@@ -92,7 +92,7 @@ def get_token_counts_and_ratios(
 
 
 def compute_constraints_from_config(
-    config: ExperimentConfig,
+    config: LaunchConfig,
     *,
     target_tokens: int,
     repetition_factor: float = 5.0,
@@ -472,7 +472,7 @@ class SimulationProposer(Proposer):
         seed: int = 1337,
         search_iterations: int = 10,
         constrain_objective: bool = False,
-        swarm_config: ExperimentConfig | None = None,
+        swarm_config: LaunchConfig | None = None,
         obj_weights: list | None = None,
         temperature: float | None = None,
         make_worst_mix: bool = False,
@@ -587,7 +587,7 @@ class SearchProposer(Proposer):
         prior_distributions: dict,
         token_counts: dict[str, int],
         constrain_objective: bool = False,
-        swarm_config: ExperimentConfig | None = None,
+        swarm_config: LaunchConfig | None = None,
         target_tokens: int | None = None,
         repetition_factor: float = 5.0,
         **kwargs,
@@ -625,7 +625,7 @@ class LogLinearExactProposer(Proposer):
         prior_distributions: dict,
         token_counts: dict[str, int],
         constrain_objective: bool = False,
-        swarm_config: ExperimentConfig | None = None,
+        swarm_config: LaunchConfig | None = None,
         kl_reg: float | None = 0.1,
         obj_weights: list | None = None,
         manual_kl: dict | None = None,
@@ -1141,7 +1141,7 @@ def filter_constrained_swarm(final_cookbook_path: Path, run_ratios: list, run_me
     with open(final_cookbook_path) as f:
         data = yaml.safe_load(f)
 
-    final_config = ExperimentConfig(**data)
+    final_config = LaunchConfig(**data)
     desired_tokens = final_config.training.get_max_tokens()
 
     token_universe = get_token_counts_and_ratios(final_config.data.sources, final_config.data.dtype, True)
@@ -1336,15 +1336,15 @@ def aggregate_mmlu(metrics: pd.DataFrame, metrics_to_index: list):
     return metrics, metrics_to_index
 
 
-def swarm_config_from_path(config: str) -> ExperimentConfig:
+def swarm_config_from_path(config: str) -> LaunchConfig:
     """
     Load configuration from a config file path.
 
     Args:
         config: Path to the YAML config file
     Returns:
-        ExperimentConfig loaded from the file
+        LaunchConfig loaded from the file
     """
     with open(config) as f:
         data = yaml.safe_load(f)
-    return ExperimentConfig(**data)
+    return LaunchConfig(**data)

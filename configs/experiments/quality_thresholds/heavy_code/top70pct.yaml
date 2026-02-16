@@ -27,10 +27,8 @@ training:
 data:
   sources:
   - name: all_dressed
-    weight: 98
     topics:
     - name: science_math_and_technology
-      weight: 20
       quality:
       - name: vigintile_0007
         paths:
@@ -72,7 +70,6 @@ data:
         paths:
         - s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/science_math_and_technology/vigintile_0020/*.npy
     - name: software_development
-      weight: 50
       quality:
       - name: vigintile_0007
         paths:
@@ -114,7 +111,6 @@ data:
         paths:
         - s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/software_development/vigintile_0020/*.npy
     - name: education_and_jobs
-      weight: 15
       quality:
       - name: vigintile_0007
         paths:
@@ -156,7 +152,6 @@ data:
         paths:
         - s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/education_and_jobs/vigintile_0020/*.npy
     - name: politics
-      weight: 5
       quality:
       - name: vigintile_0007
         paths:
@@ -198,7 +193,6 @@ data:
         paths:
         - s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/politics/vigintile_0020/*.npy
     - name: adult_content
-      weight: 3
       quality:
       - name: vigintile_0007
         paths:
@@ -240,7 +234,6 @@ data:
         paths:
         - s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/adult_content/vigintile_0020/*.npy
     - name: art_and_design
-      weight: 5
       quality:
       - name: vigintile_0007
         paths:
@@ -282,100 +275,363 @@ data:
         paths:
         - s3://ai2-llm/preprocessed/cc_all_dressed/all_dressed_v3/dclm_plus2_vigilantes/allenai/dolma2-tokenizer/art_and_design/vigintile_0020/*.npy
   - name: arxiv
-    weight: 1
     paths:
     - s3://ai2-llm/preprocessed/proof-pile-2/v0_decontaminated-0625_tokenized/arxiv/train/allenai/dolma2-tokenizer/*.npy
-    max_repetition_factor: 1.5
   - name: wikipedia
-    weight: 1
     paths:
     - s3://ai2-llm/preprocessed/wikipedia-dolma-0823/allenai/dolma2-tokenizer/*.npy
-    max_repetition_factor: 2.0
 eval:
   type: inloop
   tasks:
     math:
-      gsm8k_gold_bpb_5shot: "eval/downstream/gsm8k_gold_bpb_5shot (BPB v2)"
-      minerva_math_algebra_gold_bpb_0shot: "eval/downstream/minerva_math_algebra_gold_bpb_0shot (BPB v2)"
-      minerva_math_counting_and_probability_gold_bpb_0shot: "eval/downstream/minerva_math_counting_and_probability_gold_bpb_0shot (BPB v2)"
-      minerva_math_geometry_gold_bpb_0shot: "eval/downstream/minerva_math_geometry_gold_bpb_0shot (BPB v2)"
-      minerva_math_intermediate_algebra_gold_bpb_0shot: "eval/downstream/minerva_math_intermediate_algebra_gold_bpb_0shot (BPB v2)"
-      minerva_math_number_theory_gold_bpb_0shot: "eval/downstream/minerva_math_number_theory_gold_bpb_0shot (BPB v2)"
-      minerva_math_prealgebra_gold_bpb_0shot: "eval/downstream/minerva_math_prealgebra_gold_bpb_0shot (BPB v2)"
-      minerva_math_precalculus_gold_bpb_0shot: "eval/downstream/minerva_math_precalculus_gold_bpb_0shot (BPB v2)"
+      gsm8k_gold_bpb_5shot: eval/downstream/gsm8k_gold_bpb_5shot (BPB v2)
+      minerva_math_algebra_gold_bpb_0shot: eval/downstream/minerva_math_algebra_gold_bpb_0shot
+        (BPB v2)
+      minerva_math_counting_and_probability_gold_bpb_0shot: eval/downstream/minerva_math_counting_and_probability_gold_bpb_0shot
+        (BPB v2)
+      minerva_math_geometry_gold_bpb_0shot: eval/downstream/minerva_math_geometry_gold_bpb_0shot
+        (BPB v2)
+      minerva_math_intermediate_algebra_gold_bpb_0shot: eval/downstream/minerva_math_intermediate_algebra_gold_bpb_0shot
+        (BPB v2)
+      minerva_math_number_theory_gold_bpb_0shot: eval/downstream/minerva_math_number_theory_gold_bpb_0shot
+        (BPB v2)
+      minerva_math_prealgebra_gold_bpb_0shot: eval/downstream/minerva_math_prealgebra_gold_bpb_0shot
+        (BPB v2)
+      minerva_math_precalculus_gold_bpb_0shot: eval/downstream/minerva_math_precalculus_gold_bpb_0shot
+        (BPB v2)
     code:
-      codex_humaneval_gold_bpb_3shot: "eval/downstream/codex_humaneval_gold_bpb_3shot (BPB v2)"
-      codex_mbpp_gold_bpb_3shot: "eval/downstream/codex_mbpp_gold_bpb_3shot (BPB v2)"
-      mt_mbpp_bash_gold_bpb_3shot: "eval/downstream/mt_mbpp_bash_gold_bpb_3shot (BPB v2)"
-      mt_mbpp_c_gold_bpb_3shot: "eval/downstream/mt_mbpp_c_gold_bpb_3shot (BPB v2)"
-      mt_mbpp_cpp_gold_bpb_3shot: "eval/downstream/mt_mbpp_cpp_gold_bpb_3shot (BPB v2)"
-      mt_mbpp_csharp_gold_bpb_3shot: "eval/downstream/mt_mbpp_csharp_gold_bpb_3shot (BPB v2)"
-      mt_mbpp_go_gold_bpb_3shot: "eval/downstream/mt_mbpp_go_gold_bpb_3shot (BPB v2)"
-      mt_mbpp_haskell_gold_bpb_3shot: "eval/downstream/mt_mbpp_haskell_gold_bpb_3shot (BPB v2)"
-      mt_mbpp_java_gold_bpb_3shot: "eval/downstream/mt_mbpp_java_gold_bpb_3shot (BPB v2)"
-      mt_mbpp_javascript_gold_bpb_3shot: "eval/downstream/mt_mbpp_javascript_gold_bpb_3shot (BPB v2)"
-      mt_mbpp_matlab_gold_bpb_3shot: "eval/downstream/mt_mbpp_matlab_gold_bpb_3shot (BPB v2)"
-      mt_mbpp_php_gold_bpb_3shot: "eval/downstream/mt_mbpp_php_gold_bpb_3shot (BPB v2)"
-      mt_mbpp_python_gold_bpb_3shot: "eval/downstream/mt_mbpp_python_gold_bpb_3shot (BPB v2)"
-      mt_mbpp_r_gold_bpb_3shot: "eval/downstream/mt_mbpp_r_gold_bpb_3shot (BPB v2)"
-      mt_mbpp_ruby_gold_bpb_3shot: "eval/downstream/mt_mbpp_ruby_gold_bpb_3shot (BPB v2)"
-      mt_mbpp_rust_gold_bpb_3shot: "eval/downstream/mt_mbpp_rust_gold_bpb_3shot (BPB v2)"
-      mt_mbpp_scala_gold_bpb_3shot: "eval/downstream/mt_mbpp_scala_gold_bpb_3shot (BPB v2)"
-      mt_mbpp_swift_gold_bpb_3shot: "eval/downstream/mt_mbpp_swift_gold_bpb_3shot (BPB v2)"
-      mt_mbpp_typescript_gold_bpb_3shot: "eval/downstream/mt_mbpp_typescript_gold_bpb_3shot (BPB v2)"
+      codex_humaneval_gold_bpb_3shot: eval/downstream/codex_humaneval_gold_bpb_3shot
+        (BPB v2)
+      codex_mbpp_gold_bpb_3shot: eval/downstream/codex_mbpp_gold_bpb_3shot (BPB v2)
+      mt_mbpp_bash_gold_bpb_3shot: eval/downstream/mt_mbpp_bash_gold_bpb_3shot (BPB
+        v2)
+      mt_mbpp_c_gold_bpb_3shot: eval/downstream/mt_mbpp_c_gold_bpb_3shot (BPB v2)
+      mt_mbpp_cpp_gold_bpb_3shot: eval/downstream/mt_mbpp_cpp_gold_bpb_3shot (BPB
+        v2)
+      mt_mbpp_csharp_gold_bpb_3shot: eval/downstream/mt_mbpp_csharp_gold_bpb_3shot
+        (BPB v2)
+      mt_mbpp_go_gold_bpb_3shot: eval/downstream/mt_mbpp_go_gold_bpb_3shot (BPB v2)
+      mt_mbpp_haskell_gold_bpb_3shot: eval/downstream/mt_mbpp_haskell_gold_bpb_3shot
+        (BPB v2)
+      mt_mbpp_java_gold_bpb_3shot: eval/downstream/mt_mbpp_java_gold_bpb_3shot (BPB
+        v2)
+      mt_mbpp_javascript_gold_bpb_3shot: eval/downstream/mt_mbpp_javascript_gold_bpb_3shot
+        (BPB v2)
+      mt_mbpp_matlab_gold_bpb_3shot: eval/downstream/mt_mbpp_matlab_gold_bpb_3shot
+        (BPB v2)
+      mt_mbpp_php_gold_bpb_3shot: eval/downstream/mt_mbpp_php_gold_bpb_3shot (BPB
+        v2)
+      mt_mbpp_python_gold_bpb_3shot: eval/downstream/mt_mbpp_python_gold_bpb_3shot
+        (BPB v2)
+      mt_mbpp_r_gold_bpb_3shot: eval/downstream/mt_mbpp_r_gold_bpb_3shot (BPB v2)
+      mt_mbpp_ruby_gold_bpb_3shot: eval/downstream/mt_mbpp_ruby_gold_bpb_3shot (BPB
+        v2)
+      mt_mbpp_rust_gold_bpb_3shot: eval/downstream/mt_mbpp_rust_gold_bpb_3shot (BPB
+        v2)
+      mt_mbpp_scala_gold_bpb_3shot: eval/downstream/mt_mbpp_scala_gold_bpb_3shot (BPB
+        v2)
+      mt_mbpp_swift_gold_bpb_3shot: eval/downstream/mt_mbpp_swift_gold_bpb_3shot (BPB
+        v2)
+      mt_mbpp_typescript_gold_bpb_3shot: eval/downstream/mt_mbpp_typescript_gold_bpb_3shot
+        (BPB v2)
     qa:
-      arc_challenge_test_rc_5shot: "eval/downstream/arc_challenge_test_rc_5shot (BPB v2)"
-      arc_easy_test_rc_5shot: "eval/downstream/arc_easy_test_rc_5shot (BPB v2)"
-      hellaswag_rc_5shot: "eval/downstream/hellaswag_rc_5shot (BPB v2)"
-      winogrande_val_rc_5shot: "eval/downstream/winogrande_val_rc_5shot (BPB v2)"
-      csqa_val_rc_5shot: "eval/downstream/csqa_val_rc_5shot (BPB v2)"
-      piqa_val_rc_5shot: "eval/downstream/piqa_val_rc_5shot (BPB v2)"
-      socialiqa_val_rc_5shot: "eval/downstream/socialiqa_val_rc_5shot (BPB v2)"
-      mmlu_stem_val_rc_5shot: "eval/downstream/mmlu_stem_val_rc_5shot (BPB v2)"
-      mmlu_humanities_val_rc_5shot: "eval/downstream/mmlu_humanities_val_rc_5shot (BPB v2)"
-      mmlu_social_sciences_val_rc_5shot: "eval/downstream/mmlu_social_sciences_val_rc_5shot (BPB v2)"
-      mmlu_other_val_rc_5shot: "eval/downstream/mmlu_other_val_rc_5shot (BPB v2)"
-      mmlu_stem_test_rc_5shot: "eval/downstream/mmlu_stem_test_rc_5shot (BPB v2)"
-      mmlu_humanities_test_rc_5shot: "eval/downstream/mmlu_humanities_test_rc_5shot (BPB v2)"
-      mmlu_social_sciences_test_rc_5shot: "eval/downstream/mmlu_social_sciences_test_rc_5shot (BPB v2)"
-      mmlu_other_test_rc_5shot: "eval/downstream/mmlu_other_test_rc_5shot (BPB v2)"
-      coqa_bpb_0shot: "eval/downstream/coqa_bpb_0shot (BPB v2)"
-      drop_bpb_5shot: "eval/downstream/drop_bpb_5shot (BPB v2)"
-      jeopardy_bpb_5shot: "eval/downstream/jeopardy_bpb_5shot (BPB v2)"
-      lambada_bpb_0shot: "eval/downstream/lambada_bpb_0shot (BPB v2)"
-      naturalqs_bpb_5shot: "eval/downstream/naturalqs_bpb_5shot (BPB v2)"
-      squad_bpb_5shot: "eval/downstream/squad_bpb_5shot (BPB v2)"
-      basic_skills_arithmetic_rc_5shot: "eval/downstream/basic_skills_arithmetic_rc_5shot (BPB v2)"
-      basic_skills_coding_rc_5shot: "eval/downstream/basic_skills_coding_rc_5shot (BPB v2)"
-      basic_skills_common_knowledge_rc_5shot: "eval/downstream/basic_skills_common_knowledge_rc_5shot (BPB v2)"
-      basic_skills_logical_reasoning_rc_5shot: "eval/downstream/basic_skills_logical_reasoning_rc_5shot (BPB v2)"
-      basic_skills_pattern_rc_5shot: "eval/downstream/basic_skills_pattern_rc_5shot (BPB v2)"
-      basic_skills_string_operations_rc_5shot: "eval/downstream/basic_skills_string_operations_rc_5shot (BPB v2)"
-      lab_bench_dbqa_rc_3shot: "eval/downstream/lab_bench_dbqa_rc_3shot (BPB v2)"
-      lab_bench_protocolqa_rc_3shot: "eval/downstream/lab_bench_protocolqa_rc_3shot (BPB v2)"
-      medmcqa_rc_5shot: "eval/downstream/medmcqa_rc_5shot (BPB v2)"
-      medqa_en_rc_5shot: "eval/downstream/medqa_en_rc_5shot (BPB v2)"
-      qasper_yesno_rc_5shot: "eval/downstream/qasper_yesno_rc_5shot (BPB v2)"
-      sciriff_yesno_rc_5shot: "eval/downstream/sciriff_yesno_rc_5shot (BPB v2)"
-
-priors:
-  token_counts:
-    all_dressed:adult_content:10-30pct: 26058194945
-    all_dressed:adult_content:top10pct: 8889341991
-    all_dressed:art_and_design:10-30pct: 40498827290
-    all_dressed:art_and_design:top10pct: 28009369632
-    all_dressed:education_and_jobs:10-30pct: 87305637062
-    all_dressed:education_and_jobs:top10pct: 55814387477
-    all_dressed:politics:10-30pct: 156681369035
-    all_dressed:politics:top10pct: 99244993275
-    all_dressed:science_math_and_technology:10-30pct: 121950543689
-    all_dressed:science_math_and_technology:top10pct: 73845556815
-    all_dressed:software_development:10-30pct: 44574637758
-    all_dressed:software_development:top10pct: 28270076579
-    arxiv: 21377485731
-    wikipedia: 3692487830
-
-swarm:
-  seed: 42
-  variants: 1
-  minimum_weight: 0.0001
+      arc_challenge_test_rc_5shot: eval/downstream/arc_challenge_test_rc_5shot (BPB
+        v2)
+      arc_easy_test_rc_5shot: eval/downstream/arc_easy_test_rc_5shot (BPB v2)
+      hellaswag_rc_5shot: eval/downstream/hellaswag_rc_5shot (BPB v2)
+      winogrande_val_rc_5shot: eval/downstream/winogrande_val_rc_5shot (BPB v2)
+      csqa_val_rc_5shot: eval/downstream/csqa_val_rc_5shot (BPB v2)
+      piqa_val_rc_5shot: eval/downstream/piqa_val_rc_5shot (BPB v2)
+      socialiqa_val_rc_5shot: eval/downstream/socialiqa_val_rc_5shot (BPB v2)
+      mmlu_stem_val_rc_5shot: eval/downstream/mmlu_stem_val_rc_5shot (BPB v2)
+      mmlu_humanities_val_rc_5shot: eval/downstream/mmlu_humanities_val_rc_5shot (BPB
+        v2)
+      mmlu_social_sciences_val_rc_5shot: eval/downstream/mmlu_social_sciences_val_rc_5shot
+        (BPB v2)
+      mmlu_other_val_rc_5shot: eval/downstream/mmlu_other_val_rc_5shot (BPB v2)
+      mmlu_stem_test_rc_5shot: eval/downstream/mmlu_stem_test_rc_5shot (BPB v2)
+      mmlu_humanities_test_rc_5shot: eval/downstream/mmlu_humanities_test_rc_5shot
+        (BPB v2)
+      mmlu_social_sciences_test_rc_5shot: eval/downstream/mmlu_social_sciences_test_rc_5shot
+        (BPB v2)
+      mmlu_other_test_rc_5shot: eval/downstream/mmlu_other_test_rc_5shot (BPB v2)
+      coqa_bpb_0shot: eval/downstream/coqa_bpb_0shot (BPB v2)
+      drop_bpb_5shot: eval/downstream/drop_bpb_5shot (BPB v2)
+      jeopardy_bpb_5shot: eval/downstream/jeopardy_bpb_5shot (BPB v2)
+      lambada_bpb_0shot: eval/downstream/lambada_bpb_0shot (BPB v2)
+      naturalqs_bpb_5shot: eval/downstream/naturalqs_bpb_5shot (BPB v2)
+      squad_bpb_5shot: eval/downstream/squad_bpb_5shot (BPB v2)
+      basic_skills_arithmetic_rc_5shot: eval/downstream/basic_skills_arithmetic_rc_5shot
+        (BPB v2)
+      basic_skills_coding_rc_5shot: eval/downstream/basic_skills_coding_rc_5shot (BPB
+        v2)
+      basic_skills_common_knowledge_rc_5shot: eval/downstream/basic_skills_common_knowledge_rc_5shot
+        (BPB v2)
+      basic_skills_logical_reasoning_rc_5shot: eval/downstream/basic_skills_logical_reasoning_rc_5shot
+        (BPB v2)
+      basic_skills_pattern_rc_5shot: eval/downstream/basic_skills_pattern_rc_5shot
+        (BPB v2)
+      basic_skills_string_operations_rc_5shot: eval/downstream/basic_skills_string_operations_rc_5shot
+        (BPB v2)
+      lab_bench_dbqa_rc_3shot: eval/downstream/lab_bench_dbqa_rc_3shot (BPB v2)
+      lab_bench_protocolqa_rc_3shot: eval/downstream/lab_bench_protocolqa_rc_3shot
+        (BPB v2)
+      medmcqa_rc_5shot: eval/downstream/medmcqa_rc_5shot (BPB v2)
+      medqa_en_rc_5shot: eval/downstream/medqa_en_rc_5shot (BPB v2)
+      qasper_yesno_rc_5shot: eval/downstream/qasper_yesno_rc_5shot (BPB v2)
+      sciriff_yesno_rc_5shot: eval/downstream/sciriff_yesno_rc_5shot (BPB v2)
+mix:
+  all_dressed:
+    weight: 0.999984
+    science_math_and_technology:
+      weight: 0.204074
+      vigintile_0007:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0008:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0009:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0010:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0011:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0012:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0013:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0014:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0015:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0016:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0017:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0018:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0020:
+        weight: 0.076923
+        repetition_factor: 1.0
+    software_development:
+      weight: 0.510199
+      vigintile_0007:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0008:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0009:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0010:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0011:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0012:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0013:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0014:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0015:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0016:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0017:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0018:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0020:
+        weight: 0.076923
+        repetition_factor: 1.0
+    education_and_jobs:
+      weight: 0.153062
+      vigintile_0007:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0008:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0009:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0010:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0011:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0012:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0013:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0014:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0015:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0016:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0017:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0018:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0020:
+        weight: 0.076923
+        repetition_factor: 1.0
+    politics:
+      weight: 0.051025
+      vigintile_0007:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0008:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0009:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0010:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0011:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0012:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0013:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0014:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0015:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0016:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0017:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0018:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0020:
+        weight: 0.076923
+        repetition_factor: 1.0
+    adult_content:
+      weight: 0.030615
+      vigintile_0007:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0008:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0009:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0010:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0011:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0012:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0013:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0014:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0015:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0016:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0017:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0018:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0020:
+        weight: 0.076923
+        repetition_factor: 1.0
+    art_and_design:
+      weight: 0.051025
+      vigintile_0007:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0008:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0009:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0010:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0011:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0012:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0013:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0014:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0015:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0016:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0017:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0018:
+        weight: 0.076923
+        repetition_factor: 1.0
+      vigintile_0020:
+        weight: 0.076923
+        repetition_factor: 1.0
+  arxiv:
+    weight: 8.0e-06
+    repetition_factor: 1.5
+  wikipedia:
+    weight: 8.0e-06
+    repetition_factor: 2.0

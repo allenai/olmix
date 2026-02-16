@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-from olmix.aliases import ExperimentConfig
+from olmix.aliases import LaunchConfig
 from olmix.fit.utils import (
     PROPOSER_TYPES,
     REGRESSION_TYPES,
@@ -49,7 +49,7 @@ def run_fit(
     *,
     eval_metrics: list[str] | None = None,
     experiment_groups: list[str] | None = None,
-    launch_configs: list[ExperimentConfig] | None = None,
+    launch_configs: list[LaunchConfig] | None = None,
     full_group_names: list[str] | None = None,
     token_counts: dict[str, int] | None = None,
     # Regression options

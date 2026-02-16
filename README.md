@@ -195,49 +195,167 @@ The key output is `opt_avg_all_metrics_*_optimal.json` — the single set of wei
 
 Once you're comfortable with the fitting workflow above, you can use olmix end-to-end: generate candidate mixtures, launch proxy training runs on Beaker, and fit directly from the W&B results.
 
-### Experiment configs
+The workflow uses two separate configs:
 
-Start from one of the configs in [`configs/experiments/`](configs/experiments/):
+- **`GenerationConfig`** — controls how mixes are sampled (data sources, priors, swarm parameters, token budget). See [`configs/generations/example.yaml`](configs/generations/example.yaml).
+- **`LaunchConfig`** — controls how training runs are launched (infra, training hyperparams, eval, **mix**). See configs in [`configs/experiments/`](configs/experiments/).
 
-| Suite | What it tests |
-|-------|--------------|
-| [`data_proportions/`](configs/experiments/data_proportions/) | Varying topic weights across sources |
-| [`quality_thresholds/`](configs/experiments/quality_thresholds/) | Including/excluding quality vigintiles |
-| [`quality_upsampling/`](configs/experiments/quality_upsampling/) | Weighting quality buckets within topics |
-| [`training_duration/`](configs/experiments/training_duration/) | Effect of training length on mixture quality |
+Every `LaunchConfig` requires an explicit top-level `mix` field that maps domain keys to weights and repetition factors. The `data.sources` section describes *what data exists*; the `mix` section describes *how much of each domain to use*.
+
+The `mix` supports two formats — **nested** (recommended for hand-written configs) and **flat** (used by generated configs). Both are equivalent; nested mixes are auto-flattened on load.
+
+**Nested format** — mirrors the source/topic/quality hierarchy. Weights at each level are multiplied to get the final leaf weight. `repetition_factor` is inherited from the nearest ancestor that sets it:
+
+```yaml
+mix:
+  dclm:
+    weight: 0.8
+    repetition_factor: 1.0
+    science_math_and_technology:
+      weight: 0.25
+      repetition_factor: 1.0
+    software_development:
+      weight: 0.625
+      repetition_factor: 1.0
+    education_and_jobs:
+      weight: 0.125
+      repetition_factor: 1.0
+  wikipedia:
+    weight: 0.1
+    repetition_factor: 2.0
+  arxiv:
+    weight: 0.1
+    repetition_factor: 1.5
+```
+
+For quality-level nesting:
+
+```yaml
+mix:
+  all_dressed:
+    weight: 0.98
+    repetition_factor: 1.0
+    science:
+      weight: 0.20
+      high: { weight: 0.70, repetition_factor: 1.0 }
+      med: { weight: 0.30, repetition_factor: 1.0 }
+    code:
+      weight: 0.50
+      high: { weight: 0.70, repetition_factor: 1.0 }
+      med: { weight: 0.30, repetition_factor: 1.0 }
+  arxiv:
+    weight: 0.02
+    repetition_factor: 1.5
+```
+
+**Flat format** — colon-separated domain keys, each with `weight` and `repetition_factor`. This is what `olmix generate` produces:
+
+```yaml
+mix:
+  dclm:science_math_and_technology:
+    weight: 0.2
+    repetition_factor: 1.0
+  dclm:software_development:
+    weight: 0.5
+    repetition_factor: 1.0
+  wikipedia:
+    weight: 0.1
+    repetition_factor: 2.0
+```
 
 ### Step 0: Compute priors (token counts)
 
-Before launching, compute the token counts for your data sources. This scans S3 paths and outputs the `priors` block for your config:
+Before generating mixes, compute the token counts for your data sources. This scans S3 paths and outputs the `priors` block for your generation config:
 
 ```bash
-olmix priors compute --config configs/experiments/data_proportions/mix_baseline.yaml
+olmix priors compute --config configs/generations/example.yaml
 ```
 
-Copy the output into your experiment config's `priors:` section. Use `--output priors.yaml` to write to a file instead. Results are cached in `cache/` for subsequent runs; use `--no-cache` to force a fresh scan.
+This outputs a YAML block you can paste directly into your generation config:
 
-### Step 1: Sample candidate mixtures
+```yaml
+priors:
+  token_counts:
+    arxiv: 21377485731
+    dclm:education_and_jobs: 20771836713
+    dclm:science_math_and_technology: 84526121193
+    dclm:software_development: 23878302458
+    wikipedia: 3692487830
+```
 
-The input config defines sources hierarchically (source → topic → quality bucket) with S3 paths. The `priors` section provides the token counts per domain, which are used as Dirichlet priors to sample `variants` mixture configurations. Each mix flattens the hierarchy into fully-qualified leaf keys (e.g. `"dclm:software_development"`) with a `[weight, repetition_factor]` pair. Repetition factors are computed from how many tokens are needed vs. available. Output is written to `output/mixes/`.
+Copy the output into your generation config's `priors:` section. Use `--output priors.yaml` to write to a file instead. Results are cached in `cache/` for subsequent runs; use `--no-cache` to force a fresh scan.
+
+### Step 1: Generate candidate mixtures
+
+Use `olmix generate` to sample mixture variants from a generation config. The `--base` flag provides a launch config template, and each variant is written as a self-contained launch config YAML file — ready to submit directly.
 
 ```bash
-olmix mix generate --config configs/experiments/data_proportions/mix_baseline.yaml
+olmix generate \
+  --config configs/generations/example.yaml \
+  --base configs/experiments/data_proportions/mix_baseline.yaml \
+  --output output/my_variants/
 ```
+
+This produces one YAML file per variant in the output directory:
+
+```
+output/my_variants/
+  example-swarm-a1b2c3d4-0000.yaml
+  example-swarm-a1b2c3d4-0001.yaml
+  example-swarm-a1b2c3d4-0002.yaml
+  example-swarm-a1b2c3d4-0003.yaml
+```
+
+Each variant file is a complete launch config with infra, training, data, eval, and the sampled mix:
+
+```yaml
+name: example-swarm-a1b2c3d4-0000
+description: Data proportions experiment - balanced baseline mix
+infra:
+  budget: ai2/oe-base
+  cluster: ai2/jupiter
+  # ...
+training:
+  proxy_model_id: olmo3_14m
+  # ...
+data:
+  sources:
+  - name: dclm
+    topics:
+    - name: science_math_and_technology
+      paths:
+      - s3://...
+  - name: wikipedia
+    paths:
+    - s3://...
+eval:
+  tasks: { ... }
+mix:
+  dclm:science_math_and_technology:
+    weight: 0.55
+  wikipedia:
+    weight: 0.10
+group_id: a1b2c3d4
+```
+
+Inspect and edit these files before launching — this is the point where you have full control over what gets trained.
 
 ### Step 2: Preview training commands
 
-Takes the sampled mixtures from step 1 and renders the full OLMo training command for each variant — model config, data paths, mixing weights, eval settings. Prints to stdout without launching anything.
+Renders the full OLMo training command for each variant. The `--variants` flag accepts a directory of configs or a single config file. Prints to stdout without launching anything.
 
 ```bash
-olmix launch preview --config configs/experiments/data_proportions/mix_baseline.yaml
+olmix launch preview --variants output/my_variants/          # directory
+olmix launch preview --variants configs/experiments/data_proportions/mix_heavy_code.yaml  # single file
 ```
 
 ### Step 3: Launch a swarm
 
-Submits one Beaker job per variant (steps 1-2 happen automatically if no pre-generated mix file is provided). Each job trains a proxy model on its mixture and logs eval metrics to W&B under a shared group ID. Launch metadata (Beaker experiment IDs, W&B group link, git commit, priors) is saved alongside the mix JSON in `output/mixes/`.
+Submits one Beaker job per variant. Each job trains a proxy model on its mixture and logs eval metrics to W&B under a shared group ID. Launch metadata is saved in the variants directory.
 
 ```bash
-olmix launch run --config configs/experiments/data_proportions/mix_baseline.yaml
+olmix launch run --variants output/my_variants/
+olmix launch run --variants configs/experiments/data_proportions/mix_heavy_code.yaml  # single file
 ```
 
 Use `--dry-run` to generate the metadata JSON without launching any jobs.
