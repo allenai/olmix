@@ -2,23 +2,23 @@ name: example-swarm
 
 data:
   sources:
-    - name: arxiv
-      paths:
-        - "s3://ai2-llm/preprocessed/arxiv/v0_decontaminated/*.npy"
     - name: dclm
       topics:
         - name: science_math_and_technology
           paths:
-            - "s3://ai2-llm/preprocessed/dclm/v0_decontaminated/science_math_and_technology/**/*.npy"
-        - name: education_and_jobs
-          paths:
-            - "s3://ai2-llm/preprocessed/dclm/v0_decontaminated/education_and_jobs/**/*.npy"
+            - "s3://ai2-llm/preprocessed/dclm/baseline_topic_ft_lr05_ng2_n3M6_ova_20pct/allenai/dolma2-tokenizer/science_math_and_technology/**/*.npy"
         - name: software_development
           paths:
-            - "s3://ai2-llm/preprocessed/dclm/v0_decontaminated/software_development/**/*.npy"
+            - "s3://ai2-llm/preprocessed/dclm/baseline_topic_ft_lr05_ng2_n3M6_ova_20pct/allenai/dolma2-tokenizer/software_development/**/*.npy"
+        - name: education_and_jobs
+          paths:
+            - "s3://ai2-llm/preprocessed/dclm/baseline_topic_ft_lr05_ng2_n3M6_ova_20pct/allenai/dolma2-tokenizer/education_and_jobs/**/*.npy"
     - name: wikipedia
       paths:
-        - "s3://ai2-llm/preprocessed/wiki/v0_decontaminated/*.npy"
+        - "s3://ai2-llm/preprocessed/wikipedia-dolma-0823/allenai/dolma2-tokenizer/*.npy"
+    - name: arxiv
+      paths:
+        - "s3://ai2-llm/preprocessed/proof-pile-2/v0_decontaminated-0625_tokenized/arxiv/train/allenai/dolma2-tokenizer/*.npy"
 
 priors:
   token_counts:

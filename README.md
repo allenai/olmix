@@ -271,6 +271,18 @@ Before generating mixes, compute the token counts for your data sources. This sc
 olmix priors compute --config configs/generations/example.yaml
 ```
 
+This outputs a YAML block you can paste directly into your generation config:
+
+```yaml
+priors:
+  token_counts:
+    arxiv: 21377485731
+    dclm:education_and_jobs: 20771836713
+    dclm:science_math_and_technology: 84526121193
+    dclm:software_development: 23878302458
+    wikipedia: 3692487830
+```
+
 Copy the output into your generation config's `priors:` section. Use `--output priors.yaml` to write to a file instead. Results are cached in `cache/` for subsequent runs; use `--no-cache` to force a fresh scan.
 
 ### Step 1: Generate candidate mixtures
