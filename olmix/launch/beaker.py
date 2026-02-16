@@ -6,68 +6,49 @@ from beaker import Beaker
 from olmo_core.launch.beaker import BeakerEnvSecret, BeakerEnvVar, BeakerLaunchConfig, BeakerWekaBucket
 
 from olmix.aliases import (
-    ExperimentConfig,
     ExperimentGroup,
     ExperimentInstance,
+    LaunchConfig,
 )
-from olmix.launch.launch_utils import mk_source_instances
+from olmix.launch.utils import mk_source_instances
 
 logger = logging.getLogger(__name__)
 
 
-def mk_experiments(
-    config: ExperimentConfig, mixes: list[dict[str, tuple[float, float]]], group_uuid: str
-) -> list[ExperimentInstance]:
+def mk_experiment_group(configs: list[LaunchConfig], group_uuid: str) -> ExperimentGroup:
     """
-    Generate experiment instances from a config and mixture samples.
+    Build an experiment group from self-contained launch configs.
 
     Args:
-        config: Experiment configuration
-        mixes: List of mixture weight dictionaries
-        group_uuid: Unique identifier for this experiment group
-
-    Returns:
-        List of ExperimentInstance objects
-    """
-    return [
-        ExperimentInstance(
-            name=f"{config.name}-{group_uuid}-{idx:04}",
-            sources=mk_source_instances(config.data.sources, mix),
-        )
-        for idx, mix in enumerate(mixes)
-    ]
-
-
-def mk_experiment_group(
-    config: ExperimentConfig, mixes: list[dict[str, tuple[float, float]]], group_uuid: str
-) -> ExperimentGroup:
-    """
-    Build an experiment group from an experiment config.
-
-    Args:
-        config: Experiment configuration
-        mixes: List of mixture weight dictionaries
+        configs: List of LaunchConfig objects, each with a ``mix`` field
         group_uuid: Unique identifier for this experiment group
 
     Returns:
         ExperimentGroup containing all experiment instances
     """
+    instances = []
+    for lc in configs:
+        assert lc.mix is not None, f"LaunchConfig '{lc.name}' has no mix field"
+        instances.append(
+            ExperimentInstance(
+                name=lc.name,
+                sources=mk_source_instances(lc.data.sources, lc.mix),
+            )
+        )
     return ExperimentGroup(
-        config=config,
+        config=configs[0],
         group_id=group_uuid,
-        instances=mk_experiments(config, mixes, group_uuid),
+        instances=instances,
     )
 
 
-def mk_instance_cmd(
-    instance: ExperimentInstance, config: ExperimentConfig, group_id: str, beaker_user: str
-) -> list[str]:
+def mk_instance_cmd(instance: ExperimentInstance, config: LaunchConfig, group_id: str, beaker_user: str) -> list[str]:
     """
     Build a command for launching an experiment instance.
 
     Args:
         instance: Experiment instance to launch
-        config: Experiment configuration
+        config: Launch configuration
         group_id: Unique identifier for the experiment group
         beaker_user: Beaker username for the job
 
@@ -180,6 +161,24 @@ def mk_launch_configs(group: ExperimentGroup, beaker_user: str) -> list[BeakerLa
         )
         for experiment in group.instances
     ]
+
+
+def launch_noninteractive(config: BeakerLaunchConfig, torchrun: bool = False):
+    """Launch a BeakerLaunchConfig without interactive prompts.
+
+    Gantry's launch_experiment has several interactive prompts (experiment name,
+    GitHub token, etc.) that block in non-interactive contexts. This bypasses
+    them by setting ``yes=True`` on the gantry recipe before launching.
+
+    Also forces ``follow=False`` so we don't block waiting for each experiment
+    to complete before launching the next one.
+    """
+    from olmo_core.launch.beaker import get_beaker_client
+
+    with get_beaker_client(workspace=config.workspace) as beaker:
+        recipe, recipe_launch_kwargs = config._build_recipe(beaker, torchrun=torchrun, follow=False)
+        recipe.yes = True
+        return recipe.launch(client=beaker, **recipe_launch_kwargs)
 
 
 def get_beaker_username() -> str:

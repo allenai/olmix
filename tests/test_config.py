@@ -1,24 +1,24 @@
-"""Tests for ExperimentConfig and related configuration classes."""
+"""Tests for config types and related configuration classes."""
 
 import pytest
 
 from olmix.aliases import (
     TOKENS_PER_PARAM,
     DataConfig,
-    ExperimentConfig,
     ExperimentGroup,
     ExperimentInstance,
+    GenerationConfig,
     InfraConfig,
     InstanceFilterConfig,
+    LaunchConfig,
+    MixEntry,
     Priority,
     SourceConfig,
     SourceInstance,
-    SwarmConfig,
     TopicConfig,
     TrainingConfig,
     TrainType,
     compute_max_tokens,
-    config_from_path,
     get_model_num_params,
 )
 from olmix.fit.config import InLoopEvalConfig, PriorsConfig
@@ -82,8 +82,8 @@ class TestSourceInstance:
         assert instance.repetition_factor == 1.5
 
 
-class TestExperimentConfig:
-    """Test ExperimentConfig model."""
+class TestLaunchConfig:
+    """Test LaunchConfig model."""
 
     @pytest.fixture
     def sample_config_dict(self):
@@ -116,33 +116,24 @@ class TestExperimentConfig:
                     "qa": {"arc_challenge_test_rc_5shot": "eval/downstream/arc_challenge_test_rc_5shot (BPB v2)"},
                 },
             },
-            "priors": {
-                "token_counts": {"wikipedia": 1_000_000, "dclm": 500_000},
-            },
-            "swarm": {
-                "seed": 42,
-                "variants": 64,
-            },
         }
 
     def test_valid_config_parses(self, sample_config_dict):
         """Test that a valid config parses successfully."""
-        config = ExperimentConfig(**sample_config_dict)
+        config = LaunchConfig(**sample_config_dict)
 
         assert config.name == "test-swarm"
-        assert config.swarm.variants == 64
         assert len(config.data.sources) == 2
         assert config.training.chinchilla_multiple == 1.0
 
     def test_config_defaults(self, sample_config_dict):
         """Test default values are set correctly."""
-        config = ExperimentConfig(**sample_config_dict)
+        config = LaunchConfig(**sample_config_dict)
 
         assert config.infra.priority == Priority.normal
         assert config.training.train_type == TrainType.pretrain
         assert config.infra.preemptible is True
         assert config.infra.weka is False
-        assert config.swarm.mix_temperature == 1.0
 
     def test_config_from_yaml(self, sample_config_dict, tmp_path):
         """Test loading config from YAML file."""
@@ -152,22 +143,118 @@ class TestExperimentConfig:
         with open(config_file, "w") as f:
             yaml.dump(sample_config_dict, f)
 
-        config = ExperimentConfig.from_yaml(config_file)
+        config = LaunchConfig.from_yaml(config_file)
 
         assert config.name == "test-swarm"
         assert len(config.data.sources) == 2
 
-    def test_config_from_path_helper(self, sample_config_dict, tmp_path):
-        """Test config_from_path helper function."""
+
+class TestGenerationConfig:
+    """Test GenerationConfig model."""
+
+    @pytest.fixture
+    def sample_config_dict(self):
+        """Return a sample generation config dictionary."""
+        return {
+            "name": "test-gen",
+            "data": {
+                "sources": [
+                    {"name": "wikipedia", "paths": ["s3://bucket/wiki/**/*.npy"]},
+                    {"name": "dclm", "paths": ["s3://bucket/dclm/**/*.npy"]},
+                ],
+            },
+            "priors": {
+                "token_counts": {"wikipedia": 1_000_000, "dclm": 500_000},
+            },
+            "swarm": {
+                "seed": 42,
+                "variants": 4,
+            },
+            "max_tokens": 600_000_000,
+        }
+
+    def test_valid_config_parses(self, sample_config_dict):
+        """Test that a valid generation config parses successfully."""
+        config = GenerationConfig(**sample_config_dict)
+
+        assert config.name == "test-gen"
+        assert config.max_tokens == 600_000_000
+        assert config.swarm.variants == 4
+        assert len(config.data.sources) == 2
+
+    def test_config_from_yaml(self, sample_config_dict, tmp_path):
+        """Test loading generation config from YAML file."""
         import yaml
 
         config_file = tmp_path / "config.yaml"
         with open(config_file, "w") as f:
             yaml.dump(sample_config_dict, f)
 
-        config = config_from_path(config_file)
+        config = GenerationConfig.from_yaml(config_file)
 
-        assert config.name == "test-swarm"
+        assert config.name == "test-gen"
+        assert config.max_tokens == 600_000_000
+
+
+class TestLaunchConfigMix:
+    """Test LaunchConfig mix and group_id fields."""
+
+    def test_launch_config_without_mix(self):
+        """Test that LaunchConfig works without mix/group_id (backward compat)."""
+        config = LaunchConfig(
+            name="test",
+            infra=InfraConfig(budget="test", workspace="test", cluster="test"),
+            training=TrainingConfig(proxy_model_id="olmo2_30m", tokenizer="dolma2"),
+            data=DataConfig(sources=[SourceConfig(name="wiki", paths=["test.npy"])]),
+            eval=_MINIMAL_EVAL,
+        )
+        assert config.mix is None
+        assert config.group_id is None
+
+    def test_launch_config_with_mix(self):
+        """Test LaunchConfig with mix and group_id fields."""
+        config = LaunchConfig(
+            name="test-abc123-0000",
+            infra=InfraConfig(budget="test", workspace="test", cluster="test"),
+            training=TrainingConfig(proxy_model_id="olmo2_30m", tokenizer="dolma2"),
+            data=DataConfig(sources=[SourceConfig(name="wiki", paths=["test.npy"])]),
+            eval=_MINIMAL_EVAL,
+            mix={
+                "wiki": MixEntry(weight=0.6, repetition_factor=1.0),
+                "code": MixEntry(weight=0.4, repetition_factor=1.5),
+            },
+            group_id="abc12345",
+        )
+        assert config.mix is not None
+        assert len(config.mix) == 2
+        assert config.mix["wiki"].weight == 0.6
+        assert config.mix["code"].repetition_factor == 1.5
+        assert config.group_id == "abc12345"
+
+    def test_launch_config_with_mix_from_yaml(self, tmp_path):
+        """Test loading LaunchConfig with mix from YAML."""
+        import yaml
+
+        config_data = {
+            "name": "test-abc123-0000",
+            "group_id": "abc12345",
+            "infra": {"budget": "test", "workspace": "test", "cluster": "test"},
+            "training": {"proxy_model_id": "olmo2_30m", "tokenizer": "dolma2"},
+            "data": {"sources": [{"name": "wiki", "paths": ["test.npy"]}]},
+            "eval": {"type": "inloop", "tasks": {"qa": {"arc": "eval/arc (BPB v2)"}}},
+            "mix": {
+                "wiki": {"weight": 0.6, "repetition_factor": 1.0},
+                "code": {"weight": 0.4, "repetition_factor": 1.5},
+            },
+        }
+        config_file = tmp_path / "config.yaml"
+        with open(config_file, "w") as f:
+            yaml.dump(config_data, f)
+
+        config = LaunchConfig.from_yaml(config_file)
+        assert config.mix is not None
+        assert config.mix["wiki"].weight == 0.6
+        assert config.group_id == "abc12345"
 
 
 class TestExperimentInstance:
@@ -203,8 +290,8 @@ class TestExperimentGroup:
 
     @pytest.fixture
     def sample_config(self):
-        """Return a sample ExperimentConfig."""
-        return ExperimentConfig(
+        """Return a sample LaunchConfig."""
+        return LaunchConfig(
             name="test-swarm",
             description="Test",
             infra=InfraConfig(
@@ -226,11 +313,6 @@ class TestExperimentGroup:
                 ],
             ),
             eval=_MINIMAL_EVAL,
-            priors=_MINIMAL_PRIORS,
-            swarm=SwarmConfig(
-                seed=42,
-                variants=2,
-            ),
         )
 
     def test_experiment_group(self, sample_config):
@@ -286,48 +368,30 @@ class TestChinchillaScaling:
         assert TOKENS_PER_PARAM == 20
 
 
-class TestExperimentConfigChinchilla:
-    """Test ExperimentConfig Chinchilla methods."""
+class TestTrainingConfigChinchilla:
+    """Test TrainingConfig Chinchilla methods."""
 
     def test_get_max_tokens(self):
         """Test get_max_tokens method."""
-        config = ExperimentConfig(
-            name="test",
-            infra=InfraConfig(budget="test", workspace="test", cluster="test"),
-            training=TrainingConfig(
-                proxy_model_id="olmo2_30m",
-                tokenizer="dolma2",
-                chinchilla_multiple=1.0,
-                seed=42,
-            ),
-            data=DataConfig(sources=[SourceConfig(name="wiki", paths=["test.npy"])]),
-            eval=_MINIMAL_EVAL,
-            priors=_MINIMAL_PRIORS,
-            swarm=SwarmConfig(seed=42, variants=1),
+        training = TrainingConfig(
+            proxy_model_id="olmo2_30m",
+            tokenizer="dolma2",
+            chinchilla_multiple=1.0,
+            seed=42,
         )
-
         # 1xC with 30M params = 600M tokens
-        assert config.training.get_max_tokens() == 600_000_000
+        assert training.get_max_tokens() == 600_000_000
 
     def test_get_max_tokens_5x(self):
         """Test get_max_tokens with 5x Chinchilla multiple."""
-        config = ExperimentConfig(
-            name="test",
-            infra=InfraConfig(budget="test", workspace="test", cluster="test"),
-            training=TrainingConfig(
-                proxy_model_id="olmo2_30m",
-                tokenizer="dolma2",
-                chinchilla_multiple=5.0,
-                seed=42,
-            ),
-            data=DataConfig(sources=[SourceConfig(name="wiki", paths=["test.npy"])]),
-            eval=_MINIMAL_EVAL,
-            priors=_MINIMAL_PRIORS,
-            swarm=SwarmConfig(seed=42, variants=1),
+        training = TrainingConfig(
+            proxy_model_id="olmo2_30m",
+            tokenizer="dolma2",
+            chinchilla_multiple=5.0,
+            seed=42,
         )
-
         # 5xC with 30M params = 3B tokens
-        assert config.training.get_max_tokens() == 3_000_000_000
+        assert training.get_max_tokens() == 3_000_000_000
 
 
 class TestInstanceFilterConfig:
@@ -353,13 +417,12 @@ class TestInstanceFilterConfig:
         assert filter_config.repetition_max_period == 20
         assert filter_config.repetition_max_count == 64
 
-    def test_experiment_config_with_filter(self):
-        """Test ExperimentConfig with instance filter."""
-        config = ExperimentConfig(
+    def test_launch_config_with_filter(self):
+        """Test LaunchConfig with instance filter."""
+        config = LaunchConfig(
             name="test",
             infra=InfraConfig(budget="test", workspace="test", cluster="test"),
             eval=_MINIMAL_EVAL,
-            priors=_MINIMAL_PRIORS,
             training=TrainingConfig(
                 proxy_model_id="olmo2_30m",
                 tokenizer="dolma2",
@@ -372,7 +435,6 @@ class TestInstanceFilterConfig:
                 ),
             ),
             data=DataConfig(sources=[SourceConfig(name="wiki", paths=["test.npy"])]),
-            swarm=SwarmConfig(seed=42, variants=1),
         )
 
         assert config.training.instance_filter is not None

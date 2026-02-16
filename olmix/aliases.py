@@ -211,19 +211,45 @@ class SwarmConfig(BaseModel):
     existing_mix_file: str | None = None
 
 
-class ExperimentConfig(BaseModel):
+class GenerationConfig(BaseModel):
+    """Input to ``olmix generate``. Contains everything needed to sample mixes."""
+
+    name: str = ""
+    data: DataConfig
+    priors: PriorsConfig
+    swarm: SwarmConfig = SwarmConfig()
+    max_tokens: int
+
+    @classmethod
+    def from_yaml(cls, path: PathType) -> "GenerationConfig":
+        """Load a GenerationConfig from a YAML file."""
+        with open(path) as f:
+            data = yaml.safe_load(f)
+        return cls(**data)
+
+
+class MixEntry(BaseModel):
+    """A single domain entry in a mixture variant."""
+
+    weight: float
+    repetition_factor: float = 1.0
+
+
+class LaunchConfig(BaseModel):
+    """Base config for ``olmix launch``. Everything needed to run training."""
+
     name: str
     description: str = ""
     infra: InfraConfig
     training: TrainingConfig
     data: DataConfig
     eval: InLoopEvalConfig
-    priors: PriorsConfig
-    swarm: SwarmConfig = SwarmConfig()
+    mix: dict[str, MixEntry] | None = None
+    group_id: str | None = None
 
     @classmethod
-    def from_yaml(cls, path: PathType) -> "ExperimentConfig":
-        """Load an ExperimentConfig from a YAML file."""
+    def from_yaml(cls, path: PathType) -> "LaunchConfig":
+        """Load a LaunchConfig from a YAML file."""
         with open(path) as f:
             data = yaml.safe_load(f)
         return cls(**data)
@@ -239,11 +265,6 @@ class ExperimentInstance(BaseModel):
 class ExperimentGroup(BaseModel):
     """A group of experiment instances sharing a common configuration."""
 
-    config: ExperimentConfig
+    config: LaunchConfig
     group_id: str
     instances: list[ExperimentInstance]
-
-
-def config_from_path(config: PathType) -> ExperimentConfig:
-    """Load an ExperimentConfig from a YAML file path."""
-    return ExperimentConfig.from_yaml(config)

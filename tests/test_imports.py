@@ -15,27 +15,28 @@ class TestPackageImports:
     def test_aliases_imports(self):
         """Test aliases module imports."""
         from olmix.aliases import (
-            ExperimentConfig,
             ExperimentGroup,
             ExperimentInstance,
+            GenerationConfig,
+            LaunchConfig,
+            MixEntry,
             Priority,
             SourceConfig,
             SourceInstance,
             TopicConfig,
             TrainType,
-            config_from_path,
         )
 
-        # Verify classes exist
-        assert ExperimentConfig is not None
         assert ExperimentGroup is not None
         assert ExperimentInstance is not None
+        assert GenerationConfig is not None
+        assert LaunchConfig is not None
+        assert MixEntry is not None
         assert Priority is not None
         assert SourceConfig is not None
         assert SourceInstance is not None
         assert TopicConfig is not None
         assert TrainType is not None
-        assert config_from_path is not None
 
     def test_fit_module_imports(self):
         """Test fit module imports."""
@@ -54,29 +55,25 @@ class TestPackageImports:
         assert LogLinearRegressor is not None
         assert Regressor is not None
 
-    def test_launch_module_imports(self):
-        """Test launch module imports."""
-        from olmix.launch.launch_utils import (
-            config_from_path,
+    def test_generate_module_imports(self):
+        """Test generate module imports."""
+        from olmix.generate import (
+            calculate_priors,
             mk_mixes,
-            mk_source_instances,
+            mk_mixtures,
             prettify_mixes,
         )
 
-        assert config_from_path is not None
+        assert calculate_priors is not None
         assert mk_mixes is not None
-        assert mk_source_instances is not None
+        assert mk_mixtures is not None
         assert prettify_mixes is not None
 
-    def test_launch_synthesize_imports(self):
-        """Test synthesize_mixture module imports."""
-        from olmix.launch.synthesize_mixture import (
-            calculate_priors,
-            mk_mixtures,
-        )
+    def test_launch_module_imports(self):
+        """Test launch module imports."""
+        from olmix.launch.utils import mk_source_instances
 
-        assert calculate_priors is not None
-        assert mk_mixtures is not None
+        assert mk_source_instances is not None
 
     @pytest.mark.skipif(
         True,  # Skip if beaker not installed
@@ -88,14 +85,12 @@ class TestPackageImports:
             from olmix.launch.beaker import (
                 get_beaker_username,
                 mk_experiment_group,
-                mk_experiments,
                 mk_instance_cmd,
                 mk_launch_configs,
             )
 
             assert get_beaker_username is not None
             assert mk_experiment_group is not None
-            assert mk_experiments is not None
             assert mk_instance_cmd is not None
             assert mk_launch_configs is not None
         except ImportError:
