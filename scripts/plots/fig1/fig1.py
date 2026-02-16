@@ -24,6 +24,30 @@ from matplotlib.offsetbox import AnnotationBbox, OffsetImage
 from matplotlib.patches import Circle, FancyArrowPatch, FancyBboxPatch, Rectangle
 from PIL import Image
 
+import matplotlib.patheffects as pe
+
+
+from matplotlib.font_manager import FontProperties, fontManager
+
+MANROPE_BASE_PATH = (Path(__file__).parent / "manrope").absolute()
+for path in MANROPE_BASE_PATH.iterdir():
+    if path.suffix == ".ttf":
+        fontManager.addfont(str(path))
+ 
+
+plt.rcParams["font.family"] = "Manrope"
+
+
+#import matplotlib.font_manager as fm
+
+#fm.fontManager.addfont(
+ #   "/usr/share/fonts/truetype/msttcorefonts/Comic_Sans_MS.ttf"
+#)
+
+import matplotlib.pyplot as plt
+#plt.rcParams['font.family'] = 'Comic Sans MS'
+
+
 # =============================================================================
 # Colors (approximate from reference image)
 # =============================================================================
@@ -36,6 +60,8 @@ RED_TEXT = "#d9534f"
 BLUE_TEXT = "#337ab7"
 BLACK = "#2c3e50"
 
+
+BACKGROUND="#FAF2E9"
 
 # =============================================================================
 # Data structures
@@ -70,6 +96,10 @@ def draw_block(
         facecolor=color,
         edgecolor=BLACK,
         linewidth=1.5,
+        path_effects=[
+            pe.withStroke(linewidth=3.2, foreground=BACKGROUND),
+            pe.Normal(),
+        ],
     )
     ax.add_patch(rect)
     return x + width
@@ -242,9 +272,17 @@ def build_figure(left_icon_path: Path | None, right_icon_path: Path | None) -> p
     """Build the complete figure."""
     # Hand-drawn sketch style
     plt.xkcd(scale=0.5, length=100, randomness=2)
-    plt.rcParams["font.family"] = ["Comic Sans MS", "DejaVu Sans"]
+    plt.rcParams["font.family"] = ["Manrope", "DejaVu Sans"]
 
-    fig, ax = plt.subplots(figsize=(20, 2.8), dpi=150)
+
+    fig, ax = plt.subplots(
+        figsize=(20, 2.8),
+        dpi=1000,
+        facecolor=BACKGROUND,   # figure background
+    )
+    ax.set_facecolor(BACKGROUND)  # axes background
+
+
     ax.set_xlim(0, 42)
     ax.set_ylim(-0.8, 7.0)
     ax.set_aspect("equal")
@@ -273,7 +311,7 @@ def build_figure(left_icon_path: Path | None, right_icon_path: Path | None) -> p
         TimelineStage(
             tick_label=r"Recompute mix" + "\n" + r"$\rightarrow P_2$",
             tick_label_color=BLUE_TEXT,
-            header="Transform",
+            header="Revise",
             content_fn=content_transform,
         ),
         TimelineStage(
@@ -311,13 +349,21 @@ def build_figure(left_icon_path: Path | None, right_icon_path: Path | None) -> p
         mutation_scale=20,
         linewidth=2,
         color=BLACK,
+        path_effects=[
+            pe.withStroke(linewidth=3.2, foreground=BACKGROUND),
+            pe.Normal(),
+        ],
     )
     ax.add_patch(arrow)
 
     # Draw each stage
     for stage, tx in zip(stages, tick_positions):
         # Tick mark
-        ax.plot([tx, tx], [timeline_y - 0.4, timeline_y + 0.4], color=BLACK, lw=2)
+        ax.plot([tx, tx], [timeline_y - 0.4, timeline_y + 0.4], color=BLACK, lw=2, path_effects=[
+            pe.withStroke(linewidth=3.2, foreground=BACKGROUND),
+            pe.Normal(),
+            ],
+        )
 
         # Tick label (below timeline)
         ax.text(
@@ -328,6 +374,10 @@ def build_figure(left_icon_path: Path | None, right_icon_path: Path | None) -> p
             va="top",
             fontsize=11,
             color=stage.tick_label_color,
+            path_effects=[
+            pe.withStroke(linewidth=3.2, foreground=BACKGROUND),
+            pe.Normal(),
+            ],
         )
 
         # Header (above content)
@@ -340,6 +390,10 @@ def build_figure(left_icon_path: Path | None, right_icon_path: Path | None) -> p
                 va="bottom",
                 fontsize=13,
                 color=BLACK,
+                path_effects=[
+                    pe.withStroke(linewidth=3.2, foreground=BACKGROUND),
+                    pe.Normal(),
+                ],
             )
 
         # Content (blocks, arrows, etc.)
@@ -358,6 +412,10 @@ def build_figure(left_icon_path: Path | None, right_icon_path: Path | None) -> p
         edgecolor=BLUE_TEXT,
         linestyle="--",
         linewidth=1.5,
+        path_effects=[
+            pe.withStroke(linewidth=3.2, foreground=BACKGROUND),
+            pe.Normal(),
+        ],
     )
     ax.add_patch(dotted_box)
 
@@ -378,6 +436,11 @@ def build_figure(left_icon_path: Path | None, right_icon_path: Path | None) -> p
         va="top",
         fontsize=11,
         color=RED_TEXT,
+        path_effects=[
+            pe.withStroke(linewidth=3.2, foreground=BACKGROUND),
+            pe.Normal(),
+        ],
+
     )
 
     # ==========================================================================
@@ -396,6 +459,11 @@ def build_figure(left_icon_path: Path | None, right_icon_path: Path | None) -> p
         va="top",
         fontsize=11,
         color=BLACK,
+        path_effects=[
+            pe.withStroke(linewidth=3.2, foreground=BACKGROUND),
+            pe.Normal(),
+        ],
+
     )
 
     # ==========================================================================
@@ -411,9 +479,17 @@ def build_figure(left_icon_path: Path | None, right_icon_path: Path | None) -> p
         fill=False,
         edgecolor=BLACK,
         linewidth=1.5,
+        path_effects=[
+            pe.withStroke(linewidth=3.2, foreground=BACKGROUND),
+            pe.Normal(),
+        ],
     )
     ax.add_patch(rect)
-    ax.text(legend_x + 0.8, legend_y, "= domain", ha="left", va="center", fontsize=11)
+    ax.text(legend_x + 0.8, legend_y, "= domain", ha="left", va="center", fontsize=11, path_effects=[
+            pe.withStroke(linewidth=3.2, foreground=BACKGROUND),
+            pe.Normal(),
+        ],
+    )
 
     # Subtitle at bottom (below the dotted box)
     ax.text(
@@ -424,7 +500,17 @@ def build_figure(left_icon_path: Path | None, right_icon_path: Path | None) -> p
         va="center",
         fontsize=11,
         color=BLUE_TEXT,
-        bbox=dict(facecolor="white", edgecolor="none", pad=2),
+        bbox=dict(facecolor=BACKGROUND, edgecolor=BACKGROUND, pad=2, path_effects=[
+            pe.withStroke(linewidth=3.2, foreground=BACKGROUND),
+            pe.Normal(),
+        ],
+        ),
+        # This is the key: paint over the halo with the block color
+        path_effects=[
+            pe.withStroke(linewidth=3.2, foreground=BACKGROUND),
+            pe.Normal(),
+        ],
+
     )
 
     return fig
@@ -438,19 +524,19 @@ def main() -> None:
     parser.add_argument(
         "--left-icon",
         type=Path,
-        default=None,
+        default=Path("icons8-configuration-100.png"),
         help="Path to left icon PNG (transparent background)",
     )
     parser.add_argument(
         "--right-icon",
         type=Path,
-        default=None,
+        default=Path("icons8-rocket-100.png"),
         help="Path to right icon PNG (transparent background)",
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("fig1_output.png"),
+        default=Path("fig1_output_beige.png"),
         help="Output filename",
     )
     parser.add_argument(
@@ -463,9 +549,9 @@ def main() -> None:
     fig = build_figure(args.left_icon, args.right_icon)
     # Use transparent background for PDF, white for other formats
     if str(args.output).endswith(".pdf"):
-        fig.savefig(args.output, bbox_inches="tight", transparent=True)
+        fig.savefig(args.output, bbox_inches="tight", facecolor=BACKGROUND)
     else:
-        fig.savefig(args.output, bbox_inches="tight", facecolor="white")
+        fig.savefig(args.output, bbox_inches="tight", facecolor=BACKGROUND)
     print(f"Saved to {args.output}")
 
     if args.show:
