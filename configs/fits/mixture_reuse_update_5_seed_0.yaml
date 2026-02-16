@@ -1,0 +1,90 @@
+# DCLM baseline fit config
+# Fits regression models against 127 DCLM swarm runs across 24 DataDelve domains
+
+swarm:
+  ratios: full_reuse_update_5_seed_0_ratios.csv
+  metrics: full_reuse_update_5_seed_0_metrics.csv
+
+priors:
+  relative_sizes:
+    existing: 0.7
+    s2pdfv1:adult: 8.771475822523781e-05
+    s2pdfv1:art_design: 0.002059172391270055
+    s2pdfv1:crime_law: 0.012655223762420637
+    s2pdfv1:education_jobs: 0.0394663077295179
+    s2pdfv1:entertainment: 0.0016861037066108254
+    s2pdfv1:fashion_beauty: 0.0001661910520988046
+    s2pdfv1:finance_business: 0.017273622172081317
+    s2pdfv1:food_dining: 0.0006802499157310876
+    s2pdfv1:games: 0.0006995440238578353
+    s2pdfv1:health: 0.03494052637755208
+    s2pdfv1:home_hobbies: 0.0010735238491024438
+    s2pdfv1:industrial: 0.007970492619957643
+    s2pdfv1:literature: 0.009584175099207505
+    s2pdfv1:politics: 0.011768078369223053
+    s2pdfv1:religion: 0.0072939631442422315
+    s2pdfv1:science_tech: 0.1316972787575317
+    s2pdfv1:software: 0.0023556036636991516
+    s2pdfv1:software_dev: 0.011638986134500042
+    s2pdfv1:sports_fitness: 0.0015612986457456772
+    s2pdfv1:transportation: 0.004723421326648058
+    s2pdfv1:travel: 0.0006185225007767017
+  total_tokens: null
+  token_counts:
+    existing: 5260301671355 # dclm, stackedu, pes2o, arxiv, finemath, wiki
+    s2pdfv1:adult: 303073226 
+    s2pdfv1:art_design: 6833185034
+    s2pdfv1:crime_law: 42538674743
+    s2pdfv1:education_jobs: 138127926093
+    s2pdfv1:entertainment: 6069602783
+    s2pdfv1:fashion_beauty: 557917820
+    s2pdfv1:finance_business: 61150044703
+    s2pdfv1:food_dining: 2322982204
+    s2pdfv1:games: 2486095532
+    s2pdfv1:health: 108215933374
+    s2pdfv1:home_hobbies: 3924579643
+    s2pdfv1:industrial: 29389278657
+    s2pdfv1:literature: 31886391090
+    s2pdfv1:politics: 39234116889
+    s2pdfv1:religion: 24729732953
+    s2pdfv1:science_tech: 424245385160
+    s2pdfv1:software: 9146853216
+    s2pdfv1:software_dev: 41841278724
+    s2pdfv1:sports_fitness: 5450913796
+    s2pdfv1:transportation: 17149342957
+    s2pdfv1:travel: 2102425717
+
+
+regression:
+  type: log_linear
+  seed: 0
+  n_test: 0
+  train_split: [1.0]
+  aggregate_task_families: false
+
+proposer:
+  type: exact
+  temperature: null
+  kl_reg: 0.05
+  use_natural_kl: false
+  fit_only: false
+  make_worst_mix: false
+
+constraints:
+  enabled: true
+  target_tokens: 1_000_000_000_000
+  repetition_factor: 4.0
+
+filtering:
+  keep_sources: []
+  support_domains: []
+  drop_metrics: ["ultrachat_masked_ppl",
+    "wildchat_masked_ppl",
+    "qasper_yesno:rc::olmes",
+    "sciriff_yesno:rc::olmes",
+    "lab_bench_dbqa",
+    "lab_bench_protocolqa",
+    "medqa_en:rc::none"
+  ]
+  fixed_weight: {}
+  obj_weights: {}

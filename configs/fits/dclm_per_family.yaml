@@ -1,0 +1,215 @@
+# DCLM baseline fit config
+# Fits regression models against 127 DCLM swarm runs across 24 DataDelve domains
+
+swarm:
+  ratios: dclm_ratios.csv
+  metrics: dclm_metrics.csv
+
+priors:
+  relative_sizes:
+    adult_content: 0.011426145559378242
+    art_and_design: 0.017115279947642753
+    crime_and_law: 0.03760251381333424
+    education_and_jobs: 0.03819063764260111
+    electronics_and_hardware: 0.02252846927808186
+    entertainment: 0.09499472729589659
+    fashion_and_beauty: 0.009181677850877463
+    finance_and_business: 0.06572786800235751
+    food_and_dining: 0.020291659593193807
+    games: 0.0510904592313224
+    health: 0.10085821548021548
+    history_and_geography: 0.028007795295185975
+    home_and_hobbies: 0.034621890011029464
+    industrial: 0.010640504851475604
+    literature: 0.05367136256765137
+    politics: 0.09838421860766539
+    religion: 0.04030199076983852
+    science_math_and_technology: 0.06933979163830614
+    social_life: 0.04443687756758139
+    software: 0.025134154331657502
+    software_development: 0.04835767747466825
+    sports_and_fitness: 0.03455368961865927
+    transportation: 0.02686612455867175
+    travel_and_tourism: 0.01667626901270792
+  total_tokens: 5_000_000_000_000
+  token_counts:
+    adult_content: 67_760_078_203
+    art_and_design: 70_659_711_995
+    crime_and_law: 170_130_914_779
+    education_and_jobs: 184_690_792_861
+    electronics_and_hardware: 80_168_541_745
+    entertainment: 441_768_061_760
+    fashion_and_beauty: 37_256_539_512
+    finance_and_business: 310_313_927_581
+    food_and_dining: 105_937_299_687
+    games: 229_992_491_702
+    health: 393_496_227_836
+    history_and_geography: 161_049_719_459
+    home_and_hobbies: 126_910_777_314
+    industrial: 43_572_140_450
+    literature: 364_834_344_848
+    politics: 611_198_130_192
+    religion: 277_776_929_208
+    science_math_and_technology: 427_131_054_341
+    social_life: 218_731_841_124
+    software: 108_039_380_021
+    software_development: 223_384_974_282
+    sports_and_fitness: 196_759_999_355
+    transportation: 90_793_306_202
+    travel_and_tourism: 57_642_815_530
+
+
+eval:
+  type: offline
+  tasks:
+    math:
+      - "minerva_math_algebra::olmes"
+      - "minerva_math_counting_and_probability::olmes"
+      - "minerva_math_geometry::olmes"
+      - "minerva_math_intermediate_algebra::olmes"
+      - "minerva_math_number_theory::olmes"
+      - "minerva_math_prealgebra::olmes"
+      - "minerva_math_precalculus::olmes"
+    code:
+      - "codex_humaneval:3shot::none"
+      - "mbpp:3shot::none"
+      - "mt_mbpp_v2fix:bash"
+      - "mt_mbpp_v2fix:c"
+      - "mt_mbpp_v2fix:cpp"
+      - "mt_mbpp_v2fix:csharp"
+      - "mt_mbpp_v2fix:go"
+      - "mt_mbpp_v2fix:haskell"
+      - "mt_mbpp_v2fix:java"
+      - "mt_mbpp_v2fix:javascript"
+      - "mt_mbpp_v2fix:matlab"
+      - "mt_mbpp_v2fix:php"
+      - "mt_mbpp_v2fix:python"
+      - "mt_mbpp_v2fix:r"
+      - "mt_mbpp_v2fix:ruby"
+      - "mt_mbpp_v2fix:rust"
+      - "mt_mbpp_v2fix:scala"
+      - "mt_mbpp_v2fix:swift"
+      - "mt_mbpp_v2fix:typescript"
+    qa:
+      - "arc_challenge:rc::olmes"
+      - "arc_easy:rc::olmes"
+      - "basic_skills:rc::olmes"
+      - "basic_skills_arithmetic:rc::olmes"
+      - "basic_skills_coding:rc::olmes"
+      - "basic_skills_common_knowledge:rc::olmes"
+      - "basic_skills_logical_reasoning:rc::olmes"
+      - "basic_skills_pattern:rc::olmes"
+      - "basic_skills_string_operations:rc::olmes"
+      - "coqa:rc::gen2mc"
+      - "csqa:rc::olmes"
+      - "drop:rc::gen2mc"
+      - "hellaswag:rc::olmes"
+      - "jeopardy:rc::gen2mc"
+      - "lab_bench_dbqa"
+      - "lab_bench_protocolqa"
+      - "lambada"
+      - "medmcqa:rc::none"
+      - "medqa_en:rc::none"
+      - "mmlu_abstract_algebra:rc::olmes"
+      - "mmlu_anatomy:rc::olmes"
+      - "mmlu_astronomy:rc::olmes"
+      - "mmlu_business_ethics:rc::olmes"
+      - "mmlu_clinical_knowledge:rc::olmes"
+      - "mmlu_college_biology:rc::olmes"
+      - "mmlu_college_chemistry:rc::olmes"
+      - "mmlu_college_computer_science:rc::olmes"
+      - "mmlu_college_mathematics:rc::olmes"
+      - "mmlu_college_medicine:rc::olmes"
+      - "mmlu_college_physics:rc::olmes"
+      - "mmlu_computer_security:rc::olmes"
+      - "mmlu_conceptual_physics:rc::olmes"
+      - "mmlu_econometrics:rc::olmes"
+      - "mmlu_electrical_engineering:rc::olmes"
+      - "mmlu_elementary_mathematics:rc::olmes"
+      - "mmlu_formal_logic:rc::olmes"
+      - "mmlu_global_facts:rc::olmes"
+      - "mmlu_high_school_biology:rc::olmes"
+      - "mmlu_high_school_chemistry:rc::olmes"
+      - "mmlu_high_school_computer_science:rc::olmes"
+      - "mmlu_high_school_european_history:rc::olmes"
+      - "mmlu_high_school_geography:rc::olmes"
+      - "mmlu_high_school_government_and_politics:rc::olmes"
+      - "mmlu_high_school_macroeconomics:rc::olmes"
+      - "mmlu_high_school_mathematics:rc::olmes"
+      - "mmlu_high_school_microeconomics:rc::olmes"
+      - "mmlu_high_school_physics:rc::olmes"
+      - "mmlu_high_school_psychology:rc::olmes"
+      - "mmlu_high_school_statistics:rc::olmes"
+      - "mmlu_high_school_us_history:rc::olmes"
+      - "mmlu_high_school_world_history:rc::olmes"
+      - "mmlu_human_aging:rc::olmes"
+      - "mmlu_human_sexuality:rc::olmes"
+      - "mmlu_international_law:rc::olmes"
+      - "mmlu_jurisprudence:rc::olmes"
+      - "mmlu_logical_fallacies:rc::olmes"
+      - "mmlu_machine_learning:rc::olmes"
+      - "mmlu_management:rc::olmes"
+      - "mmlu_marketing:rc::olmes"
+      - "mmlu_medical_genetics:rc::olmes"
+      - "mmlu_miscellaneous:rc::olmes"
+      - "mmlu_moral_disputes:rc::olmes"
+      - "mmlu_moral_scenarios:rc::olmes"
+      - "mmlu_nutrition:rc::olmes"
+      - "mmlu_philosophy:rc::olmes"
+      - "mmlu_prehistory:rc::olmes"
+      - "mmlu_professional_accounting:rc::olmes"
+      - "mmlu_professional_law:rc::olmes"
+      - "mmlu_professional_medicine:rc::olmes"
+      - "mmlu_professional_psychology:rc::olmes"
+      - "mmlu_public_relations:rc::olmes"
+      - "mmlu_security_studies:rc::olmes"
+      - "mmlu_sociology:rc::olmes"
+      - "mmlu_us_foreign_policy:rc::olmes"
+      - "mmlu_virology:rc::olmes"
+      - "mmlu_world_religions:rc::olmes"
+      - "naturalqs:rc::gen2mc"
+      - "piqa:rc::olmes"
+      - "qasper_yesno:rc::olmes"
+      - "sciq:rc::olmo3"
+      - "sciriff_yesno:rc::olmes"
+      - "socialiqa:rc::olmes"
+      - "squad:rc::gen2mc"
+      - "winogrande:rc::olmes"
+
+
+regression:
+  type: log_linear
+  seed: 0
+  n_test: 0
+  train_split: [1.0]
+  aggregate_task_families: true
+
+proposer:
+  type: exact
+  temperature: null
+  kl_reg: 0.05
+  use_natural_kl: false
+  fit_only: false
+  make_worst_mix: false
+
+constraints:
+  enabled: true
+  target_tokens: 6_000_000_000_000
+  repetition_factor: 4.0
+
+filtering:
+  keep_sources: []
+  support_domains: []
+  drop_metrics: ["ultrachat_masked_ppl",
+    "wildchat_masked_ppl",
+    "qasper_yesno:rc::olmes",
+    "sciriff_yesno:rc::olmes",
+    "lab_bench_dbqa",
+    "lab_bench_protocolqa",
+    "medqa_en:rc::none"
+  ]
+  fixed_weight: {}
+  obj_weights:
+    math: "7/52.0"
+    code: "19/52.0"
+    qa: "26/52.0"

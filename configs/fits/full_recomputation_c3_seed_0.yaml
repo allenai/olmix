@@ -1,0 +1,226 @@
+# DCLM baseline fit config
+# Fits regression models against 127 DCLM swarm runs across 24 DataDelve domains
+
+swarm:
+  ratios: full_recomputation_ratios.csv
+  metrics: full_recomputation_metrics.csv
+
+priors:
+  relative_sizes:
+    arxiv: 0.04081632653
+    dclm:adult_content: 0.007260008378781617
+    dclm:art_and_design: 0.007570683427890269
+    dclm:crime_and_law: 0.018228312297343258
+    dclm:education_and_jobs: 0.01978829923464438
+    dclm:electronics_and_hardware: 0.008589486615330858
+    dclm:entertainment: 0.04733229233020377
+    dclm:fashion_and_beauty: 0.0039917720905245065
+    dclm:finance_and_business: 0.033247920811400884
+    dclm:food_and_dining: 0.01135042496619488
+    dclm:games: 0.024642052681790323
+    dclm:health: 0.04216031012418717
+    dclm:history_and_geography: 0.017255327084508186
+    dclm:home_and_hobbies: 0.013597583283321514
+    dclm:industrial: 0.004668443619570556
+    dclm:literature: 0.03908939408990015
+    dclm:politics: 0.06548551394749036
+    dclm:religion: 0.029761813843007766
+    dclm:science_math_and_technology: 0.04576404153537389
+    dclm:social_life: 0.023435554405540723
+    dclm:software: 0.011575647859110355
+    dclm:software_development: 0.023934104386801644
+    dclm:sports_and_fitness: 0.021081428501823974
+    dclm:transportation: 0.009727854235711368
+    dclm:travel_and_tourism: 0.0061760159495475595
+    finemath-3plus: 0.1020408163
+    pes2o: 0.02040816327
+    s2pdf:adult: 2.9834951769534685e-05
+    s2pdf:art_design: 0.0007003987723587315
+    s2pdf:crime_law: 0.004304497877255197
+    s2pdf:education_jobs: 0.013423914190223355
+    s2pdf:entertainment: 0.0005735046619634145
+    s2pdf:fashion_beauty: 5.652756872639283e-05
+    s2pdf:finance_business: 0.005875381689656523
+    s2pdf:food_dining: 0.00023137752229735462
+    s2pdf:games: 0.0002379401441074673
+    s2pdf:health: 0.01188453277839032
+    s2pdf:home_hobbies: 0.000365144166266438
+    s2pdf:industrial: 0.0027110519108453452
+    s2pdf:literature: 0.0032599235022842247
+    s2pdf:politics: 0.004002747743592977
+    s2pdf:religion: 0.0024809398443353067
+    s2pdf:science_tech: 0.04479499276302395
+    s2pdf:software: 0.0008012257357437738
+    s2pdf:software_dev: 0.00395883882022922
+    s2pdf:sports_fitness: 0.0005310539609999115
+    s2pdf:transportation: 0.0016066058929999894
+    s2pdf:travel: 0.00021038180293057342
+    stack-edu:C: 0.0061786719102295004
+    stack-edu:CSharp: 0.00940099268591905
+    stack-edu:Cpp: 0.01635064398307945
+    stack-edu:Go: 0.0018249894127522247
+    stack-edu:Java: 0.04090481020788093
+    stack-edu:JavaScript: 0.011596372856026719
+    stack-edu:Markdown: 0.03773213389237864
+    stack-edu:PHP: 0.009649581453994433
+    stack-edu:Python: 0.023510988448010806
+    stack-edu:Ruby: 0.001809566706914491
+    stack-edu:Rust: 0.0018508937755699767
+    stack-edu:SQL: 0.009216937068389422
+    stack-edu:Shell: 0.0033178202487746814
+    stack-edu:Swift: 0.0019703834928440217
+    stack-edu:TypeScript: 0.003256642457235611
+    wikipedia: 0.02040816327
+  total_tokens: null
+  token_counts:
+    algebraicstack: 11818955329
+    arxiv: 20773846846 # 20 billion
+    dclm:adult_content: 67760078203 # multiplied natural distribution by 5T guess
+    dclm:art_and_design: 70659711995
+    dclm:crime_and_law: 170130914779
+    dclm:education_and_jobs: 184690792861
+    dclm:electronics_and_hardware: 80168541745
+    dclm:entertainment: 441768061760
+    dclm:fashion_and_beauty: 37256539512
+    dclm:finance_and_business: 310313927581
+    dclm:food_and_dining: 105937299687
+    dclm:games: 229992491702
+    dclm:health: 393496227836
+    dclm:history_and_geography: 161_049_719_459
+    dclm:home_and_hobbies: 126910777314
+    dclm:industrial: 43572140450
+    dclm:literature: 364834344848
+    dclm:politics: 611_198_130_192
+    dclm:religion: 277776929208
+    dclm:science_math_and_technology: 427131054341
+    dclm:social_life: 218731841124
+    dclm:software: 108039380021
+    dclm:software_development: 223384974282
+    dclm:sports_and_fitness: 196759999355
+    dclm:transportation: 90793306202
+    dclm:travel_and_tourism: 57642815530
+    finemath-3plus: 34057973953 # 34 billion
+    pes2o: 58552461187 # 60 billion
+    s2pdfv2:adult: 303073226 # taken from v2 
+    s2pdfv2:art_design: 6833185034
+    s2pdfv2:crime_law: 42538674743
+    s2pdfv2:education_jobs: 138127926093
+    s2pdfv2:entertainment: 6069602783
+    s2pdfv2:fashion_beauty: 557917820
+    s2pdfv2:finance_business: 61150044703
+    s2pdfv2:food_dining: 2322982204
+    s2pdfv2:games: 2486095532
+    s2pdfv2:hardware: 7334608118 # not used
+    s2pdfv2:health: 108215933374
+    s2pdfv2:history: 26016611836 # not used 
+    s2pdfv2:home_hobbies: 3924579643
+    s2pdfv2:industrial: 29389278657
+    s2pdfv2:literature: 31886391090
+    s2pdfv2:politics: 39234116889
+    s2pdfv2:religion: 24729732953
+    s2pdfv2:science_tech: 424245385160
+    s2pdfv2:social_life: 3181652910 # not used 
+    s2pdfv2:software: 9146853216
+    s2pdfv2:software_dev: 41841278724
+    s2pdfv2:sports_fitness: 5450913796
+    s2pdfv2:transportation: 17149342957
+    s2pdfv2:travel: 2102425717
+    s2pdfv1:adult: 303073226 # taken from v2 
+    s2pdfv1:art_design: 6833185034
+    s2pdfv1:crime_law: 42538674743
+    s2pdfv1:education_jobs: 138127926093
+    s2pdfv1:entertainment: 6069602783
+    s2pdfv1:fashion_beauty: 557917820
+    s2pdfv1:finance_business: 61150044703
+    s2pdfv1:food_dining: 2322982204
+    s2pdfv1:games: 2486095532
+    s2pdfv1:hardware: 7334608118 # not used
+    s2pdfv1:health: 108215933374
+    s2pdfv1:history: 26016611836 # not used 
+    s2pdfv1:home_hobbies: 3924579643
+    s2pdfv1:industrial: 29389278657
+    s2pdfv1:literature: 31886391090
+    s2pdfv1:politics: 39234116889
+    s2pdfv1:religion: 24729732953
+    s2pdfv1:science_tech: 424245385160
+    s2pdfv1:social_life: 3181652910 # not used 
+    s2pdfv1:software: 9146853216
+    s2pdfv1:software_dev: 41841278724
+    s2pdfv1:sports_fitness: 5450913796
+    s2pdfv1:transportation: 17149342957
+    s2pdfv1:travel: 2102425717
+    s2pdf:adult: 303073226 # taken from v2 
+    s2pdf:art_design: 6833185034
+    s2pdf:crime_law: 42538674743
+    s2pdf:education_jobs: 138127926093
+    s2pdf:entertainment: 6069602783
+    s2pdf:fashion_beauty: 557917820
+    s2pdf:finance_business: 61150044703
+    s2pdf:food_dining: 2322982204
+    s2pdf:games: 2486095532
+    s2pdf:hardware: 7334608118 # not used
+    s2pdf:health: 108215933374
+    s2pdf:history: 26016611836 # not used 
+    s2pdf:home_hobbies: 3924579643
+    s2pdf:industrial: 29389278657
+    s2pdf:literature: 31886391090
+    s2pdf:politics: 39234116889
+    s2pdf:religion: 24729732953
+    s2pdf:science_tech: 424245385160
+    s2pdf:social_life: 3181652910 # not used 
+    s2pdf:software: 9146853216
+    s2pdf:software_dev: 41841278724
+    s2pdf:sports_fitness: 5450913796
+    s2pdf:transportation: 17149342957
+    s2pdf:travel: 2102425717
+    stack-edu:C: 4735074247
+    stack-edu:CSharp: 7204525343
+    stack-edu:Cpp: 12530445761
+    stack-edu:Go: 1398595118
+    stack-edu:Java: 31347725888
+    stack-edu:JavaScript: 8886972357
+    stack-edu:Markdown: 28916320218
+    stack-edu:PHP: 7395033318
+    stack-edu:Python: 18017832560
+    stack-edu:Ruby: 1386775805
+    stack-edu:Rust: 1418447132
+    stack-edu:SQL: 7063472860
+    stack-edu:Shell: 2542637875
+    stack-edu:Swift: 1510019025
+    stack-edu:TypeScript: 2495753789
+    wikipedia: 10067758073 # 10 billion
+
+
+regression:
+  type: log_linear
+  seed: 0
+  n_test: 0
+  train_split: [256]
+  aggregate_task_families: false
+
+proposer:
+  type: exact
+  temperature: null
+  kl_reg: 0.05
+  use_natural_kl: false
+  fit_only: false
+  make_worst_mix: false
+
+constraints:
+  enabled: true
+  target_tokens: 1_000_000_000_000
+  repetition_factor: 4.0
+
+filtering:
+  keep_sources: []
+  support_domains: []
+  drop_metrics: ["ultrachat_masked_ppl",
+    "wildchat_masked_ppl",
+    "qasper_yesno:rc::olmes",
+    "sciriff_yesno:rc::olmes",
+    "lab_bench_dbqa",
+    "lab_bench_protocolqa",
+    "medqa_en:rc::none"
+  ]
+  fixed_weight: {}
+  obj_weights: {}
