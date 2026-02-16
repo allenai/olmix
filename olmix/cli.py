@@ -64,7 +64,7 @@ def _save_launch_metadata(
             "wandb_url": f"https://wandb.ai/ai2-llm/olmix?group={group_uuid}",
             **_get_git_info(),
         },
-        "config": base.model_dump(mode="json"),
+        "config": base.model_dump(mode="json", exclude_none=True),
         "experiments": experiments,
     }
 
