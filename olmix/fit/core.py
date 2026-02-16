@@ -15,6 +15,7 @@ from copy import deepcopy
 
 import numpy as np
 import pandas as pd
+from pydantic import BaseModel
 from sklearn.model_selection import train_test_split
 
 from olmix.aliases import LaunchConfig
@@ -38,6 +39,32 @@ warnings.filterwarnings("ignore", category=UserWarning)
 logger = logging.getLogger(__name__)
 
 BASE_CACHE_DIR = "cache/"
+
+
+class RegressionCacheConfig(BaseModel):
+    """Configuration for regression model caching.
+
+    Captures all parameters that affect the regression model, including
+    hashes of input dataframes to ensure cache uniqueness.
+    """
+
+    ratios_hash: str
+    metrics_hash: str
+    regression_type: str
+    train_split: float | tuple[float, ...]
+    n_test: int
+    seed: int
+    keep_sources: list[str] | None
+    early_stopping: float
+    fixed_weight: str | None
+    support_domains: tuple[str, ...]
+    aggregate_task_families: bool
+
+    def get_hash(self) -> str:
+        """Get hash string for cache key."""
+        config_dict = self.model_dump(exclude_none=True, exclude_defaults=True)
+        config_str = json.dumps(config_dict, sort_keys=True)
+        return hashlib.sha256(config_str.encode("utf-8")).hexdigest()[:16]
 
 
 def run_fit(
@@ -124,18 +151,23 @@ def run_fit(
     fixed_weight_dict = json.loads(fixed_weight) if fixed_weight is not None else None
 
     # Build regression config for caching
-    regression_config: dict = {
-        "regression_type": regression_type,
-        "train_split": train_split[0] if len(train_split) == 1 else train_split,
-        "n_test": n_test,
-        "seed": seed,
-        "keep_sources": keep_sources,
-        "early_stopping": early_stopping,
-    }
-    if fixed_weight is not None:
-        regression_config["fixed_weight"] = fixed_weight
-    if len(support_domains) != 0:
-        regression_config["support_domains"] = support_domains
+    # Hash input dataframes to ensure cache uniqueness
+    ratios_hash = hashlib.sha256(pd.util.hash_pandas_object(ratios, index=True).values.tobytes()).hexdigest()
+    metrics_hash = hashlib.sha256(pd.util.hash_pandas_object(metrics, index=True).values.tobytes()).hexdigest()
+
+    regression_config = RegressionCacheConfig(
+        ratios_hash=ratios_hash,
+        metrics_hash=metrics_hash,
+        regression_type=regression_type,
+        train_split=train_split[0] if len(train_split) == 1 else train_split,
+        n_test=n_test,
+        seed=seed,
+        keep_sources=keep_sources,
+        early_stopping=early_stopping,
+        fixed_weight=fixed_weight,
+        support_domains=support_domains,
+        aggregate_task_families=aggregate_task_families,
+    )
 
     metrics_to_index = eval_metrics
 
@@ -176,11 +208,6 @@ def run_fit(
         logger.warning(f"Found NaNs in the following rows, dropping them! {bad_rows.index.tolist()}")
         metrics = metrics.drop(index=bad_rows.index)
         ratios = ratios.drop(index=bad_rows.index)
-
-    if regression_type == "log_linear":
-        if (metrics[metrics.columns[3:]] < 0).any().any():
-            logger.info("Log-linear regression requires non-negative metrics, shifting metrics to be non-negative.")
-            metrics[metrics.columns[3:]] = metrics[metrics.columns[3:]].subtract(metrics[metrics.columns[3:]].min())
 
     if aggregate_task_families:
         if task_families is None:
@@ -295,12 +322,13 @@ def run_fit(
     obj_weights_list: list[float] | None = None
     if obj_weights:
         obj_weights_list = [obj_weights.get(metric, 1) for idx, metric in indexed_metrics]
-        logger.info(f"Minimizing weighted average: {obj_weights_list}")
+        logger.info(f"Minimizing weighted average: {obj_weights}")
+    else:
+        obj_weights_list = None
 
     # Caching logic for regression model
     experiment_groups_key = "_".join(experiment_groups) if experiment_groups else "csv"
-    regression_config_str = json.dumps(regression_config, sort_keys=True)
-    hash_str = hashlib.sha256(regression_config_str.encode("utf-8")).hexdigest()[:16]
+    hash_str = regression_config.get_hash()
     regression_model_cache_folder = pathlib.Path(BASE_CACHE_DIR) / experiment_groups_key / hash_str
     regression_model_cache_folder.mkdir(parents=True, exist_ok=True)
     regression_model_cache_path = regression_model_cache_folder / "regression_params.pkl"
@@ -313,6 +341,9 @@ def run_fit(
         with open(os.path.join(output_dir, "path_to_regression_model.txt"), "w") as f:
             f.write(str(regression_model_cache_path))
 
+
+        breakpoint()
+
         # initialize the regression models using the cached parameters
         for idx, metric in indexed_metrics:
             reg = REGRESSION_TYPES[regression_type](
@@ -324,6 +355,7 @@ def run_fit(
         and regression_type == "log_linear"
         and os.path.exists(os.path.join(output_dir, "path_to_regression_model.txt"))
     ):
+        logger.info(f"Model at {regression_model_cache_path} not found, but {os.path.join(output_dir, 'path_to_regression_model.txt')} exists. Attempting to load regression model from output directory link...")
         # look in output_dir
         with open(os.path.join(output_dir, "path_to_regression_model.txt")) as f:
             regression_model_cache_path = pathlib.Path(f.read().strip())
