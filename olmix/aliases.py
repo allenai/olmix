@@ -5,7 +5,7 @@ from typing import Any, Union
 
 import yaml
 from olmo_core.data.types import NumpyDatasetDType
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from olmix.fit.config import InLoopEvalConfig, PriorsConfig
 
@@ -90,14 +90,12 @@ class QualityConfig(BaseModel):
     name: str  # e.g., "vigintile_0001", "high", "low"
     paths: list[str]
     weight: float | None = None  # Optional weight for quality bucket (used in upsampling experiments)
-    max_repetition_factor: float = 1.0
 
 
 class TopicConfig(BaseModel):
     name: str
     paths: list[str] | None = None
     quality: list[QualityConfig] | None = None
-    max_repetition_factor: float = 1.0
     max_topic_ratio: float = 1.0
     weight: float | None = None
 
@@ -114,7 +112,7 @@ class SourceConfig(BaseModel):
     paths: list[str] | None = None
     topics: list[TopicConfig] | None = None
     quality: list[QualityConfig] | None = None
-    max_repetition_factor: float = 1.0
+    weight: float | None = None
 
     def model_post_init(self, __context) -> None:
         """Validate that exactly one of paths, topics, or quality is provided."""
@@ -235,6 +233,70 @@ class MixEntry(BaseModel):
     repetition_factor: float = 1.0
 
 
+def _flatten_mix_node(
+    prefix: str,
+    node: dict[str, Any],
+    result: dict[str, Any],
+    inherited_weight: float = 1.0,
+    inherited_rep: float = 1.0,
+) -> None:
+    """Recursively flatten a nested mix node into leaf entries.
+
+    At each level, ``weight`` and ``repetition_factor`` are properties;
+    all other keys are children.  The final leaf weight is the product of
+    weights along the path from root to leaf.  ``repetition_factor`` is
+    inherited from the nearest ancestor that sets it.
+    """
+    weight = inherited_weight * node.get("weight", 1.0)
+    rep = node.get("repetition_factor", inherited_rep)
+
+    children = {k: v for k, v in node.items() if k not in ("weight", "repetition_factor")}
+
+    if not children:
+        # Leaf node
+        result[prefix] = {"weight": weight, "repetition_factor": rep}
+    else:
+        for child_name, child_value in children.items():
+            child_key = f"{prefix}:{child_name}"
+            if isinstance(child_value, dict):
+                _flatten_mix_node(child_key, child_value, result, weight, rep)
+            else:
+                # Scalar value is a weight shorthand
+                result[child_key] = {"weight": weight * float(child_value), "repetition_factor": rep}
+
+
+def flatten_mix(mix: dict[str, Any]) -> dict[str, Any]:
+    """Flatten a potentially nested mix dict into leaf-level entries.
+
+    Supports two formats:
+
+    **Flat** (generated configs) — keys are colon-separated domain paths,
+    values are ``{weight, repetition_factor}``::
+
+        {"dclm:code": {"weight": 0.5, "repetition_factor": 1.0}}
+
+    **Nested** (hand-written configs) — keys are source/topic/quality names,
+    nesting mirrors the data hierarchy::
+
+        {"dclm": {"weight": 0.98, "code": {"weight": 0.5}}}
+
+    Returns a flat dict suitable for ``dict[str, MixEntry]``.
+    """
+    flat: dict[str, Any] = {}
+    for key, value in mix.items():
+        if not isinstance(value, dict):
+            flat[key] = value
+            continue
+        non_props = {k for k in value if k not in ("weight", "repetition_factor")}
+        if not non_props:
+            # Already a leaf entry
+            flat[key] = value
+        else:
+            # Nested — flatten recursively
+            _flatten_mix_node(key, value, flat)
+    return flat
+
+
 class LaunchConfig(BaseModel):
     """Base config for ``olmix launch``. Everything needed to run training."""
 
@@ -246,6 +308,15 @@ class LaunchConfig(BaseModel):
     eval: InLoopEvalConfig
     mix: dict[str, MixEntry] | None = None
     group_id: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _resolve_nested_mix(cls, data: Any) -> Any:
+        """Auto-flatten nested mix dicts into leaf-level MixEntry dicts."""
+        if isinstance(data, dict) and isinstance(data.get("mix"), dict):
+            data = dict(data)
+            data["mix"] = flatten_mix(data["mix"])
+        return data
 
     @classmethod
     def from_yaml(cls, path: PathType) -> "LaunchConfig":

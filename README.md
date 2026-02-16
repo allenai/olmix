@@ -198,7 +198,65 @@ Once you're comfortable with the fitting workflow above, you can use olmix end-t
 The workflow uses two separate configs:
 
 - **`GenerationConfig`** — controls how mixes are sampled (data sources, priors, swarm parameters, token budget). See [`configs/generations/example.yaml`](configs/generations/example.yaml).
-- **`LaunchConfig`** — controls how training runs are launched (infra, training hyperparams, eval). See configs in [`configs/experiments/`](configs/experiments/).
+- **`LaunchConfig`** — controls how training runs are launched (infra, training hyperparams, eval, **mix**). See configs in [`configs/experiments/`](configs/experiments/).
+
+Every `LaunchConfig` requires an explicit top-level `mix` field that maps domain keys to weights and repetition factors. The `data.sources` section describes *what data exists*; the `mix` section describes *how much of each domain to use*.
+
+The `mix` supports two formats — **nested** (recommended for hand-written configs) and **flat** (used by generated configs). Both are equivalent; nested mixes are auto-flattened on load.
+
+**Nested format** — mirrors the source/topic/quality hierarchy. Weights at each level are multiplied to get the final leaf weight. `repetition_factor` is inherited from the nearest ancestor that sets it:
+
+```yaml
+mix:
+  dclm:
+    weight: 0.8
+    science_math_and_technology:
+      weight: 0.25
+    software_development:
+      weight: 0.625
+    education_and_jobs:
+      weight: 0.125
+  wikipedia:
+    weight: 0.1
+    repetition_factor: 2.0
+  arxiv:
+    weight: 0.1
+    repetition_factor: 1.5
+```
+
+For quality-level nesting:
+
+```yaml
+mix:
+  all_dressed:
+    weight: 0.98
+    science:
+      weight: 0.20
+      high: { weight: 0.70 }
+      med: { weight: 0.30 }
+    code:
+      weight: 0.50
+      high: { weight: 0.70 }
+      med: { weight: 0.30 }
+  arxiv:
+    weight: 0.02
+    repetition_factor: 1.5
+```
+
+**Flat format** — colon-separated domain keys, each with `weight` and `repetition_factor`. This is what `olmix generate` produces:
+
+```yaml
+mix:
+  dclm:science_math_and_technology:
+    weight: 0.2
+    repetition_factor: 1.0
+  dclm:software_development:
+    weight: 0.5
+    repetition_factor: 1.0
+  wikipedia:
+    weight: 0.1
+    repetition_factor: 2.0
+```
 
 ### Step 0: Compute priors (token counts)
 
@@ -267,10 +325,11 @@ Inspect and edit these files before launching — this is the point where you ha
 
 ### Step 2: Preview training commands
 
-Takes the generated variants directory and renders the full OLMo training command for each variant. Prints to stdout without launching anything.
+Renders the full OLMo training command for each variant. The `--variants` flag accepts a directory of configs or a single config file. Prints to stdout without launching anything.
 
 ```bash
-olmix launch preview --variants output/my_variants/
+olmix launch preview --variants output/my_variants/          # directory
+olmix launch preview --variants configs/experiments/data_proportions/mix_heavy_code.yaml  # single file
 ```
 
 ### Step 3: Launch a swarm
@@ -279,6 +338,7 @@ Submits one Beaker job per variant. Each job trains a proxy model on its mixture
 
 ```bash
 olmix launch run --variants output/my_variants/
+olmix launch run --variants configs/experiments/data_proportions/mix_heavy_code.yaml  # single file
 ```
 
 Use `--dry-run` to generate the metadata JSON without launching any jobs.

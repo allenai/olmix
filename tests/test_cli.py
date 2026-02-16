@@ -87,6 +87,53 @@ class TestCLI:
         assert "--config" in result.output
 
 
+class TestLoadLaunchConfigs:
+    """Test _load_launch_configs accepts file or directory."""
+
+    def test_load_single_file(self, tmp_path):
+        """Test loading a single launch config file."""
+        import yaml
+
+        from olmix.cli import _load_launch_configs
+
+        config_data = {
+            "name": "test",
+            "infra": {"budget": "test", "workspace": "test", "cluster": "test"},
+            "training": {"proxy_model_id": "olmo2_30m", "tokenizer": "dolma2"},
+            "data": {"sources": [{"name": "wiki", "paths": ["test.npy"]}]},
+            "eval": {"type": "inloop", "tasks": {"qa": {"arc": "eval/arc (BPB v2)"}}},
+            "mix": {"wiki": {"weight": 1.0, "repetition_factor": 1.0}},
+        }
+        config_file = tmp_path / "config.yaml"
+        with open(config_file, "w") as f:
+            yaml.dump(config_data, f)
+
+        configs = _load_launch_configs(str(config_file))
+        assert len(configs) == 1
+        assert configs[0].name == "test"
+
+    def test_load_directory(self, tmp_path):
+        """Test loading configs from a directory."""
+        import yaml
+
+        from olmix.cli import _load_launch_configs
+
+        for i in range(3):
+            config_data = {
+                "name": f"test-{i}",
+                "infra": {"budget": "test", "workspace": "test", "cluster": "test"},
+                "training": {"proxy_model_id": "olmo2_30m", "tokenizer": "dolma2"},
+                "data": {"sources": [{"name": "wiki", "paths": ["test.npy"]}]},
+                "eval": {"type": "inloop", "tasks": {"qa": {"arc": "eval/arc (BPB v2)"}}},
+                "mix": {"wiki": {"weight": 1.0, "repetition_factor": 1.0}},
+            }
+            with open(tmp_path / f"config_{i}.yaml", "w") as f:
+                yaml.dump(config_data, f)
+
+        configs = _load_launch_configs(str(tmp_path))
+        assert len(configs) == 3
+
+
 class TestFitCLI:
     """Test fit CLI commands."""
 
