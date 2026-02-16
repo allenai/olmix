@@ -96,7 +96,6 @@ class TopicConfig(BaseModel):
     name: str
     paths: list[str] | None = None
     quality: list[QualityConfig] | None = None
-    max_topic_ratio: float = 1.0
     weight: float | None = None
 
     def model_post_init(self, __context) -> None:
@@ -145,7 +144,7 @@ class InfraConfig(BaseModel):
     priority: Priority = Priority.normal
     preemptible: bool = True
     nodes: int = 1
-    gpus: int = 1
+    gpus: int
     weka: bool = False
     shared_filesystem: bool = False
     wandb_debug: bool = False
@@ -156,8 +155,8 @@ class TrainingConfig(BaseModel):
 
     proxy_model_id: str
     tokenizer: str
-    chinchilla_multiple: float = 1.0  # Trains for N * Chinchilla optimal tokens (20 * params * N)
-    seed: int = 42  # OLMo Core training seed (passed as -S to training script)
+    chinchilla_multiple: float
+    seed: int
     device_batch_size: int = 4
     global_batch_size: int | None = None
     checkpoint_path: str | None = None
@@ -230,7 +229,7 @@ class MixEntry(BaseModel):
     """A single domain entry in a mixture variant."""
 
     weight: float
-    repetition_factor: float = 1.0
+    repetition_factor: float
 
 
 def _flatten_mix_node(

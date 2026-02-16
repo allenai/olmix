@@ -210,12 +210,16 @@ The `mix` supports two formats — **nested** (recommended for hand-written conf
 mix:
   dclm:
     weight: 0.8
+    repetition_factor: 1.0
     science_math_and_technology:
       weight: 0.25
+      repetition_factor: 1.0
     software_development:
       weight: 0.625
+      repetition_factor: 1.0
     education_and_jobs:
       weight: 0.125
+      repetition_factor: 1.0
   wikipedia:
     weight: 0.1
     repetition_factor: 2.0
@@ -230,14 +234,15 @@ For quality-level nesting:
 mix:
   all_dressed:
     weight: 0.98
+    repetition_factor: 1.0
     science:
       weight: 0.20
-      high: { weight: 0.70 }
-      med: { weight: 0.30 }
+      high: { weight: 0.70, repetition_factor: 1.0 }
+      med: { weight: 0.30, repetition_factor: 1.0 }
     code:
       weight: 0.50
-      high: { weight: 0.70 }
-      med: { weight: 0.30 }
+      high: { weight: 0.70, repetition_factor: 1.0 }
+      med: { weight: 0.30, repetition_factor: 1.0 }
   arxiv:
     weight: 0.02
     repetition_factor: 1.5
@@ -293,7 +298,7 @@ Each variant file is a complete launch config with infra, training, data, eval, 
 
 ```yaml
 name: example-swarm-a1b2c3d4-0000
-group_id: a1b2c3d4
+description: Data proportions experiment - balanced baseline mix
 infra:
   budget: ai2/oe-base
   cluster: ai2/jupiter
@@ -303,22 +308,22 @@ training:
   # ...
 data:
   sources:
-    - name: dclm
-      topics:
-        - name: science_math_and_technology
-          paths: [s3://...]
-    - name: wikipedia
-      paths: [s3://...]
+  - name: dclm
+    topics:
+    - name: science_math_and_technology
+      paths:
+      - s3://...
+  - name: wikipedia
+    paths:
+    - s3://...
 eval:
-  type: inloop
   tasks: { ... }
 mix:
   dclm:science_math_and_technology:
     weight: 0.55
-    repetition_factor: 1.0
   wikipedia:
     weight: 0.10
-    repetition_factor: 1.5
+group_id: a1b2c3d4
 ```
 
 Inspect and edit these files before launching — this is the point where you have full control over what gets trained.

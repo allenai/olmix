@@ -222,8 +222,8 @@ class TestLaunchConfigMix:
         """Test that LaunchConfig works without mix/group_id (backward compat)."""
         config = LaunchConfig(
             name="test",
-            infra=InfraConfig(budget="test", workspace="test", cluster="test"),
-            training=TrainingConfig(proxy_model_id="olmo2_30m", tokenizer="dolma2"),
+            infra=InfraConfig(budget="test", workspace="test", cluster="test", gpus=1),
+            training=TrainingConfig(proxy_model_id="olmo2_30m", tokenizer="dolma2", chinchilla_multiple=1.0, seed=42),
             data=DataConfig(sources=[SourceConfig(name="wiki", paths=["test.npy"])]),
             eval=_MINIMAL_EVAL,
         )
@@ -234,8 +234,8 @@ class TestLaunchConfigMix:
         """Test LaunchConfig with mix and group_id fields."""
         config = LaunchConfig(
             name="test-abc123-0000",
-            infra=InfraConfig(budget="test", workspace="test", cluster="test"),
-            training=TrainingConfig(proxy_model_id="olmo2_30m", tokenizer="dolma2"),
+            infra=InfraConfig(budget="test", workspace="test", cluster="test", gpus=1),
+            training=TrainingConfig(proxy_model_id="olmo2_30m", tokenizer="dolma2", chinchilla_multiple=1.0, seed=42),
             data=DataConfig(sources=[SourceConfig(name="wiki", paths=["test.npy"])]),
             eval=_MINIMAL_EVAL,
             mix={
@@ -257,8 +257,8 @@ class TestLaunchConfigMix:
         config_data = {
             "name": "test-abc123-0000",
             "group_id": "abc12345",
-            "infra": {"budget": "test", "workspace": "test", "cluster": "test"},
-            "training": {"proxy_model_id": "olmo2_30m", "tokenizer": "dolma2"},
+            "infra": {"budget": "test", "workspace": "test", "cluster": "test", "gpus": 1},
+            "training": {"proxy_model_id": "olmo2_30m", "tokenizer": "dolma2", "chinchilla_multiple": 1.0, "seed": 42},
             "data": {"sources": [{"name": "wiki", "paths": ["test.npy"]}]},
             "eval": {"type": "inloop", "tasks": {"qa": {"arc": "eval/arc (BPB v2)"}}},
             "mix": {
@@ -359,8 +359,8 @@ class TestNestedMix:
         """Test that LaunchConfig accepts nested mix and flattens it."""
         config = LaunchConfig(
             name="test",
-            infra=InfraConfig(budget="test", workspace="test", cluster="test"),
-            training=TrainingConfig(proxy_model_id="olmo2_30m", tokenizer="dolma2"),
+            infra=InfraConfig(budget="test", workspace="test", cluster="test", gpus=1),
+            training=TrainingConfig(proxy_model_id="olmo2_30m", tokenizer="dolma2", chinchilla_multiple=1.0, seed=42),
             data=DataConfig(sources=[SourceConfig(name="wiki", paths=["test.npy"])]),
             eval=_MINIMAL_EVAL,
             mix={
@@ -387,8 +387,8 @@ class TestNestedMix:
 
         config_data = {
             "name": "test",
-            "infra": {"budget": "test", "workspace": "test", "cluster": "test"},
-            "training": {"proxy_model_id": "olmo2_30m", "tokenizer": "dolma2"},
+            "infra": {"budget": "test", "workspace": "test", "cluster": "test", "gpus": 1},
+            "training": {"proxy_model_id": "olmo2_30m", "tokenizer": "dolma2", "chinchilla_multiple": 1.0, "seed": 42},
             "data": {"sources": [{"name": "wiki", "paths": ["test.npy"]}]},
             "eval": {"type": "inloop", "tasks": {"qa": {"arc": "eval/arc (BPB v2)"}}},
             "mix": {
@@ -614,7 +614,7 @@ class TestInstanceFilterConfig:
         """Test LaunchConfig with instance filter."""
         config = LaunchConfig(
             name="test",
-            infra=InfraConfig(budget="test", workspace="test", cluster="test"),
+            infra=InfraConfig(budget="test", workspace="test", cluster="test", gpus=1),
             eval=_MINIMAL_EVAL,
             training=TrainingConfig(
                 proxy_model_id="olmo2_30m",

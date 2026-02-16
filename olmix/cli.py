@@ -152,7 +152,12 @@ def generate(config: str, base: str, output: str):
         variant_config = base_config.model_copy(update={"name": variant_name, "mix": mix, "group_id": group_uuid})
         variant_file = output_path / f"{variant_name}.yaml"
         with open(variant_file, "w") as f:
-            yaml.dump(variant_config.model_dump(mode="json"), f, default_flow_style=False, sort_keys=False)
+            yaml.dump(
+                variant_config.model_dump(mode="json", exclude_none=True, exclude_defaults=True),
+                f,
+                default_flow_style=False,
+                sort_keys=False,
+            )
 
     click.echo(f"Generated {len(mixes)} variant(s) in {output_path}/")
     for vf in sorted(output_path.glob("*.yaml")):

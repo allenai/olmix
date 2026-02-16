@@ -98,8 +98,8 @@ class TestLoadLaunchConfigs:
 
         config_data = {
             "name": "test",
-            "infra": {"budget": "test", "workspace": "test", "cluster": "test"},
-            "training": {"proxy_model_id": "olmo2_30m", "tokenizer": "dolma2"},
+            "infra": {"budget": "test", "workspace": "test", "cluster": "test", "gpus": 1},
+            "training": {"proxy_model_id": "olmo2_30m", "tokenizer": "dolma2", "chinchilla_multiple": 1.0, "seed": 42},
             "data": {"sources": [{"name": "wiki", "paths": ["test.npy"]}]},
             "eval": {"type": "inloop", "tasks": {"qa": {"arc": "eval/arc (BPB v2)"}}},
             "mix": {"wiki": {"weight": 1.0, "repetition_factor": 1.0}},
@@ -121,8 +121,13 @@ class TestLoadLaunchConfigs:
         for i in range(3):
             config_data = {
                 "name": f"test-{i}",
-                "infra": {"budget": "test", "workspace": "test", "cluster": "test"},
-                "training": {"proxy_model_id": "olmo2_30m", "tokenizer": "dolma2"},
+                "infra": {"budget": "test", "workspace": "test", "cluster": "test", "gpus": 1},
+                "training": {
+                    "proxy_model_id": "olmo2_30m",
+                    "tokenizer": "dolma2",
+                    "chinchilla_multiple": 1.0,
+                    "seed": 42,
+                },
                 "data": {"sources": [{"name": "wiki", "paths": ["test.npy"]}]},
                 "eval": {"type": "inloop", "tasks": {"qa": {"arc": "eval/arc (BPB v2)"}}},
                 "mix": {"wiki": {"weight": 1.0, "repetition_factor": 1.0}},
