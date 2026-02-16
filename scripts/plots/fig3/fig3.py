@@ -13,15 +13,12 @@ Usage:
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
 from pathlib import Path
 
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.patches import FancyBboxPatch, FancyArrowPatch
-from matplotlib.font_manager import fontManager
-
 import matplotlib.patheffects as pe
+import matplotlib.pyplot as plt
+from matplotlib.font_manager import fontManager
+from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
 
 # -----------------------------
 # Font (optional: matches your style)
@@ -37,9 +34,10 @@ plt.rcParams["font.family"] = "Manrope"
 # Colors
 # -----------------------------
 BLACK = "#2c3e50"
-BLUE = "#aed6f1"   # unaffected domains
-GREEN= "#abebc6"
+BLUE = "#aed6f1"  # unaffected domains
+GREEN = "#abebc6"
 ORANGE = "#f8c471"  # affected domains
+
 
 # -----------------------------
 # Drawing primitives
@@ -86,6 +84,7 @@ def rounded_block(
             ],
         )
 
+
 def draw_domain_row(
     ax: plt.Axes,
     x0: float,
@@ -121,14 +120,14 @@ def arrow(ax, x1, y1, x2, y2, ms=18, lw=2.0, two_way=False):
     style = "<->" if two_way else "-|>"
     ax.add_patch(
         FancyArrowPatch(
-            (x1, y1), (x2, y2),
+            (x1, y1),
+            (x2, y2),
             arrowstyle=style,
             mutation_scale=ms,
             linewidth=lw,
             color=BLACK,
         )
     )
-
 
 
 def draw_olmixbase_call(
@@ -181,7 +180,9 @@ def draw_olmixbase_call(
 def legend_item(ax: plt.Axes, x: float, y: float, label: str, facecolor: str | None, outline: bool = False) -> None:
     w, h = 1.0, 1.0
     if outline:
-        rounded_block(ax, x, y - h / 2, w, h, facecolor="white", lw=3.0, text=r"$\mathcal{D}_{\mathrm{fix}}$", fontsize=8)
+        rounded_block(
+            ax, x, y - h / 2, w, h, facecolor="white", lw=3.0, text=r"$\mathcal{D}_{\mathrm{fix}}$", fontsize=8
+        )
     else:
         rounded_block(ax, x, y - h / 2, w, h, facecolor=facecolor or "white", lw=1.6)
     ax.text(x + w + 0.45, y, label, ha="left", va="center", fontsize=12, color=BLACK)
@@ -215,12 +216,19 @@ def build_figure() -> plt.Figure:
     # -----------------------------
     # Top row: Before / After update
     # -----------------------------
-    ax.text(x_left- 0.5, y_top_titles, r"Before ($\mathcal{D}$)", ha="center", va="center", fontsize=20, color=BLACK)
+    ax.text(x_left - 0.5, y_top_titles, r"Before ($\mathcal{D}$)", ha="center", va="center", fontsize=20, color=BLACK)
     ax.text(x_mid - 0.5, y_top_titles, r"After ($\mathcal{D}'$)", ha="center", va="center", fontsize=20, color=BLACK)
 
-    ax.text((x_mid + x_left)/2 , y_top_titles-1.0, "'Partition' update", ha="center", va="center", fontsize=14, color=BLACK)
-    arrow(ax, x_left+3.0, y_top_titles-1.5, x_mid-3.3, y_top_titles-1.5, ms=18, lw=1)
-
+    ax.text(
+        (x_mid + x_left) / 2,
+        y_top_titles - 1.0,
+        "'Partition' update",
+        ha="center",
+        va="center",
+        fontsize=14,
+        color=BLACK,
+    )
+    arrow(ax, x_left + 3.0, y_top_titles - 1.5, x_mid - 3.3, y_top_titles - 1.5, ms=18, lw=1)
 
     # before blocks: D1 D2 D3 (unaffected)
     draw_domain_row(
@@ -248,7 +256,9 @@ def build_figure() -> plt.Figure:
     legend_item(ax, legend_x, legend_y0, r"unaffected domains", facecolor=BLUE)
     legend_item(ax, legend_x, legend_y0 - 1.2, r"affected domains (old)", facecolor=GREEN)
     legend_item(ax, legend_x, legend_y0 - 2.4, r"affected domains (new)", facecolor=ORANGE)
-    legend_item(ax, legend_x, legend_y0 - 3.6, r"reuse ratios within $\mathcal{D}_{\mathrm{fix}}$", facecolor=None, outline=True)
+    legend_item(
+        ax, legend_x, legend_y0 - 3.6, r"reuse ratios within $\mathcal{D}_{\mathrm{fix}}$", facecolor=None, outline=True
+    )
 
     # -----------------------------
     # Middle row: three strategies
@@ -260,21 +270,19 @@ def build_figure() -> plt.Figure:
     # Full recomputation: OlmixBase(D1 D2 D3 D4')
     draw_olmixbase_call(
         ax,
-        center_x=x_left+2,
-        center_y=y_mid_blocks-0.3,
+        center_x=x_left + 2,
+        center_y=y_mid_blocks - 0.3,
         labels=[r"$D_1$", r"$D_2$", r"$D_3$", r"$D_4'$", r"$D_5'$"],
         colors=[BLUE, BLUE, BLUE, ORANGE, ORANGE],
     )
 
-
     # Partial reuse: OlmixBase(D_fix, D2, D4')
-
 
     # bottom small box: (D1, D3) -> D_fix (connector)
     small_center_x = x_mid - 0.3
-    small_center_y = y_mid_blocks-1
+    small_center_y = y_mid_blocks - 1
 
-    s_xL, s_xR = draw_domain_row(
+    _, s_xR = draw_domain_row(
         ax,
         small_center_x - 4,
         small_center_y,
@@ -283,13 +291,12 @@ def build_figure() -> plt.Figure:
         block_w=1.50,
         block_h=1.50,
         gap=0.10,
-        thick_outline_idx={0}
+        thick_outline_idx={0},
     )
 
+    ax.text(s_xR + 0.3, small_center_y + 0.6, "=", ha="left", va="center", fontsize=18, color=BLACK)
 
-    ax.text(s_xR+0.3, small_center_y+0.6, "=", ha="left", va="center", fontsize=18, color=BLACK)
-
-    s_xL, s_xR = draw_domain_row(
+    draw_domain_row(
         ax,
         small_center_x - 1.3,
         small_center_y,
@@ -300,37 +307,20 @@ def build_figure() -> plt.Figure:
         gap=0.10,
     )
 
-    xL, xR, yB, yT = draw_olmixbase_call(
+    draw_olmixbase_call(
         ax,
-        center_x=x_mid+1.5,
-        center_y=y_mid_blocks-2.5,
+        center_x=x_mid + 1.5,
+        center_y=y_mid_blocks - 2.5,
         labels=[r"$\mathcal{D}_{\mathrm{fix}}$", r"$D_2$", r"$D_4'$", r"$D_5'$"],
         colors=[BLUE, BLUE, ORANGE, ORANGE],
         thick_outline_idx={0},
     )
 
-
-
-    # connector from small box to center of D_fix block
-    # D_fix block is the first block in the main call:
-    #dfix_center_x = xL + 1.50 / 2
-    #dfix_center_y = (yB + yT) / 2
-    #connector(ax, (s_xL + s_xR) / 2, small_center_y + 0.45, dfix_center_x, dfix_center_y - 0.55)
-
-
-    #connector(ax, s_xL, small_center_y + 0.6, dfix_center_x, dfix_center_y - 0.9)
-    #connector(ax, s_xR, small_center_y + 0.6, dfix_center_x, dfix_center_y - 0.9)
-
-
-    # Full reuse: OlmixBase( D_fix , D4' ) with thick outline around D_fix
-
-
     # bottom small box: (D1, D2, D3) -> D_fix
     small_center_x2 = x_right - 0.3
-    small_center_y2 = y_mid_blocks-1
+    small_center_y2 = y_mid_blocks - 1
 
-
-    s_xL, s_xR = draw_domain_row(
+    _, s_xR = draw_domain_row(
         ax,
         small_center_x2 - 4,
         small_center_y2,
@@ -339,13 +329,12 @@ def build_figure() -> plt.Figure:
         block_w=1.50,
         block_h=1.50,
         gap=0.10,
-        thick_outline_idx={0}
+        thick_outline_idx={0},
     )
 
-    ax.text(s_xR+0.3, small_center_y2+0.6, "=", ha="left", va="center", fontsize=18, color=BLACK)
+    ax.text(s_xR + 0.3, small_center_y2 + 0.6, "=", ha="left", va="center", fontsize=18, color=BLACK)
 
-
-    s2_xL, s2_xR = draw_domain_row(
+    draw_domain_row(
         ax,
         small_center_x2 - 1.3,
         small_center_y2,
@@ -356,25 +345,15 @@ def build_figure() -> plt.Figure:
         gap=0.10,
     )
 
-    xL2, xR2, yB2, yT2 = draw_olmixbase_call(
+    draw_olmixbase_call(
         ax,
-        center_x=x_right+1.5,
-        center_y=y_mid_blocks-2.5,
+        center_x=x_right + 1.5,
+        center_y=y_mid_blocks - 2.5,
         labels=[r"$\mathcal{D}_{\mathrm{fix}}$", r"$D_4'$", r"$D_5'$"],
         colors=[BLUE, ORANGE, ORANGE],
         thick_outline_idx={0},
     )
 
-
-    #dfix_center_x2 = xL2 + 1.50 / 2
-    #dfix_center_y2 = (yB2 + yT2) / 2
-
-    #connector(ax, s2_xL, small_center_y2 + 0.6, dfix_center_x2, dfix_center_y2 - 0.9)
-    #connector(ax, s2_xR, small_center_y2 + 0.6, dfix_center_x2, dfix_center_y2 - 0.9)
-
-    # -----------------------------
-    # Bottom: cost/performance axis
-    # -----------------------------
     ax.text(1.0, y_bottom + 1.2, "Higher cost", ha="left", va="center", fontsize=18, color=BLACK)
     ax.text(1.0, y_bottom - 1.2, "Higher performance", ha="left", va="center", fontsize=18, color=BLACK)
 

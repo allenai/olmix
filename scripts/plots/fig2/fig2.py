@@ -13,20 +13,15 @@ Usage:
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
 from pathlib import Path
 
-from PIL import Image
-from matplotlib.offsetbox import AnnotationBbox, OffsetImage
-
-
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.patches import Circle, FancyArrowPatch, FancyBboxPatch
-from matplotlib.font_manager import FontProperties, fontManager
-
 import matplotlib.patheffects as pe
-
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.font_manager import fontManager
+from matplotlib.offsetbox import AnnotationBbox, OffsetImage
+from matplotlib.patches import Circle, FancyArrowPatch, FancyBboxPatch
+from PIL import Image
 
 MANROPE_BASE_PATH = (Path(__file__).parent / "manrope").absolute()
 for path in MANROPE_BASE_PATH.iterdir():
@@ -36,8 +31,8 @@ for path in MANROPE_BASE_PATH.iterdir():
 
 plt.rcParams["font.family"] = "Manrope"
 
-#Y_COLOR = "#d9534f"  # warm red (nice contrast with black)
-#FHAT_COLOR = "#7b1fa2"  # purple
+# Y_COLOR = "#d9534f"  # warm red (nice contrast with black)
+# FHAT_COLOR = "#7b1fa2"  # purple
 
 
 Y_COLOR = "#d9534f"
@@ -47,9 +42,8 @@ FHAT_COLOR = "#337ab7"
 BLACK = "#2c3e50"
 
 
-from matplotlib.patches import Wedge, Circle
+from matplotlib.patches import Circle, Wedge
 
-from matplotlib.patches import Wedge, Circle
 
 def draw_pie_at(
     ax,
@@ -99,7 +93,6 @@ def draw_pie_at(
     )
 
 
-
 def draw_circled_number(ax: plt.Axes, x: float, y: float, number: int) -> None:
     circ = Circle((x, y), 0.8, fill=False, edgecolor=BLACK, linewidth=2)
     ax.add_patch(circ)
@@ -141,8 +134,8 @@ def panel_titles(ax: plt.Axes) -> None:
     ax.text(15.2, 8.5, "Regression", ha="left", va="center", fontsize=18, color=BLACK)
 
     df = 2
-    draw_circled_number(ax, 26.5-df, 8.5, 3)
-    ax.text(27.7-df, 8.5, "Optimization", ha="left", va="center", fontsize=18, color=BLACK)
+    draw_circled_number(ax, 26.5 - df, 8.5, 3)
+    ax.text(27.7 - df, 8.5, "Optimization", ha="left", va="center", fontsize=18, color=BLACK)
 
 
 def draw_swarm_panel(ax: plt.Axes) -> None:
@@ -164,10 +157,8 @@ def draw_swarm_panel(ax: plt.Axes) -> None:
     draw_arrow(ax, proxy_right2, 2.4, proxy_right2 + L, 2.4)
     y_text_x = proxy_right1 + L + 0.2
 
-    ax.text(y_text_x, 5.3, r"$y_{11},\ldots,y_{n1}$",
-            ha="left", va="center", fontsize=16, color=Y_COLOR)
-    ax.text(y_text_x, 2.4, r"$y_{1K},\ldots,y_{nK}$",
-            ha="left", va="center", fontsize=16, color=Y_COLOR)
+    ax.text(y_text_x, 5.3, r"$y_{11},\ldots,y_{n1}$", ha="left", va="center", fontsize=16, color=Y_COLOR)
+    ax.text(y_text_x, 2.4, r"$y_{1K},\ldots,y_{nK}$", ha="left", va="center", fontsize=16, color=Y_COLOR)
 
     ax.text(0.2, 6.5, r"Mixes $p$", ha="left", va="center", fontsize=16, color=BLACK)
     ax.text(y_text_x, 6.5, "Performance", ha="left", va="center", fontsize=16, color=BLACK)
@@ -216,8 +207,8 @@ def draw_math_segments(ax, x, y, segments, fontsize=20, va="center"):
         cur_x += w_data
 
 
-from matplotlib.path import Path as MplPath
-from matplotlib.patches import PathPatch, FancyArrowPatch
+from matplotlib.patches import FancyArrowPatch
+
 
 def place_icon(
     ax: plt.Axes,
@@ -253,134 +244,191 @@ def draw_optimization_panel(ax: plt.Axes) -> None:
 
     dx = 2.0
 
-    top_x, top_y     = 30.5 - dx, 4.3
-    bl_x, bl_y       = 26.8 - dx, 2.4
-    br_x, br_y       = 34.2 - dx, 2.8
+    top_x, top_y = 30.5 - dx, 4.3
+    bl_x, bl_y = 26.8 - dx, 2.4
+    br_x, br_y = 34.2 - dx, 2.8
 
     t = np.linspace(0, 1, 150)
 
     def quad_bezier(p0, p1, p2):
-        x = (1-t)**2 * p0[0] + 2*t*(1-t) * p1[0] + t**2 * p2[0]
-        y = (1-t)**2 * p0[1] + 2*t*(1-t) * p1[1] + t**2 * p2[1]
+        x = (1 - t) ** 2 * p0[0] + 2 * t * (1 - t) * p1[0] + t**2 * p2[0]
+        y = (1 - t) ** 2 * p0[1] + 2 * t * (1 - t) * p1[1] + t**2 * p2[1]
         return x, y
 
-    left_ctrl = ((top_x + bl_x)/2 - 0.8, (top_y + bl_y)/2 - 1.4)
+    left_ctrl = ((top_x + bl_x) / 2 - 0.8, (top_y + bl_y) / 2 - 1.4)
     xl, yl = quad_bezier((top_x, top_y), left_ctrl, (bl_x, bl_y))
-    ax.plot(xl, yl, color=FHAT_COLOR, lw=1.8, solid_capstyle="round", path_effects=[
+    ax.plot(
+        xl,
+        yl,
+        color=FHAT_COLOR,
+        lw=1.8,
+        solid_capstyle="round",
+        path_effects=[
             pe.withStroke(linewidth=1.8, foreground=FHAT_COLOR),
             pe.Normal(),
         ],
     )
 
-    right_ctrl = ((top_x + br_x)/2 + 0.8, (top_y + br_y)/2 - 1.4)
+    right_ctrl = ((top_x + br_x) / 2 + 0.8, (top_y + br_y) / 2 - 1.4)
     xr, yr = quad_bezier((top_x, top_y), right_ctrl, (br_x, br_y))
-    ax.plot(xr, yr, color=FHAT_COLOR, lw=1.8, solid_capstyle="round", path_effects=[
+    ax.plot(
+        xr,
+        yr,
+        color=FHAT_COLOR,
+        lw=1.8,
+        solid_capstyle="round",
+        path_effects=[
             pe.withStroke(linewidth=1.8, foreground=FHAT_COLOR),
             pe.Normal(),
         ],
     )
 
-
-    bot_ctrl = ((bl_x + br_x)/2 - 0.3, min(bl_y, br_y) - 1.6)
+    bot_ctrl = ((bl_x + br_x) / 2 - 0.3, min(bl_y, br_y) - 1.6)
     xb, yb = quad_bezier((bl_x, bl_y), bot_ctrl, (br_x, br_y))
-    ax.plot(xb, yb, color=FHAT_COLOR, lw=1.8, solid_capstyle="round", path_effects=[
+    ax.plot(
+        xb,
+        yb,
+        color=FHAT_COLOR,
+        lw=1.8,
+        solid_capstyle="round",
+        path_effects=[
             pe.withStroke(linewidth=1.8, foreground=FHAT_COLOR),
             pe.Normal(),
         ],
     )
-    
 
-    #### Grid lines 
-    new_top_x = top_x+0.7
-    new_top_y = top_y-0.5
-    new_bl_x = bl_x+1.25
-    new_bl_y = bl_y-0.45
-    left_ctrl = ((new_top_x + new_bl_x)/2 + 0.2, (new_top_y + new_bl_y)/2 - 0.8)
+    #### Grid lines
+    new_top_x = top_x + 0.7
+    new_top_y = top_y - 0.5
+    new_bl_x = bl_x + 1.25
+    new_bl_y = bl_y - 0.45
+    left_ctrl = ((new_top_x + new_bl_x) / 2 + 0.2, (new_top_y + new_bl_y) / 2 - 0.8)
     xl, yl = quad_bezier((new_top_x, new_top_y), left_ctrl, (new_bl_x, new_bl_y))
-    ax.plot(xl, yl, color=FHAT_COLOR, lw=0.5, solid_capstyle="round", path_effects=[
+    ax.plot(
+        xl,
+        yl,
+        color=FHAT_COLOR,
+        lw=0.5,
+        solid_capstyle="round",
+        path_effects=[
             pe.withStroke(linewidth=0.5, foreground=FHAT_COLOR),
             pe.Normal(),
-        ])
+        ],
+    )
 
-    new_top_x = top_x+1.45
-    new_top_y = top_y-0.95
-    new_bl_x = bl_x+2.5
-    new_bl_y = bl_y-0.7
-    left_ctrl = ((new_top_x + new_bl_x)/2 + 0.2, (new_top_y + new_bl_y)/2 - 0.8)
+    new_top_x = top_x + 1.45
+    new_top_y = top_y - 0.95
+    new_bl_x = bl_x + 2.5
+    new_bl_y = bl_y - 0.7
+    left_ctrl = ((new_top_x + new_bl_x) / 2 + 0.2, (new_top_y + new_bl_y) / 2 - 0.8)
     xl, yl = quad_bezier((new_top_x, new_top_y), left_ctrl, (new_bl_x, new_bl_y))
-    ax.plot(xl, yl, color=FHAT_COLOR, lw=0.5, solid_capstyle="round", path_effects=[
+    ax.plot(
+        xl,
+        yl,
+        color=FHAT_COLOR,
+        lw=0.5,
+        solid_capstyle="round",
+        path_effects=[
             pe.withStroke(linewidth=0.5, foreground=FHAT_COLOR),
             pe.Normal(),
-        ])
+        ],
+    )
 
-    new_top_x = top_x+2.2
-    new_top_y = top_y-1.4
-    new_bl_x = bl_x+4.8
-    new_bl_y = bl_y-0.5
-    left_ctrl = ((new_top_x + new_bl_x)/2 + 0.2, (new_top_y + new_bl_y)/2 - 0.2)
+    new_top_x = top_x + 2.2
+    new_top_y = top_y - 1.4
+    new_bl_x = bl_x + 4.8
+    new_bl_y = bl_y - 0.5
+    left_ctrl = ((new_top_x + new_bl_x) / 2 + 0.2, (new_top_y + new_bl_y) / 2 - 0.2)
     xl, yl = quad_bezier((new_top_x, new_top_y), left_ctrl, (new_bl_x, new_bl_y))
-    ax.plot(xl, yl, color=FHAT_COLOR, lw=0.5, solid_capstyle="round", path_effects=[
+    ax.plot(
+        xl,
+        yl,
+        color=FHAT_COLOR,
+        lw=0.5,
+        solid_capstyle="round",
+        path_effects=[
             pe.withStroke(linewidth=0.5, foreground=FHAT_COLOR),
             pe.Normal(),
-        ])
+        ],
+    )
 
-
-
-    new_top_x = top_x-0.65
-    new_top_y = top_y-0.55
-    new_br_x = br_x-1.4
-    new_br_y = br_y-0.55
-    right_ctrl = ((new_top_x + new_br_x)/2 - 0 , (new_top_y + new_br_y)/2 - 0.8)
+    new_top_x = top_x - 0.65
+    new_top_y = top_y - 0.55
+    new_br_x = br_x - 1.4
+    new_br_y = br_y - 0.55
+    right_ctrl = ((new_top_x + new_br_x) / 2 - 0, (new_top_y + new_br_y) / 2 - 0.8)
     xr, yr = quad_bezier((new_top_x, new_top_y), right_ctrl, (new_br_x, new_br_y))
-    ax.plot(xr, yr, color=FHAT_COLOR, lw=0.5, solid_capstyle="round", path_effects=[
+    ax.plot(
+        xr,
+        yr,
+        color=FHAT_COLOR,
+        lw=0.5,
+        solid_capstyle="round",
+        path_effects=[
             pe.withStroke(linewidth=0.5, foreground=FHAT_COLOR),
             pe.Normal(),
-        ])
-    
+        ],
+    )
 
-    new_top_x = top_x-1.45
-    new_top_y = top_y-1.15
-    new_br_x = br_x-2.3
-    new_br_y = br_y-0.8
-    right_ctrl = ((new_top_x + new_br_x)/2 - 0 , (new_top_y + new_br_y)/2 - 0.8)
+    new_top_x = top_x - 1.45
+    new_top_y = top_y - 1.15
+    new_br_x = br_x - 2.3
+    new_br_y = br_y - 0.8
+    right_ctrl = ((new_top_x + new_br_x) / 2 - 0, (new_top_y + new_br_y) / 2 - 0.8)
     xr, yr = quad_bezier((new_top_x, new_top_y), right_ctrl, (new_br_x, new_br_y))
-    ax.plot(xr, yr, color=FHAT_COLOR, lw=0.5, solid_capstyle="round", path_effects=[
+    ax.plot(
+        xr,
+        yr,
+        color=FHAT_COLOR,
+        lw=0.5,
+        solid_capstyle="round",
+        path_effects=[
             pe.withStroke(linewidth=0.5, foreground=FHAT_COLOR),
             pe.Normal(),
-        ])
+        ],
+    )
 
-
-    new_top_x = top_x-2.3
-    new_top_y = top_y-1.75
-    new_br_x = br_x-4
-    new_br_y = br_y-1.1
-    right_ctrl = ((new_top_x + new_br_x)/2 - 0 , (new_top_y + new_br_y)/2 - 0.4)
+    new_top_x = top_x - 2.3
+    new_top_y = top_y - 1.75
+    new_br_x = br_x - 4
+    new_br_y = br_y - 1.1
+    right_ctrl = ((new_top_x + new_br_x) / 2 - 0, (new_top_y + new_br_y) / 2 - 0.4)
     xr, yr = quad_bezier((new_top_x, new_top_y), right_ctrl, (new_br_x, new_br_y))
-    ax.plot(xr, yr, color=FHAT_COLOR, lw=0.5, solid_capstyle="round", path_effects=[
+    ax.plot(
+        xr,
+        yr,
+        color=FHAT_COLOR,
+        lw=0.5,
+        solid_capstyle="round",
+        path_effects=[
             pe.withStroke(linewidth=0.5, foreground=FHAT_COLOR),
             pe.Normal(),
-        ])
+        ],
+    )
 
-
-    #place_icon(ax, top_x, top_y-1, Path("bowl.png"), zoom=0.2)
-
+    # place_icon(ax, top_x, top_y-1, Path("bowl.png"), zoom=0.2)
 
     # p* dot at the centroid
     pstar_x = (top_x + bl_x + br_x) / 3
     pstar_y = (top_y + bl_y + br_y) / 3
-    ax.plot(pstar_x, pstar_y-1, marker="o", markersize=5, color=BLACK, zorder=5)
-    ax.text(pstar_x + 0.45, pstar_y-0.8, r"$p^*$", ha="left", va="center", fontsize=14, color=BLACK)
+    ax.plot(pstar_x, pstar_y - 1, marker="o", markersize=5, color=BLACK, zorder=5)
+    ax.text(pstar_x + 0.45, pstar_y - 0.8, r"$p^*$", ha="left", va="center", fontsize=14, color=BLACK)
 
     # Text above
-    draw_math_segments(ax, 27.5-dx, 6.5, [
-        ("minimize  ", BLACK),
-        (r"$\hat{f}(p)$", FHAT_COLOR),
-    ], fontsize=16)
+    draw_math_segments(
+        ax,
+        27.5 - dx,
+        6.5,
+        [
+            ("minimize  ", BLACK),
+            (r"$\hat{f}(p)$", FHAT_COLOR),
+        ],
+        fontsize=16,
+    )
 
-    ax.text(28.5-dx, 5.5, r"$p \in S$", ha="left", va="center", fontsize=16, color=BLACK)
+    ax.text(28.5 - dx, 5.5, r"$p \in S$", ha="left", va="center", fontsize=16, color=BLACK)
 
-    ax.text(pstar_x + 4, pstar_y-0.5, r"$\hat{f}$", ha="left", va="center", fontsize=14, color=FHAT_COLOR)
-
+    ax.text(pstar_x + 4, pstar_y - 0.5, r"$\hat{f}$", ha="left", va="center", fontsize=14, color=FHAT_COLOR)
 
 
 def build_figure() -> plt.Figure:
