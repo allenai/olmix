@@ -19,24 +19,24 @@ class TestPackageImports:
             ExperimentInstance,
             GenerationConfig,
             LaunchConfig,
+            MixEntry,
             Priority,
             SourceConfig,
             SourceInstance,
             TopicConfig,
             TrainType,
-            VariantConfig,
         )
 
         assert ExperimentGroup is not None
         assert ExperimentInstance is not None
         assert GenerationConfig is not None
         assert LaunchConfig is not None
+        assert MixEntry is not None
         assert Priority is not None
         assert SourceConfig is not None
         assert SourceInstance is not None
         assert TopicConfig is not None
         assert TrainType is not None
-        assert VariantConfig is not None
 
     def test_fit_module_imports(self):
         """Test fit module imports."""
@@ -85,14 +85,12 @@ class TestPackageImports:
             from olmix.launch.beaker import (
                 get_beaker_username,
                 mk_experiment_group,
-                mk_experiments,
                 mk_instance_cmd,
                 mk_launch_configs,
             )
 
             assert get_beaker_username is not None
             assert mk_experiment_group is not None
-            assert mk_experiments is not None
             assert mk_instance_cmd is not None
             assert mk_launch_configs is not None
         except ImportError:

@@ -27,6 +27,7 @@ class TestCLI:
         result = runner.invoke(cli, ["generate", "--help"])
         assert result.exit_code == 0
         assert "--config" in result.output
+        assert "--base" in result.output
         assert "--output" in result.output
 
     def test_launch_group_help(self, runner):
@@ -42,7 +43,6 @@ class TestCLI:
 
         result = runner.invoke(cli, ["launch", "run", "--help"])
         assert result.exit_code == 0
-        assert "--config" in result.output
         assert "--variants" in result.output
         assert "--dry-run" in result.output
 
@@ -68,7 +68,6 @@ class TestCLI:
 
         result = runner.invoke(cli, ["launch", "preview", "--help"])
         assert result.exit_code == 0
-        assert "--config" in result.output
         assert "--variants" in result.output
 
     def test_priors_group_help(self, runner):

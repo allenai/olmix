@@ -9,52 +9,36 @@ from olmix.aliases import (
     ExperimentGroup,
     ExperimentInstance,
     LaunchConfig,
-    VariantConfig,
 )
 from olmix.launch.utils import mk_source_instances
 
 logger = logging.getLogger(__name__)
 
 
-def mk_experiments(
-    config: LaunchConfig,
-    variants: list[VariantConfig],
-) -> list[ExperimentInstance]:
+def mk_experiment_group(configs: list[LaunchConfig], group_uuid: str) -> ExperimentGroup:
     """
-    Generate experiment instances from a config and variant configs.
+    Build an experiment group from self-contained launch configs.
 
     Args:
-        config: Launch configuration
-        variants: List of variant configurations (output of olmix generate)
-
-    Returns:
-        List of ExperimentInstance objects
-    """
-    return [
-        ExperimentInstance(
-            name=variant.name,
-            sources=mk_source_instances(config.data.sources, variant.mix),
-        )
-        for variant in variants
-    ]
-
-
-def mk_experiment_group(config: LaunchConfig, variants: list[VariantConfig], group_uuid: str) -> ExperimentGroup:
-    """
-    Build an experiment group from a launch config and variant configs.
-
-    Args:
-        config: Launch configuration
-        variants: List of variant configurations (output of olmix generate)
+        configs: List of LaunchConfig objects, each with a ``mix`` field
         group_uuid: Unique identifier for this experiment group
 
     Returns:
         ExperimentGroup containing all experiment instances
     """
+    instances = []
+    for lc in configs:
+        assert lc.mix is not None, f"LaunchConfig '{lc.name}' has no mix field"
+        instances.append(
+            ExperimentInstance(
+                name=lc.name,
+                sources=mk_source_instances(lc.data.sources, lc.mix),
+            )
+        )
     return ExperimentGroup(
-        config=config,
+        config=configs[0],
         group_id=group_uuid,
-        instances=mk_experiments(config, variants),
+        instances=instances,
     )
 
 
@@ -177,6 +161,24 @@ def mk_launch_configs(group: ExperimentGroup, beaker_user: str) -> list[BeakerLa
         )
         for experiment in group.instances
     ]
+
+
+def launch_noninteractive(config: BeakerLaunchConfig, torchrun: bool = False):
+    """Launch a BeakerLaunchConfig without interactive prompts.
+
+    Gantry's launch_experiment has several interactive prompts (experiment name,
+    GitHub token, etc.) that block in non-interactive contexts. This bypasses
+    them by setting ``yes=True`` on the gantry recipe before launching.
+
+    Also forces ``follow=False`` so we don't block waiting for each experiment
+    to complete before launching the next one.
+    """
+    from olmo_core.launch.beaker import get_beaker_client
+
+    with get_beaker_client(workspace=config.workspace) as beaker:
+        recipe, recipe_launch_kwargs = config._build_recipe(beaker, torchrun=torchrun, follow=False)
+        recipe.yes = True
+        return recipe.launch(client=beaker, **recipe_launch_kwargs)
 
 
 def get_beaker_username() -> str:

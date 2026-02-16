@@ -18,7 +18,6 @@ from olmix.aliases import (
     TopicConfig,
     TrainingConfig,
     TrainType,
-    VariantConfig,
     compute_max_tokens,
     get_model_num_params,
 )
@@ -197,43 +196,65 @@ class TestGenerationConfig:
         assert config.max_tokens == 600_000_000
 
 
-class TestVariantConfig:
-    """Test VariantConfig model."""
+class TestLaunchConfigMix:
+    """Test LaunchConfig mix and group_id fields."""
 
-    def test_variant_config(self):
-        """Test creating a variant config."""
-        variant = VariantConfig(
+    def test_launch_config_without_mix(self):
+        """Test that LaunchConfig works without mix/group_id (backward compat)."""
+        config = LaunchConfig(
+            name="test",
+            infra=InfraConfig(budget="test", workspace="test", cluster="test"),
+            training=TrainingConfig(proxy_model_id="olmo2_30m", tokenizer="dolma2"),
+            data=DataConfig(sources=[SourceConfig(name="wiki", paths=["test.npy"])]),
+            eval=_MINIMAL_EVAL,
+        )
+        assert config.mix is None
+        assert config.group_id is None
+
+    def test_launch_config_with_mix(self):
+        """Test LaunchConfig with mix and group_id fields."""
+        config = LaunchConfig(
             name="test-abc123-0000",
+            infra=InfraConfig(budget="test", workspace="test", cluster="test"),
+            training=TrainingConfig(proxy_model_id="olmo2_30m", tokenizer="dolma2"),
+            data=DataConfig(sources=[SourceConfig(name="wiki", paths=["test.npy"])]),
+            eval=_MINIMAL_EVAL,
             mix={
                 "wiki": MixEntry(weight=0.6, repetition_factor=1.0),
                 "code": MixEntry(weight=0.4, repetition_factor=1.5),
             },
+            group_id="abc12345",
         )
+        assert config.mix is not None
+        assert len(config.mix) == 2
+        assert config.mix["wiki"].weight == 0.6
+        assert config.mix["code"].repetition_factor == 1.5
+        assert config.group_id == "abc12345"
 
-        assert variant.name == "test-abc123-0000"
-        assert len(variant.mix) == 2
-        assert variant.mix["wiki"].weight == 0.6
-        assert variant.mix["wiki"].repetition_factor == 1.0
-        assert variant.mix["code"].repetition_factor == 1.5
-
-    def test_variant_from_yaml(self, tmp_path):
-        """Test loading variant config from YAML file."""
+    def test_launch_config_with_mix_from_yaml(self, tmp_path):
+        """Test loading LaunchConfig with mix from YAML."""
         import yaml
 
-        variant_data = {
+        config_data = {
             "name": "test-abc123-0000",
+            "group_id": "abc12345",
+            "infra": {"budget": "test", "workspace": "test", "cluster": "test"},
+            "training": {"proxy_model_id": "olmo2_30m", "tokenizer": "dolma2"},
+            "data": {"sources": [{"name": "wiki", "paths": ["test.npy"]}]},
+            "eval": {"type": "inloop", "tasks": {"qa": {"arc": "eval/arc (BPB v2)"}}},
             "mix": {
                 "wiki": {"weight": 0.6, "repetition_factor": 1.0},
                 "code": {"weight": 0.4, "repetition_factor": 1.5},
             },
         }
-        variant_file = tmp_path / "variant.yaml"
-        with open(variant_file, "w") as f:
-            yaml.dump(variant_data, f)
+        config_file = tmp_path / "config.yaml"
+        with open(config_file, "w") as f:
+            yaml.dump(config_data, f)
 
-        variant = VariantConfig.from_yaml(variant_file)
-        assert variant.name == "test-abc123-0000"
-        assert variant.mix["wiki"].weight == 0.6
+        config = LaunchConfig.from_yaml(config_file)
+        assert config.mix is not None
+        assert config.mix["wiki"].weight == 0.6
+        assert config.group_id == "abc12345"
 
 
 class TestExperimentInstance:

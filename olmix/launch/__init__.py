@@ -10,8 +10,8 @@ __all__ = [
 try:
     from olmix.launch.beaker import (
         get_beaker_username,
+        launch_noninteractive,
         mk_experiment_group,
-        mk_experiments,
         mk_instance_cmd,
         mk_launch_configs,
     )
@@ -19,8 +19,8 @@ try:
     __all__.extend(
         [
             "get_beaker_username",
+            "launch_noninteractive",
             "mk_experiment_group",
-            "mk_experiments",
             "mk_instance_cmd",
             "mk_launch_configs",
         ]

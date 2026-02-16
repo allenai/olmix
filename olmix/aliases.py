@@ -228,6 +228,13 @@ class GenerationConfig(BaseModel):
         return cls(**data)
 
 
+class MixEntry(BaseModel):
+    """A single domain entry in a mixture variant."""
+
+    weight: float
+    repetition_factor: float = 1.0
+
+
 class LaunchConfig(BaseModel):
     """Base config for ``olmix launch``. Everything needed to run training."""
 
@@ -237,31 +244,12 @@ class LaunchConfig(BaseModel):
     training: TrainingConfig
     data: DataConfig
     eval: InLoopEvalConfig
+    mix: dict[str, MixEntry] | None = None
+    group_id: str | None = None
 
     @classmethod
     def from_yaml(cls, path: PathType) -> "LaunchConfig":
         """Load a LaunchConfig from a YAML file."""
-        with open(path) as f:
-            data = yaml.safe_load(f)
-        return cls(**data)
-
-
-class MixEntry(BaseModel):
-    """A single domain entry in a mixture variant."""
-
-    weight: float
-    repetition_factor: float = 1.0
-
-
-class VariantConfig(BaseModel):
-    """Output of ``olmix generate``. One per variant."""
-
-    name: str
-    mix: dict[str, MixEntry]
-
-    @classmethod
-    def from_yaml(cls, path: PathType) -> "VariantConfig":
-        """Load a VariantConfig from a YAML file."""
         with open(path) as f:
             data = yaml.safe_load(f)
         return cls(**data)

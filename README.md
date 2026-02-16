@@ -212,10 +212,13 @@ Copy the output into your generation config's `priors:` section. Use `--output p
 
 ### Step 1: Generate candidate mixtures
 
-Use `olmix generate` to sample mixture variants from a generation config. The config defines sources hierarchically (source → topic) with S3 paths, and the `priors` section provides token counts per domain used as Dirichlet priors. Each variant is written as a separate YAML file containing domain weights and repetition factors.
+Use `olmix generate` to sample mixture variants from a generation config. The `--base` flag provides a launch config template, and each variant is written as a self-contained launch config YAML file — ready to submit directly.
 
 ```bash
-olmix generate --config configs/generations/example.yaml --output output/my_variants/
+olmix generate \
+  --config configs/generations/example.yaml \
+  --base configs/experiments/data_proportions/mix_baseline.yaml \
+  --output output/my_variants/
 ```
 
 This produces one YAML file per variant in the output directory:
@@ -228,25 +231,46 @@ output/my_variants/
   example-swarm-a1b2c3d4-0003.yaml
 ```
 
-Each variant file contains a name and mix dictionary:
+Each variant file is a complete launch config with infra, training, data, eval, and the sampled mix:
 
 ```yaml
 name: example-swarm-a1b2c3d4-0000
+group_id: a1b2c3d4
+infra:
+  budget: ai2/oe-base
+  cluster: ai2/jupiter
+  # ...
+training:
+  proxy_model_id: olmo3_14m
+  # ...
+data:
+  sources:
+    - name: dclm
+      topics:
+        - name: science_math_and_technology
+          paths: [s3://...]
+    - name: wikipedia
+      paths: [s3://...]
+eval:
+  type: inloop
+  tasks: { ... }
 mix:
-  arxiv: [0.20, 1.0]
-  "dclm:science_math_and_technology": [0.55, 1.0]
-  "dclm:software_development": [0.15, 1.0]
-  wikipedia: [0.10, 1.5]
+  dclm:science_math_and_technology:
+    weight: 0.55
+    repetition_factor: 1.0
+  wikipedia:
+    weight: 0.10
+    repetition_factor: 1.5
 ```
 
 Inspect and edit these files before launching — this is the point where you have full control over what gets trained.
 
 ### Step 2: Preview training commands
 
-Takes a launch config and the generated variants directory to render the full OLMo training command for each variant. Prints to stdout without launching anything.
+Takes the generated variants directory and renders the full OLMo training command for each variant. Prints to stdout without launching anything.
 
 ```bash
-olmix launch preview --config configs/experiments/data_proportions/mix_baseline.yaml --variants output/my_variants/
+olmix launch preview --variants output/my_variants/
 ```
 
 ### Step 3: Launch a swarm
@@ -254,7 +278,7 @@ olmix launch preview --config configs/experiments/data_proportions/mix_baseline.
 Submits one Beaker job per variant. Each job trains a proxy model on its mixture and logs eval metrics to W&B under a shared group ID. Launch metadata is saved in the variants directory.
 
 ```bash
-olmix launch run --config configs/experiments/data_proportions/mix_baseline.yaml --variants output/my_variants/
+olmix launch run --variants output/my_variants/
 ```
 
 Use `--dry-run` to generate the metadata JSON without launching any jobs.

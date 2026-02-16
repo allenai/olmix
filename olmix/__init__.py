@@ -11,7 +11,6 @@ from olmix.aliases import (
     SourceInstance,
     TopicConfig,
     TrainType,
-    VariantConfig,
 )
 from olmix.version import __version__
 
@@ -26,6 +25,5 @@ __all__ = [
     "SourceInstance",
     "TopicConfig",
     "TrainType",
-    "VariantConfig",
     "__version__",
 ]
