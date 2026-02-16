@@ -43,8 +43,8 @@ BASE_CACHE_DIR = "cache/"
 def run_fit(
     ratios: pd.DataFrame,
     metrics: pd.DataFrame,
-    relative_sizes: dict[str, float],
-    original_relative_sizes: dict[str, float],
+    priors: tuple,
+    original_priors: tuple,
     output_dir: str,
     *,
     eval_metrics: list[str] | None = None,
@@ -88,8 +88,8 @@ def run_fit(
     Args:
         ratios: DataFrame [run, name, index, ...domain weights]
         metrics: DataFrame [run, name, index, ...metric values]
-        relative_sizes: Normalized token fractions per domain (sum to 1)
-        original_relative_sizes: Original relative sizes before collapsing
+        priors: Priors tuple from calculate_priors_with_manual
+        original_priors: Original priors before collapsing
         output_dir: Directory for saving outputs
         eval_metrics: List of metric names to fit on. None = derive from metrics.columns[3:]
         experiment_groups: Group IDs (used for hardcoded outlier drops; None in CSV mode)
@@ -146,10 +146,11 @@ def run_fit(
         ratios = ratios.drop(columns=drop_col)
         metrics = metrics.iloc[keep_idxs]
 
-        new_sizes = {k: v for k, v in relative_sizes.items() if k in list(support_domains)}
-        total = sum(list(new_sizes.values()))
-        new_sizes = {k: v / total for k, v in new_sizes.items()}
-        relative_sizes = new_sizes
+        new_priors = {k: v for k, v in priors[0].items() if k in list(support_domains)}
+        total = sum(list(new_priors.values()))
+        new_priors = {k: v / total for k, v in new_priors.items()}
+        priors[0].clear()
+        priors[0].update(new_priors)
 
     if all("mmlu_stem" not in s for s in metrics.columns) and any("mmlu" in s for s in metrics.columns):
         metrics, metrics_to_index = aggregate_mmlu(metrics, metrics_to_index)
@@ -450,7 +451,7 @@ def run_fit(
     weights = PROPOSER_TYPES[proposer_type]().propose(
         index=-1,
         predictor=predictors,
-        prior_distributions=relative_sizes,
+        prior_distributions=priors[0],
         constrain_objective=constrain_objective,
         swarm_config=launch_configs[0] if constrain_objective and launch_configs else None,
         obj_weights=obj_weights_list,
@@ -464,8 +465,8 @@ def run_fit(
         manual_kl=natural_kl,
     )
     plot_and_log_weights(
-        prior=relative_sizes,
-        original_prior=original_relative_sizes,
+        prior=priors[0],
+        original_prior=original_priors[0],
         prediction=weights,
         metric_name="opt_avg_all_metrics",
         regression_type=regression_type,
