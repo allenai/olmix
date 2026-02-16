@@ -22,15 +22,12 @@ from olmix.aliases import (
     flatten_mix,
     get_model_num_params,
 )
-from olmix.fit.config import InLoopEvalConfig, PriorsConfig
+from olmix.fit.config import InLoopEvalConfig
 
 # Minimal InLoopEvalConfig for tests
 _MINIMAL_EVAL = InLoopEvalConfig(
     tasks={"qa": {"arc_challenge_test_rc_5shot": "eval/downstream/arc_challenge_test_rc_5shot (BPB v2)"}},
 )
-
-# Minimal PriorsConfig for tests
-_MINIMAL_PRIORS = PriorsConfig(token_counts={"wiki": 1_000_000, "code": 500_000})
 
 
 class TestSourceConfig:
@@ -184,6 +181,7 @@ class TestGenerationConfig:
             },
             "priors": {
                 "token_counts": {"wikipedia": 1_000_000, "dclm": 500_000},
+                "relative_sizes": {"wikipedia": 0.66, "dclm": 0.34},
             },
             "swarm": {
                 "seed": 42,

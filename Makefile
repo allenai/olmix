@@ -32,35 +32,35 @@ install-dev:
 
 # Run all tests
 test:
-	uvx pytest
+	uv run pytest
 
 # Run fast tests only (skip slow tests)
 test-fast:
-	uvx pytest -m "not slow"
+	uv run pytest -m "not slow"
 
 # Run tests with coverage report
 test-cov:
-	uvx pytest --cov=olmix --cov-report=html --cov-report=term
+	uv run pytest --cov=olmix --cov-report=html --cov-report=term
 
 # Run ruff linter with auto-fix
 lint:
-	uvx ruff check . --fix
+	uv run ruff check . --fix
 	@echo "Linting complete!"
 
 # Format code with ruff
 format:
-	uvx ruff format olmix tests scripts
-	uvx ruff check --fix olmix tests scripts
+	uv run ruff format olmix tests scripts
+	uv run ruff check --fix olmix tests scripts
 	@echo "Formatting complete!"
 
 # Check code formatting without applying changes
 format-check:
-	uvx ruff format --check olmix tests scripts
-	uvx ruff check olmix tests scripts
+	uv run ruff format --check olmix tests scripts
+	uv run ruff check olmix tests scripts
 
 # Run pyright type checker
 typecheck:
-	uvx pyright olmix
+	uv run pyright olmix
 
 # Clean build artifacts and cache directories
 clean:

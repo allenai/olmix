@@ -326,7 +326,7 @@ def run_fit(
     else:
         obj_weights_list = None
 
-    # Reorder priors to match ratios order 
+    # Reorder priors to match ratios order
     domain_names = ratios.columns[3:].tolist()
 
     # Reorder priors[0]
@@ -343,7 +343,9 @@ def run_fit(
 
     # Reorder original_priors[0] (only for domains that exist in current CSV)
     assert set(domain_names) == set(original_priors[0].keys()), "Mismatch between CSV columns and original priors keys"
-    original_priors_reordered = {domain: original_priors[0][domain] for domain in domain_names if domain in original_priors[0]}
+    original_priors_reordered = {
+        domain: original_priors[0][domain] for domain in domain_names if domain in original_priors[0]
+    }
     original_priors[0].clear()
     original_priors[0].update(original_priors_reordered)
 
@@ -373,7 +375,9 @@ def run_fit(
         and regression_type == "log_linear"
         and os.path.exists(os.path.join(output_dir, "path_to_regression_model.txt"))
     ):
-        logger.info(f"Model at {regression_model_cache_path} not found, but {os.path.join(output_dir, 'path_to_regression_model.txt')} exists. Attempting to load regression model from output directory link...")
+        logger.info(
+            f"Model at {regression_model_cache_path} not found, but {os.path.join(output_dir, 'path_to_regression_model.txt')} exists. Attempting to load regression model from output directory link..."
+        )
         # look in output_dir
         with open(os.path.join(output_dir, "path_to_regression_model.txt")) as f:
             regression_model_cache_path = pathlib.Path(f.read().strip())
