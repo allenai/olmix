@@ -98,7 +98,7 @@ class InLoopEvalConfig(BaseModel):
 
 
 class OfflineEvalConfig(BaseModel):
-    """Eval config for offline (cookbook-eval) metrics.
+    """Eval config for offline metrics.
 
     Tasks are nested by family: {family: [metric_name, ...]}.
     Used by ``olmix fit`` only.
@@ -138,7 +138,7 @@ class FitConfig(BaseModel):
 
     swarm: SwarmDataConfig
     priors: PriorsConfig
-    eval: EvalConfig
+    eval: EvalConfig | None = None
     regression: RegressionConfig = RegressionConfig()
     proposer: ProposerConfig = ProposerConfig()
     constraints: ConstraintsConfig = ConstraintsConfig()

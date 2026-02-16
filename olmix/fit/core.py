@@ -326,6 +326,27 @@ def run_fit(
     else:
         obj_weights_list = None
 
+    # Reorder priors to match ratios order 
+    domain_names = ratios.columns[3:].tolist()
+
+    # Reorder priors[0]
+    priors_reordered = {domain: priors[0][domain] for domain in domain_names if domain in priors[0]}
+    if set(priors_reordered.keys()) != set(priors[0].keys()):
+        missing_in_csv = set(priors[0].keys()) - set(domain_names)
+        missing_in_priors = set(domain_names) - set(priors[0].keys())
+        if missing_in_csv:
+            logger.warning(f"Domains in priors but not in CSV columns: {missing_in_csv}")
+        if missing_in_priors:
+            raise ValueError(f"Domains in CSV columns but not in priors: {missing_in_priors}")
+    priors[0].clear()
+    priors[0].update(priors_reordered)
+
+    # Reorder original_priors[0] (only for domains that exist in current CSV)
+    assert set(domain_names) == set(original_priors[0].keys()), "Mismatch between CSV columns and original priors keys"
+    original_priors_reordered = {domain: original_priors[0][domain] for domain in domain_names if domain in original_priors[0]}
+    original_priors[0].clear()
+    original_priors[0].update(original_priors_reordered)
+
     # Caching logic for regression model
     experiment_groups_key = "_".join(experiment_groups) if experiment_groups else "csv"
     hash_str = regression_config.get_hash()
@@ -340,9 +361,6 @@ def run_fit(
         # link the regression model cache to the run that uses it
         with open(os.path.join(output_dir, "path_to_regression_model.txt"), "w") as f:
             f.write(str(regression_model_cache_path))
-
-
-        breakpoint()
 
         # initialize the regression models using the cached parameters
         for idx, metric in indexed_metrics:

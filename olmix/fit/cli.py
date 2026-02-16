@@ -75,6 +75,10 @@ def fit(config_path: str, output_dir_arg: str):
     if cfg.constraints.enabled and cfg.constraints.target_tokens is None:
         raise click.UsageError("constraints.enabled requires constraints.target_tokens")
 
+    # ── Validate eval config ──────────────────────────────────────────────
+    if cfg.regression.aggregate_task_families and cfg.eval is None:
+        raise click.UsageError("regression.aggregate_task_families requires eval config with task families")
+
     # ── Validate proposer ─────────────────────────────────────────────────
     if cfg.proposer.type == "search" and cfg.regression.type != "search":
         raise click.UsageError("proposer.type 'search' only works with regression.type 'search'")
@@ -95,8 +99,8 @@ def fit(config_path: str, output_dir_arg: str):
         priors_data,
         original_priors_data,
         output_dir,
-        eval_metrics=cfg.eval.metric_names,
-        task_families=cfg.eval.task_families,
+        eval_metrics=cfg.eval.metric_names if cfg.eval else None,
+        task_families=cfg.eval.task_families if cfg.eval else None,
         experiment_groups=None,
         launch_configs=None,
         full_group_names=None,
