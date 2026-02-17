@@ -1062,7 +1062,7 @@ def expand_collapsed_weights(
     collapsed_prior: dict[str, float],
 ) -> dict[str, float]:
     topics_to_expand = list(set(list(original_prior.keys())).difference(set(list(collapsed_prior.keys()))))
-    collapsed_sources = list(set(list(collapsed_prior.keys())).difference(set(list(original_prior.keys()))))
+    collapsed_sources = sorted(list(set(list(collapsed_prior.keys())).difference(set(list(original_prior.keys())))))
 
     for source in collapsed_sources:
         topics_per_source = sorted([t for t in topics_to_expand if source in t])
