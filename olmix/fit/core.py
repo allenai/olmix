@@ -54,7 +54,6 @@ class RegressionCacheConfig(BaseModel):
     train_split: float | tuple[float, ...]
     n_test: int
     seed: int
-    keep_sources: list[str] | None
     early_stopping: float
     fixed_weight: str | None
     support_domains: tuple[str, ...]
@@ -90,7 +89,6 @@ def run_fit(
     constrain_objective: bool = False,
     temperature: float | None = None,
     # Filtering options
-    keep_sources: list[str] | None = None,
     support_domains: tuple[str, ...] = (),
     drop_metrics: tuple[str, ...] = (),
     fixed_weight: str | None = None,
@@ -99,12 +97,8 @@ def run_fit(
     fit_only: bool = False,
     make_worst_mix: bool = False,
     kl_reg: float | None = None,
-    # WandB params (needed only for DRO reference model via WandB)
-    wandb_api=None,
-    workspace: str = "ai2-llm/regmixer",
     target_tokens: int | None = None,
     repetition_factor: float = 5.0,
-    natural_kl: tuple | None = None,
     test_ratios_path: tuple[str, ...] = (),
     test_metrics_path: tuple[str, ...] = (),
     aggregate_task_families: bool = False,
@@ -130,17 +124,13 @@ def run_fit(
         proposer_type: Proposer type (simulation, search, exact)
         constrain_objective: Constrain proposal by token budget
         temperature: Dirichlet temperature
-        keep_sources: Only use runs with nonzero weight on these sources
         support_domains: Only use runs where these domains sum to 1
         drop_metrics: Metrics to exclude from fitting
         fixed_weight: JSON string of fixed domain weights
         fit_only: Only fit regression, don't propose
         make_worst_mix: Invert objective for counterfactual
         kl_reg: KL regularization lambda for log-linear exact proposer
-        wandb_api: Optional WandB API instance (for DRO reference model)
-        workspace: WandB workspace (for DRO reference model)
         target_tokens: number of tokens (R) requested
-        natural_kl: whether to use natural distribution for KL regularization, even when swarm dirichlet prior is different
         test_ratios_path: Optional paths to ratios DataFrames for test set
         test_metrics_path: Optional paths to metrics DataFrames for test set
         aggregate_task_families: Whether to aggregate metrics by task family rather than per task
@@ -162,7 +152,6 @@ def run_fit(
         train_split=train_split[0] if len(train_split) == 1 else train_split,
         n_test=n_test,
         seed=seed,
-        keep_sources=keep_sources,
         early_stopping=early_stopping,
         fixed_weight=fixed_weight,
         support_domains=support_domains,
@@ -190,20 +179,8 @@ def run_fit(
     if len(ratios[ratios.columns[3:]]) > len(ratios):
         raise ValueError("The number of swarm runs is fewer than the number of mixing sources.")
 
-    if keep_sources:
-        old_len = len(ratios)
-        other_columns = list(set(ratios.columns[3:]).difference(set(keep_sources)))
-        ratios = ratios[
-            ratios[list(keep_sources)].ne(0).all(axis=1)  # all specified columns nonzero
-            & ratios[other_columns].eq(0).all(axis=1)
-        ]
-        logger.info(f"Filtered out {old_len - len(ratios)} runs that were not only on {keep_sources}")
-        metrics = metrics[metrics["name"].isin(ratios["name"])]
-        ratios.drop(columns=other_columns, inplace=True)
-
     cols_to_check = metrics.columns[3:]
     bad_rows = metrics[metrics[cols_to_check].isna().any(axis=1)]
-
     if not bad_rows.empty:
         logger.warning(f"Found NaNs in the following rows, dropping them! {bad_rows.index.tolist()}")
         metrics = metrics.drop(index=bad_rows.index)
@@ -278,7 +255,6 @@ def run_fit(
         assert len(train_split) > 0
 
         # we IID subselect training data
-
         if len(train_split) > 1:
             if full_group_names is None:
                 raise ValueError("full_group_names required for multi-split training (not available in CSV mode)")
@@ -329,7 +305,6 @@ def run_fit(
     # Reorder priors to match ratios order
     domain_names = ratios.columns[3:].tolist()
 
-    # Reorder priors[0]
     priors_reordered = {domain: priors[0][domain] for domain in domain_names if domain in priors[0]}
     if set(priors_reordered.keys()) != set(priors[0].keys()):
         missing_in_csv = set(priors[0].keys()) - set(domain_names)
@@ -341,7 +316,6 @@ def run_fit(
     priors[0].clear()
     priors[0].update(priors_reordered)
 
-    # Reorder original_priors[0] (only for domains that exist in current CSV)
     assert set(domain_names) == set(original_priors[0].keys()), "Mismatch between CSV columns and original priors keys"
     original_priors_reordered = {
         domain: original_priors[0][domain] for domain in domain_names if domain in original_priors[0]
@@ -503,11 +477,9 @@ def run_fit(
         return
 
     weights = PROPOSER_TYPES[proposer_type]().propose(
-        index=-1,
         predictor=predictors,
         prior_distributions=priors[0],
         constrain_objective=constrain_objective,
-        swarm_config=launch_configs[0] if constrain_objective and launch_configs else None,
         obj_weights=obj_weights_list,
         temperature=temperature,
         fixed_weight=fixed_weight_dict if fixed_weight is not None else None,
@@ -516,7 +488,6 @@ def run_fit(
         target_tokens=target_tokens,
         repetition_factor=repetition_factor,
         token_counts=token_counts,
-        manual_kl=natural_kl,
     )
     plot_and_log_weights(
         prior=priors[0],

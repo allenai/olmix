@@ -48,7 +48,6 @@ class ProposerConfig(BaseModel):
     type: str = "exact"
     temperature: float | None = None
     kl_reg: float | None = None
-    use_natural_kl: bool = False
     fit_only: bool = False
     make_worst_mix: bool = False
 
@@ -64,7 +63,6 @@ class ConstraintsConfig(BaseModel):
 class FilteringConfig(BaseModel):
     """Domain/metric filtering."""
 
-    keep_sources: list[str] = []
     support_domains: list[str] = []
     drop_metrics: list[str] = []
     fixed_weight: dict[str, float] = {}

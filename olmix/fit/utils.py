@@ -465,14 +465,12 @@ class Proposer:
 class SimulationProposer(Proposer):
     def propose(
         self,
-        index: int,
         predictor: list[Regressor],
         prior_distributions: dict,
         token_counts: dict[str, int],
         seed: int = 1337,
         search_iterations: int = 10,
         constrain_objective: bool = False,
-        swarm_config: LaunchConfig | None = None,
         obj_weights: list | None = None,
         temperature: float | None = None,
         make_worst_mix: bool = False,
@@ -582,12 +580,10 @@ class SimulationProposer(Proposer):
 class SearchProposer(Proposer):
     def propose(
         self,
-        index: int,
         predictor: list[SearchRegressor],
         prior_distributions: dict,
         token_counts: dict[str, int],
         constrain_objective: bool = False,
-        swarm_config: LaunchConfig | None = None,
         target_tokens: int | None = None,
         repetition_factor: float = 5.0,
         **kwargs,
@@ -625,12 +621,10 @@ class LogLinearExactProposer(Proposer):
         prior_distributions: dict,
         token_counts: dict[str, int],
         constrain_objective: bool = False,
-        swarm_config: LaunchConfig | None = None,
-        kl_reg: float | None = 0.1,
+        kl_reg: float | None = 0.05,
         obj_weights: list | None = None,
-        manual_kl: dict | None = None,
         target_tokens: int | None = None,
-        repetition_factor: float = 5.0,
+        repetition_factor: float = 4.0,
         **kwargs,
     ):
         if kl_reg is None:
@@ -650,13 +644,8 @@ class LogLinearExactProposer(Proposer):
 
         x = cp.Variable(d)
 
-        if manual_kl is not None:
-            logger.info(f"Using manual KL prior distribution: {manual_kl}")
-            q = np.array(list(manual_kl.values()))
-        else:
-            logger.info(f"Using prior distribution for KL: {prior_distributions}")
-            q = np.array(list(prior_distributions.values()))
-
+        logger.info(f"Using prior distribution for KL: {prior_distributions}")
+        q = np.array(list(prior_distributions.values()))
         q = np.asarray(q, dtype=float)
         eps = 1e-12
         q = np.maximum(q, eps)  # ensure strictly positive
@@ -721,33 +710,6 @@ def build_regression(
     reg = REGRESSION_TYPES[regression_type](requested_tokens=requested_tokens)
     reg.fit(X_train, Y_train, idx, early_stopping=early_stopping)
     return reg
-
-
-def get_runs_without_wandb(full_group_name, dashboard="olmo-3-evals"):  # "regmixer"):
-    bucket = "ai2-llm"
-    base_prefix = f"evaluation/{dashboard}/"
-
-    s3 = boto3.client("s3")
-
-    paginator = s3.get_paginator("list_objects_v2")
-    pages = paginator.paginate(Bucket=bucket, Prefix=base_prefix)
-
-    # Extract unique display names that match the pattern
-    display_names = set()
-    for page in pages:
-        if "Contents" in page:
-            for obj in page["Contents"]:
-                key = obj["Key"]
-                # Extract the display name from the key
-                # Format: evaluation/{dashboard}/{display_name}/...
-                parts = key.split("/")
-                if len(parts) >= 3:
-                    display_name = parts[2]  # The display name part
-                    if display_name.startswith(full_group_name):
-                        display_names.add(display_name)
-
-    print(f"Found display names: {sorted(display_names)}")
-    return display_names
 
 
 def get_runs_from_api(

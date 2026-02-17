@@ -57,7 +57,6 @@ class TestFitConfig:
         assert cfg.proposer.type == "exact"
         assert cfg.proposer.temperature is None
         assert cfg.proposer.kl_reg is None
-        assert cfg.proposer.use_natural_kl is False
         assert cfg.proposer.fit_only is False
         assert cfg.proposer.make_worst_mix is False
 
@@ -65,7 +64,6 @@ class TestFitConfig:
         assert cfg.constraints.target_tokens is None
         assert cfg.constraints.repetition_factor == 5.0
 
-        assert cfg.filtering.keep_sources == []
         assert cfg.filtering.support_domains == []
         assert cfg.filtering.drop_metrics == []
         assert cfg.filtering.fixed_weight == {}
@@ -137,7 +135,6 @@ class TestFitConfig:
                 "type": "exact",
                 "temperature": 0.5,
                 "kl_reg": 0.1,
-                "use_natural_kl": True,
                 "fit_only": False,
                 "make_worst_mix": False,
             },
@@ -147,7 +144,6 @@ class TestFitConfig:
                 "repetition_factor": 3.0,
             },
             "filtering": {
-                "keep_sources": ["a"],
                 "support_domains": ["a", "b"],
                 "drop_metrics": ["bad_metric"],
                 "fixed_weight": {"a": 0.7},
@@ -162,7 +158,6 @@ class TestFitConfig:
         assert cfg.regression.seed == 42
         assert cfg.constraints.enabled is True
         assert cfg.constraints.target_tokens == 1_000_000_000
-        assert cfg.filtering.keep_sources == ["a"]
         assert cfg.filtering.fixed_weight == {"a": 0.7}
 
 
