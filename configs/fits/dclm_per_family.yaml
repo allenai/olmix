@@ -2,10 +2,10 @@
 # Fits regression models against 127 DCLM swarm runs across 24 DataDelve domains
 
 swarm:
-  ratios: dclm_ratios.csv
-  metrics: dclm_metrics.csv
+  ratios: ratios.csv # https://huggingface.co/datasets/allenai/olmix/blob/main/dclm_swarm/ratios.csv
+  metrics: metrics.csv # https://huggingface.co/datasets/allenai/olmix/blob/main/dclm_swarm/metrics.csv
 
-priors:
+priors: # from https://huggingface.co/datasets/allenai/olmix/blob/main/dclm_swarm/meta.json
   relative_sizes:
     adult_content: 0.011426145559378242
     art_and_design: 0.017115279947642753
