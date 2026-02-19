@@ -2,10 +2,10 @@
 # Fits regression models against 127 DCLM swarm runs across 24 DataDelve domains
 
 swarm:
-  ratios: full_recomputation_ratios.csv
-  metrics: full_recomputation_metrics.csv
+  ratios: ratios.csv # https://huggingface.co/datasets/allenai/olmix/blob/main/mixture_reuse/real_world/full_recomputation/ratios.csv
+  metrics: metrics.csv # https://huggingface.co/datasets/allenai/olmix/blob/main/mixture_reuse/real_world/full_recomputation/metrics.csv
 
-priors:
+priors: # from https://huggingface.co/datasets/allenai/olmix/blob/main/mixture_reuse/real_world/full_recomputation/meta.json
   relative_sizes:
     arxiv: 0.04081632653
     dclm:adult_content: 0.007260008378781617
@@ -73,7 +73,6 @@ priors:
     wikipedia: 0.02040816327
   total_tokens: null
   token_counts:
-    algebraicstack: 11818955329
     arxiv: 20773846846 # 20 billion
     dclm:adult_content: 67760078203 # multiplied natural distribution by 5T guess
     dclm:art_and_design: 70659711995
@@ -101,54 +100,6 @@ priors:
     dclm:travel_and_tourism: 57642815530
     finemath-3plus: 34057973953 # 34 billion
     pes2o: 58552461187 # 60 billion
-    s2pdfv2:adult: 303073226 # taken from v2 
-    s2pdfv2:art_design: 6833185034
-    s2pdfv2:crime_law: 42538674743
-    s2pdfv2:education_jobs: 138127926093
-    s2pdfv2:entertainment: 6069602783
-    s2pdfv2:fashion_beauty: 557917820
-    s2pdfv2:finance_business: 61150044703
-    s2pdfv2:food_dining: 2322982204
-    s2pdfv2:games: 2486095532
-    s2pdfv2:hardware: 7334608118 # not used
-    s2pdfv2:health: 108215933374
-    s2pdfv2:history: 26016611836 # not used 
-    s2pdfv2:home_hobbies: 3924579643
-    s2pdfv2:industrial: 29389278657
-    s2pdfv2:literature: 31886391090
-    s2pdfv2:politics: 39234116889
-    s2pdfv2:religion: 24729732953
-    s2pdfv2:science_tech: 424245385160
-    s2pdfv2:social_life: 3181652910 # not used 
-    s2pdfv2:software: 9146853216
-    s2pdfv2:software_dev: 41841278724
-    s2pdfv2:sports_fitness: 5450913796
-    s2pdfv2:transportation: 17149342957
-    s2pdfv2:travel: 2102425717
-    s2pdfv1:adult: 303073226 # taken from v2 
-    s2pdfv1:art_design: 6833185034
-    s2pdfv1:crime_law: 42538674743
-    s2pdfv1:education_jobs: 138127926093
-    s2pdfv1:entertainment: 6069602783
-    s2pdfv1:fashion_beauty: 557917820
-    s2pdfv1:finance_business: 61150044703
-    s2pdfv1:food_dining: 2322982204
-    s2pdfv1:games: 2486095532
-    s2pdfv1:hardware: 7334608118 # not used
-    s2pdfv1:health: 108215933374
-    s2pdfv1:history: 26016611836 # not used 
-    s2pdfv1:home_hobbies: 3924579643
-    s2pdfv1:industrial: 29389278657
-    s2pdfv1:literature: 31886391090
-    s2pdfv1:politics: 39234116889
-    s2pdfv1:religion: 24729732953
-    s2pdfv1:science_tech: 424245385160
-    s2pdfv1:social_life: 3181652910 # not used 
-    s2pdfv1:software: 9146853216
-    s2pdfv1:software_dev: 41841278724
-    s2pdfv1:sports_fitness: 5450913796
-    s2pdfv1:transportation: 17149342957
-    s2pdfv1:travel: 2102425717
     s2pdf:adult: 303073226 # taken from v2 
     s2pdf:art_design: 6833185034
     s2pdf:crime_law: 42538674743
@@ -158,16 +109,13 @@ priors:
     s2pdf:finance_business: 61150044703
     s2pdf:food_dining: 2322982204
     s2pdf:games: 2486095532
-    s2pdf:hardware: 7334608118 # not used
     s2pdf:health: 108215933374
-    s2pdf:history: 26016611836 # not used 
     s2pdf:home_hobbies: 3924579643
     s2pdf:industrial: 29389278657
     s2pdf:literature: 31886391090
     s2pdf:politics: 39234116889
     s2pdf:religion: 24729732953
     s2pdf:science_tech: 424245385160
-    s2pdf:social_life: 3181652910 # not used 
     s2pdf:software: 9146853216
     s2pdf:software_dev: 41841278724
     s2pdf:sports_fitness: 5450913796

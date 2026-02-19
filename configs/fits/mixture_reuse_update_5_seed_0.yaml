@@ -2,10 +2,10 @@
 # Fits regression models against 127 DCLM swarm runs across 24 DataDelve domains
 
 swarm:
-  ratios: full_reuse_update_5_seed_0_ratios.csv
-  metrics: full_reuse_update_5_seed_0_metrics.csv
+  ratios: ratios.csv # https://huggingface.co/datasets/allenai/olmix/blob/main/mixture_reuse/real_world/full_reuse/update5_partition_pdfs_seed0/ratios.csv
+  metrics: metrics.csv # https://huggingface.co/datasets/allenai/olmix/blob/main/mixture_reuse/real_world/full_reuse/update5_partition_pdfs_seed0/metrics.csv
 
-priors:
+priors: # from https://huggingface.co/datasets/allenai/olmix/blob/main/mixture_reuse/real_world/full_reuse/update5_partition_pdfs_seed0/meta.json
   relative_sizes:
     existing: 0.7
     s2pdfv1:adult: 8.771475822523781e-05
@@ -31,7 +31,7 @@ priors:
     s2pdfv1:travel: 0.0006185225007767017
   total_tokens: null
   token_counts:
-    existing: 5260301671355 # dclm, stackedu, pes2o, arxiv, finemath, wiki
+    existing: 5260301671355 
     s2pdfv1:adult: 303073226 
     s2pdfv1:art_design: 6833185034
     s2pdfv1:crime_law: 42538674743
