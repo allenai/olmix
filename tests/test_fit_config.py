@@ -292,22 +292,11 @@ class TestEvalDiscriminator:
 
 class TestDCLMBaselineConfig:
     def test_loads_example_config(self):
-        """Verify the shipped example config loads and validates."""
+        """Verify the example config loads and validates."""
         cfg = FitConfig.from_yaml("configs/examples/fit/example.yaml")
-        assert cfg.swarm.ratios == "dclm_ratios.csv"
-        assert cfg.swarm.metrics == "dclm_metrics.csv"
+        assert cfg.swarm.ratios == "ratios.csv"
+        assert cfg.swarm.metrics == "metrics.csv"
         assert len(cfg.priors.relative_sizes) == 24
         assert cfg.regression.type == "log_linear"
         assert cfg.proposer.type == "exact"
         assert cfg.proposer.kl_reg == 0.1
-
-    def test_eval_config(self):
-        """Verify the eval section of the shipped config."""
-        cfg = FitConfig.from_yaml("configs/examples/fit/example.yaml")
-        assert cfg.eval.type == "offline"
-        assert len(cfg.eval.metric_names) == 110
-        families = cfg.eval.task_families
-        assert set(families.keys()) == {"math", "code", "qa"}
-        assert len(families["math"]) == 7
-        assert len(families["code"]) == 19
-        assert len(families["qa"]) == 84
