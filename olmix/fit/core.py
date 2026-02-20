@@ -22,7 +22,6 @@ from olmix.aliases import LaunchConfig
 from olmix.fit.utils import (
     PROPOSER_TYPES,
     REGRESSION_TYPES,
-    add_back_in_fixed_source_weights,
     aggregate_mmlu,
     build_regression,
     expand_collapsed_weights,
@@ -54,7 +53,6 @@ class RegressionCacheConfig(BaseModel):
     n_test: int
     seed: int
     early_stopping: float
-    fixed_weight: str | None
     aggregate_task_families: bool
 
     def get_hash(self) -> str:
@@ -90,7 +88,6 @@ def run_fit(
     temperature: float | None = None,
     # Filtering options
     drop_metrics: tuple[str, ...] = (),
-    fixed_weight: str | None = None,
     obj_weights: dict[str, float] | None = None,
     # Other options
     fit_only: bool = False,
@@ -126,7 +123,6 @@ def run_fit(
         constrain_objective: Constrain proposal by token budget
         temperature: Dirichlet temperature
         drop_metrics: Metrics to exclude from fitting
-        fixed_weight: JSON string of fixed domain weights
         fit_only: Only fit regression, don't propose
         make_worst_mix: Invert objective for counterfactual
         kl_reg: KL regularization lambda for log-linear exact proposer
@@ -137,8 +133,6 @@ def run_fit(
     """
     if eval_metrics is not None:
         metric_cols = list(eval_metrics)
-
-    fixed_weight_dict = json.loads(fixed_weight) if fixed_weight is not None else None
 
     # Build regression config for caching
     # Hash input dataframes to ensure cache uniqueness
@@ -153,7 +147,6 @@ def run_fit(
         n_test=n_test,
         seed=seed,
         early_stopping=early_stopping,
-        fixed_weight=fixed_weight,
         aggregate_task_families=aggregate_task_families,
     )
 
@@ -415,7 +408,6 @@ def run_fit(
         constrain_objective=constrain_objective,
         obj_weights=obj_weights_list,
         temperature=temperature,
-        fixed_weight=fixed_weight_dict if fixed_weight is not None else None,
         make_worst_mix=make_worst_mix,
         kl_reg=kl_reg,
         target_tokens=target_tokens,
@@ -433,9 +425,7 @@ def run_fit(
         split_seed=seed,
         domain_cols=domain_cols,
         output_dir=output_dir,
-        fixed_weight=fixed_weight_dict if fixed_weight is not None else None,
         expand_collapsed_weights_fn=expand_collapsed_weights,
-        add_back_in_fixed_source_weights_fn=add_back_in_fixed_source_weights,
     )
 
     metric = "opt_avg_all_metrics"

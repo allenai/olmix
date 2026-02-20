@@ -85,5 +85,4 @@ filtering:
     "lab_bench_protocolqa",
     "medqa_en:rc::none"
   ]
-  fixed_weight: {}
   obj_weights: {}

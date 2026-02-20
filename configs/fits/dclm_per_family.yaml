@@ -207,7 +207,6 @@ filtering:
     "lab_bench_protocolqa",
     "medqa_en:rc::none"
   ]
-  fixed_weight: {}
   obj_weights:
     math: "7/52.0"
     code: "19/52.0"

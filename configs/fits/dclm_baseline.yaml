@@ -198,5 +198,4 @@ constraints:
 filtering:
   keep_sources: []
   drop_metrics: []
-  fixed_weight: {}
   obj_weights: {}

@@ -255,9 +255,7 @@ def plot_and_log_weights(
     split_seed: int,
     domain_cols: list[str],
     output_dir: str = BASE_OUTPUT_DIR,
-    fixed_weight: dict[str, float] | None = None,
     expand_collapsed_weights_fn=None,
-    add_back_in_fixed_source_weights_fn=None,
 ):
     """Create a bar chart comparing corpus weights vs optimal weights."""
     logger.info(f":::::::::{metric_name}:::::::::")
@@ -273,10 +271,6 @@ def plot_and_log_weights(
     else:
         columns = domain_cols
         out = [{"domain": columns[idx], "weight": weight} for idx, weight in enumerate(prediction)]
-
-    if fixed_weight is not None and add_back_in_fixed_source_weights_fn is not None:
-        opt_weight_dict = add_back_in_fixed_source_weights_fn(opt_weight_dict, original_prior, fixed_weight)
-        out = [{"domain": domain, "weight": weight} for domain, weight in opt_weight_dict.items()]
 
     if len(out) != len(domain_cols):
         logger.info("RAW WEIGHTS:")
