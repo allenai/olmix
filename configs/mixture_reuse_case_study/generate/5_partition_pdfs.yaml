@@ -377,7 +377,7 @@ priors:
 
 swarm:
   seed: 42
-  variants: 16
+  variants: 64
   minimum_weight: 0.0001
   min_strength: 1
   max_strength: 20

@@ -260,21 +260,25 @@ max_tokens:      # Token budget per proxy run
 
 `data.sources` lists data pools in a hierarchy: **source → topic → quality**. Each source specifies exactly one of `paths` (flat source), `topics`, or `quality`.
 
-An optional `weight` field can appear on any source or topic. A `weight` on a **source** pins its global allocation exactly (all sources must have a weight if any do). A `weight` on a **topic** pins its share within that source's allocation (values within a source should sum to ~1.0). Anything without a `weight` is sampled from the Dirichlet and varies freely across runs. This is the **mixture reuse** pattern: freeze the weights you've already optimized, and only vary the new dimensions:
+An optional `weight` field can appear on any topic, which pins its share within that source's allocation (values within a source should sum to ~1.0). Anything without a `weight` is sampled from the Dirichlet and varies freely across runs. This is the **mixture reuse** pattern: freeze the existing ratios, and only recompute on affected domains. Note that topics and sources are used here relatively; for example, the aggregated virtual domain `existing` is a source while `wikipedia` is a topic within it:
 
 ```yaml
 data:
   sources:
-  - name: dclm
+  - name: existing
     topics:
-    - name: science_math_and_technology
+    - name: dclm:science_math_and_technology
       paths: [...]
       weight: 0.55   # frozen from prior optimization
-    - name: software_development
+    - name: dclm:software_development
       paths: [...]
       weight: 0.30   # frozen
-    - name: entertainment
+    - name: dclm:entertainment
       paths: [...]   # no weight → sampled freely in each variant
+      weight: 0.1
+    - name: wikipedia
+      paths: [...]
+      weight: 0.05
   - name: stack-edu
     topics:
     - name: Python
@@ -282,6 +286,8 @@ data:
     - name: Java
       paths: [...]   # free to vary
 ```
+
+For this example, the domains to recompute are `existing`, `stack-edu:Python`, and `stack-edu:Java`.
 
 #### `priors`
 
