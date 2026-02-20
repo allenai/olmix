@@ -29,7 +29,6 @@ priors: # from https://huggingface.co/datasets/allenai/olmix/blob/main/mixture_r
     s2pdfv1:sports_fitness: 0.0015612986457456772
     s2pdfv1:transportation: 0.004723421326648058
     s2pdfv1:travel: 0.0006185225007767017
-  total_tokens: null
   token_counts:
     existing: 5260301671355
     s2pdfv1:adult: 303073226

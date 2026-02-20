@@ -14,12 +14,12 @@ def prettify_mixes(mixes: list[dict[str, MixEntry]]):
     return json.dumps(result, indent=2)
 
 
-def mk_mixes(config: GenerationConfig) -> list[dict[str, MixEntry]]:
+def mk_mixes(config: GenerationConfig, group_uuid: str | None = None) -> list[dict[str, MixEntry]]:
     """Generate mixture configurations from a GenerationConfig.
 
     Returns the raw mixes and logs a nested summary.
     """
-    mixes = mk_mixtures(config)
+    mixes = mk_mixtures(config, group_uuid=group_uuid)
 
     display_mixes = deepcopy(mixes)
 
