@@ -62,7 +62,7 @@ class TestFitConfig:
 
         assert cfg.constraints.enabled is False
         assert cfg.constraints.target_tokens is None
-        assert cfg.constraints.repetition_factor == 5.0
+        assert cfg.constraints.repetition_factor == 4.0
 
         assert cfg.filtering.drop_metrics == []
         assert cfg.filtering.obj_weights == {}
@@ -211,7 +211,7 @@ class TestConstraintsConfig:
     def test_defaults(self):
         cfg = ConstraintsConfig()
         assert cfg.enabled is False
-        assert cfg.repetition_factor == 5.0
+        assert cfg.repetition_factor == 4.0
 
 
 class TestFilteringConfig:

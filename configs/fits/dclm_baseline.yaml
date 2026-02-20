@@ -186,7 +186,6 @@ proposer:
   type: exact
   temperature: null
   kl_reg: 0.1
-  use_natural_kl: true
   fit_only: true
   make_worst_mix: false
 
@@ -196,6 +195,5 @@ constraints:
   repetition_factor: 5.0
 
 filtering:
-  keep_sources: []
   drop_metrics: []
   obj_weights: {}

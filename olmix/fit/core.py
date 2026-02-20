@@ -94,7 +94,7 @@ def run_fit(
     make_worst_mix: bool = False,
     kl_reg: float | None = None,
     target_tokens: int | None = None,
-    repetition_factor: float = 5.0,
+    repetition_factor: float = 4.0,
     test_ratios_path: tuple[str, ...] = (),
     test_metrics_path: tuple[str, ...] = (),
     aggregate_task_families: bool = False,

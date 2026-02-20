@@ -57,7 +57,7 @@ class ConstraintsConfig(BaseModel):
 
     enabled: bool = False
     target_tokens: int | None = None
-    repetition_factor: float = 5.0
+    repetition_factor: float = 4.0
 
 
 class FilteringConfig(BaseModel):
