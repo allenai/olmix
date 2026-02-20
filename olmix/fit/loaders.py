@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 def load_from_csv(
     ratios_path: str,
     metrics_path: str,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame, list[str], list[str]]:
     """Load ratios and metrics from CSV files.
 
     Accepts both ``run_id`` and ``run`` as the ID column (the first one found
@@ -26,7 +26,7 @@ def load_from_csv(
         metrics_path: Path to the metrics CSV file.
 
     Returns:
-        Tuple of (ratios, metrics) DataFrames.
+        Tuple of (ratios, metrics, domain_cols, metric_cols) DataFrames.
 
     Raises:
         FileNotFoundError: If either CSV file is missing.
@@ -77,7 +77,7 @@ def load_from_csv(
 
     logger.info(f"Loaded {len(ratios)} runs from CSV: {len(domain_cols)} domains, {len(metric_cols)} metrics")
 
-    return ratios, metrics
+    return ratios, metrics, domain_cols, metric_cols
 
 
 def _resolve_id_column(df: pd.DataFrame, label: str) -> str:

@@ -38,7 +38,7 @@ class RegressionConfig(BaseModel):
     type: str = "log_linear"
     seed: int = 0
     n_test: int = 0
-    train_split: list[float] = [1.0]
+    train_split: float = 1.0
     aggregate_task_families: bool = False
 
 
@@ -63,7 +63,6 @@ class ConstraintsConfig(BaseModel):
 class FilteringConfig(BaseModel):
     """Domain/metric filtering."""
 
-    support_domains: list[str] = []
     drop_metrics: list[str] = []
     fixed_weight: dict[str, float] = {}
     obj_weights: dict[str, float] = {}
