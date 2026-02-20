@@ -7,7 +7,7 @@
 # Quality: top30pct (vigintiles: 0015, 0016, 0017, 0018, 0020)
 #
 # Usage:
-#   olmix launch run --config configs/experiments/quality_thresholds/heavy_wiki/top30pct.yaml
+#   olmix launch run --config config/examples/launch/quality_thresholds/heavy_wiki/top30pct.yaml
 
 name: quality-top30pct-heavy-wiki
 description: Quality experiment - top30pct with heavy wiki mix

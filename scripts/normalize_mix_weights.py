@@ -65,7 +65,7 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Preview without writing")
     args = parser.parse_args()
 
-    configs_dir = Path("configs/experiments")
+    configs_dir = Path("config/examples/launch")
     yaml_files = sorted(configs_dir.rglob("*.yaml"))
 
     print(f"Found {len(yaml_files)} config files in {configs_dir}/")

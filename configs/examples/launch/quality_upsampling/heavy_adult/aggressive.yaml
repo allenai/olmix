@@ -6,7 +6,7 @@
 # Quality weighting: aggressive (high=70%, med=30%, low=0%)
 #
 # Usage:
-#   olmix launch run --config configs/experiments/quality_upsampling/heavy_adult/aggressive.yaml
+#   olmix launch run --config config/examples/launch/quality_upsampling/heavy_adult/aggressive.yaml
 
 name: quality-upsampling-aggressive-heavy-adult
 description: Quality upsampling experiment - aggressive weighting with heavy adult

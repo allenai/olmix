@@ -6,7 +6,7 @@
 # Quality weighting: gradual (best=50%, high=30%, med=20%, low=0%)
 #
 # Usage:
-#   olmix launch run --config configs/experiments/quality_upsampling/heavy_wiki/gradual.yaml
+#   olmix launch run --config config/examples/launch/quality_upsampling/heavy_wiki/gradual.yaml
 
 name: quality-upsampling-gradual-heavy-wiki
 description: Quality upsampling experiment - gradual weighting with heavy wiki mix

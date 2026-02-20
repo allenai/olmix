@@ -48,7 +48,7 @@ The domain column names in `ratios.csv` and the metric column names in `metrics.
 `olmix fit` is configured via a YAML file containing `ratios.csv` and `metrics.csv`. Run it with:
 
 ```bash
-olmix fit --config configs/fits/dclm_baseline.yaml --output-dir output/my_fit
+olmix fit --config configs/examples/fit/example.yaml --output-dir output/my_fit
 ```
 
 | Flag | Description |
@@ -56,7 +56,7 @@ olmix fit --config configs/fits/dclm_baseline.yaml --output-dir output/my_fit
 | `--config` | Path to the YAML fit configuration file |
 | `--output-dir` | Directory for saving fit outputs |
 
-See [`configs/fits/dclm_baseline.yaml`](configs/fits/dclm_baseline.yaml) for a full example. The config has these sections:
+See [`configs/examples/fit/example.yaml`](configs/examples/fit/example.yaml) for a full example. The config has these sections:
 
 ```yaml
 swarm:
@@ -183,14 +183,14 @@ The key output is `opt_avg_all_metrics_*_optimal.json` — the single set of wei
 
 ## Part 2: Generating swarm mixtures
 
-`olmix generate` samples a swarm of mixtures from a `GenerationConfig` YAML and writes each one as a `LaunchConfig` file used for training the proxy models. A key capability supported by `olmix generate` is **mixture reuse**: freeze the relative topic weights within the swarm. See [`configs/generations/example.yaml`](configs/generations/example.yaml) for a basic `GenerationConfig`, [`configs/generations/mixture_reuse.yaml`](configs/generations/mixture_reuse.yaml) for a full mixture reuse example, and [`configs/generations/partial_mixture_reuse.yaml`](configs/generations/partial_mixture_reuse.yaml) for a partial mixture reuse example.
+`olmix generate` samples a swarm of mixtures from a `GenerationConfig` YAML and writes each one as a `LaunchConfig` file used for training the proxy models. A key capability supported by `olmix generate` is **mixture reuse**: freeze the relative topic weights within the swarm. See [`configs/examples/generate/example.yaml`](configs/examples/generate/example.yaml) for a basic `GenerationConfig` and [`configs/examples/generate/partial_mixture_reuse.yaml`](configs/examples/generate/partial_mixture_reuse.yaml) for a partial mixture reuse example.
 
 ### Step 0: Compute priors (token counts)
 
 Before generating mixes, set the priors for the data paths in your config. There are two fields: 1. **relative_sizes**, which is used as the Dirichlet prior and 2. **token_counts**, which is used to enforce repetition constraints on the swarm (by default, we ensure no data is repeated at the proxy model scale). These priors can be set manually or computed automatically using `olmix priors compute` to be the natural distribution and the actual sizes of the data paths:
 
 ```bash
-olmix priors compute --config configs/generations/example.yaml
+olmix priors compute --config configs/examples/generate/example.yaml
 ```
 
 This scans S3 paths and outputs a `priors:` block to paste into your generation config:
@@ -217,8 +217,8 @@ Use `olmix generate` to sample mixture variants from a generation config. The `-
 
 ```bash
 olmix generate \
-  --config configs/generations/example.yaml \
-  --base configs/experiments/data_proportions/mix_baseline.yaml \
+  --config configs/examples/generate/example.yaml \
+  --base configs/examples/launch/data_proportions/mix_baseline.yaml \
   --output output/my_variants/
 ```
 

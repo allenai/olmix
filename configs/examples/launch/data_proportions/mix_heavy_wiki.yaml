@@ -11,7 +11,7 @@
 #   - arxiv: 10%
 #
 # Usage:
-#   olmix launch run --config configs/experiments/data_proportions/mix_heavy_wiki.yaml
+#   olmix launch run --config configs/examples/launch/data_proportions/mix_heavy_wiki.yaml
 
 name: mix-heavy-wiki
 description: Data proportions experiment - 50% wikipedia emphasis

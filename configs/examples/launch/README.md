@@ -14,10 +14,10 @@ Experiment configs for validating olmix training and evaluating data mixing stra
 
 ```bash
 # Single experiment
-olmix launch run --config configs/experiments/training_duration/duration_0.5x.yaml
+olmix launch run --config configs/examples/launch/training_duration/duration_0.5x.yaml
 
 # All experiments in a suite
-for f in configs/experiments/training_duration/*.yaml; do
+for f in configs/examples/launch/training_duration/*.yaml; do
   olmix launch run --config $f
 done
 ```
@@ -33,7 +33,7 @@ All experiments use:
 ## Experiment Tracking
 
 Launch metadata is saved to `output/mixes/<experiment_path>/<config_name>/<timestamp>-<group_id>.json`, mirroring the config hierarchy with config-based grouping. For example:
-- Config: `configs/experiments/quality_thresholds/heavy_code/top10pct.yaml`
+- Config: `configs/examples/launch/quality_thresholds/heavy_code/top10pct.yaml`
 - Output: `output/mixes/quality_thresholds/heavy_code/top10pct/20260204_143025-abc123.json`
 
 This structure groups all runs of the same config together, with each run uniquely identified by its timestamp (`YYYYMMDD_HHMMSS` UTC) and group ID.
