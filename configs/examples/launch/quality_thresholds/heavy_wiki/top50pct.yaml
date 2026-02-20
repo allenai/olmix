@@ -7,7 +7,7 @@
 # Quality: top50pct (vigintiles: 0011, 0012, 0013, 0014, 0015, 0016, 0017, 0018, 0020)
 #
 # Usage:
-#   olmix launch run --config configs/experiments/quality_thresholds/heavy_wiki/top50pct.yaml
+#   olmix launch run --config config/examples/launch/quality_thresholds/heavy_wiki/top50pct.yaml
 
 name: quality-top50pct-heavy-wiki
 description: Quality experiment - top50pct with heavy wiki mix

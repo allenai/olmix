@@ -1,20 +1,15 @@
-# Data Proportions Experiment: Science-Heavy Mix
+# base mix for swarms from paper
 # Uses 14M model with 0.5 chinchilla_multiple
 # Expected tokens: 0.5 * 20 * 14M = 140M tokens
 # Estimated runtime: ~8 min (1 GPU on Jupiter)
 #
-# Target proportions:
-#   - science_math_and_technology: 50%
-#   - software_development: 10%
-#   - education_and_jobs: 10%
-#   - wikipedia: 10%
-#   - arxiv: 20%
+# This is the control config with balanced proportions across all domains.
 #
 # Usage:
-#   olmix launch run --config configs/examples/launch/data_proportions/mix_heavy_science.yaml
+#   olmix launch run --config configs/mixture_reuse_case_study/launch/base.yaml
 
-name: mix-heavy-science
-description: Data proportions experiment - 50% science emphasis
+name: base
+description: swarm baseline config
 infra:
   budget: ai2/oe-base
   workspace: ai2/oe-data
@@ -23,11 +18,10 @@ infra:
   nodes: 1
   gpus: 1
 training:
-  proxy_model_id: olmo3_14m
+  proxy_model_id: olmo2_30m
   tokenizer: dolma2
-  chinchilla_multiple: 0.5
+  chinchilla_multiple: 5
   seed: 42
-  global_batch_size: 16
 data:
   sources:
   - name: dclm
@@ -149,18 +143,18 @@ eval:
       sciriff_yesno_rc_5shot: eval/downstream/sciriff_yesno_rc_5shot (BPB v2)
 mix:
   dclm:
-    weight: 0.7
+    weight: 0.6
     science_math_and_technology:
-      weight: 0.714286
+      weight: 0.333333
       repetition_factor: 1.0
     software_development:
-      weight: 0.142857
+      weight: 0.333333
       repetition_factor: 1.0
     education_and_jobs:
-      weight: 0.142857
+      weight: 0.333333
       repetition_factor: 1.0
   wikipedia:
-    weight: 0.1
+    weight: 0.2
     repetition_factor: 2.0
   arxiv:
     weight: 0.2

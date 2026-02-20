@@ -6,7 +6,7 @@
 # This is the control config with balanced proportions across all domains.
 #
 # Usage:
-#   olmix launch run --config configs/experiments/data_proportions/mix_baseline.yaml
+#   olmix launch run --config configs/examples/launch/data_proportions/mix_baseline.yaml
 
 name: mix-baseline
 description: Data proportions experiment - balanced baseline mix

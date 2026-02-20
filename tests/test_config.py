@@ -423,7 +423,7 @@ class TestHandWrittenConfigsWithMix:
 
     def test_data_proportions_config(self):
         """Test a data_proportions config loads with normalized mix."""
-        config = LaunchConfig.from_yaml("configs/experiments/data_proportions/mix_heavy_code.yaml")
+        config = LaunchConfig.from_yaml("configs/examples/launch/data_proportions/mix_heavy_code.yaml")
         assert config.mix is not None
         assert "dclm:software_development" in config.mix
         assert config.mix["dclm:software_development"].weight == 0.5
@@ -433,7 +433,7 @@ class TestHandWrittenConfigsWithMix:
 
     def test_quality_upsampling_config(self):
         """Test a quality_upsampling config loads with normalized mix."""
-        config = LaunchConfig.from_yaml("configs/experiments/quality_upsampling/heavy_code/aggressive.yaml")
+        config = LaunchConfig.from_yaml("configs/examples/launch/quality_upsampling/heavy_code/aggressive.yaml")
         assert config.mix is not None
         assert "all_dressed:science_math_and_technology:high" in config.mix
         # Weights are normalized to sum to 1.0
@@ -442,7 +442,7 @@ class TestHandWrittenConfigsWithMix:
 
     def test_training_duration_config(self):
         """Test a training_duration config loads with equal weights."""
-        config = LaunchConfig.from_yaml("configs/experiments/training_duration/duration_0.5x.yaml")
+        config = LaunchConfig.from_yaml("configs/examples/launch/training_duration/duration_0.5x.yaml")
         assert config.mix is not None
         assert config.mix["dclm:science_math_and_technology"].weight == pytest.approx(0.2, abs=1e-4)
         assert config.mix["arxiv"].repetition_factor == 1.5

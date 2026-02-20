@@ -112,10 +112,10 @@ Every distribution benefits from some level of filtering compared to top70pct:
 
 ```bash
 # Single experiment
-olmix launch run --config configs/experiments/quality_thresholds/heavy_code/top30pct.yaml
+olmix launch run --config config/examples/launch/quality_thresholds/heavy_code/top30pct.yaml
 
 # All quality threshold experiments
-./configs/experiments/quality_thresholds/batch_run.sh
+./config/examples/launch/quality_thresholds/batch_run.sh
 ```
 
 ## WandB Links

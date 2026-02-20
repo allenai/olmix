@@ -55,7 +55,7 @@ Nested weights are multiplicative (leaf weight = product of weights along root-t
 
 `_load_launch_configs()` now accepts both a single YAML file and a directory of YAML files for `--variants`.
 
-### 5. Migrated all 31 configs (`configs/experiments/`)
+### 5. Migrated all 31 configs (`config/examples/launch/`)
 
 - Removed embedded weights from `data.sources` (source, topic, quality levels)
 - Added explicit `mix` section with normalized weights (sum to 1.0) in nested format
@@ -98,7 +98,7 @@ The launch path: `LaunchConfig.mix` → `MixEntry.repetition_factor` → `Source
 |------|--------|
 | `olmix/aliases.py` | Added `SourceConfig.weight`, removed `max_repetition_factor` from 3 models, added `flatten_mix()` + `_flatten_mix_node()` + model validator |
 | `olmix/cli.py` | `_load_launch_configs()` accepts file or dir |
-| `configs/experiments/**/*.yaml` (31 files) | Explicit nested `mix`, no embedded weights, no `max_repetition_factor` |
+| `config/examples/launch/**/*.yaml` (31 files) | Explicit nested `mix`, no embedded weights, no `max_repetition_factor` |
 | `tests/test_config.py` | New tests for weight, nested mix, config loading |
 | `tests/test_cli.py` | New tests for single-file loading |
 | `README.md` | Mix format documentation |

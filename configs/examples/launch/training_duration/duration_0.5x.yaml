@@ -4,7 +4,7 @@
 # Estimated runtime: ~8 min (1 GPU on Jupiter)
 #
 # Usage:
-#   olmix launch run --config configs/experiments/training_duration/duration_0.5x.yaml
+#   olmix launch run --config config/examples/launch/training_duration/duration_0.5x.yaml
 
 name: duration-0.5x
 description: Training duration experiment - 0.5x Chinchilla (140M tokens)

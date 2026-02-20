@@ -7,7 +7,7 @@
 # Quality: top70pct (vigintiles: 0007, 0008, 0009, 0010, 0011, 0012, 0013, 0014, 0015, 0016, 0017, 0018, 0020)
 #
 # Usage:
-#   olmix launch run --config configs/experiments/quality_thresholds/heavy_science/top70pct.yaml
+#   olmix launch run --config config/examples/launch/quality_thresholds/heavy_science/top70pct.yaml
 
 name: quality-top70pct-heavy-science
 description: Quality experiment - top70pct with heavy science mix

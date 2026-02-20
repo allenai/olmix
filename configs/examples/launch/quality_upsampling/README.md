@@ -70,10 +70,10 @@ The `quality_upsampling` experiments use weighted inclusion:
 
 ```bash
 # Single experiment
-olmix launch run --config configs/experiments/quality_upsampling/heavy_code/gradual.yaml
+olmix launch run --config config/examples/launch/quality_upsampling/heavy_code/gradual.yaml
 
 # All quality upsampling experiments
-./configs/experiments/quality_upsampling/batch_run.sh
+./config/examples/launch/quality_upsampling/batch_run.sh
 ```
 
 ## Implementation Notes
