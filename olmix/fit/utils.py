@@ -95,7 +95,7 @@ def compute_constraints_from_config(
     config: LaunchConfig,
     *,
     target_tokens: int,
-    repetition_factor: float = 5.0,
+    repetition_factor: float = 4.0,
     use_cache: bool = True,
 ) -> tuple[int, dict[str, float], float]:
     """Compute constraints from config's sources and target settings.
@@ -475,7 +475,7 @@ class SimulationProposer(Proposer):
         temperature: float | None = None,
         make_worst_mix: bool = False,
         target_tokens: int | None = None,
-        repetition_factor: float = 5.0,
+        repetition_factor: float = 4.0,
         **kwargs,
     ) -> np.ndarray:
         np.random.seed(seed)
@@ -585,7 +585,7 @@ class SearchProposer(Proposer):
         token_counts: dict[str, int],
         constrain_objective: bool = False,
         target_tokens: int | None = None,
-        repetition_factor: float = 5.0,
+        repetition_factor: float = 4.0,
         **kwargs,
     ):
         if constrain_objective:

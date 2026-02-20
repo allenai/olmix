@@ -150,7 +150,6 @@ proposer:
   type: exact
   temperature: null
   kl_reg: 0.05
-  use_natural_kl: false
   fit_only: false
   make_worst_mix: false
 
@@ -160,7 +159,6 @@ constraints:
   repetition_factor: 4.0
 
 filtering:
-  keep_sources: []
   drop_metrics: ["ultrachat_masked_ppl",
     "wildchat_masked_ppl",
     "qasper_yesno:rc::olmes",
