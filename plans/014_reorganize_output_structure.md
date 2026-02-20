@@ -1,16 +1,16 @@
-# Plan: Reorganize output/mixes/ to mirror config/examples/launch/ hierarchy
+# Plan: Reorganize output/mixes/ to mirror configs/experiments/ hierarchy
 
 ## Context
 
 **Current state:**
-- Config paths: `config/examples/launch/<group>/<subgroup>/<name>.yaml`
+- Config paths: `configs/experiments/<group>/<subgroup>/<name>.yaml`
 - Output paths: `output/mixes/<config-name>_<group_uuid>.json` (flat)
 
 **Examples:**
 | Config | Current Output | Desired Output |
 |--------|----------------|----------------|
-| `config/examples/launch/training_duration/duration_0.5x.yaml` | `output/mixes/duration-0.5x_e326e56e.json` | `output/mixes/training_duration/duration_0.5x_e326e56e.json` |
-| `config/examples/launch/quality_thresholds/heavy_code/top10pct.yaml` | `output/mixes/quality-top10pct-heavy-code_333ccd44.json` | `output/mixes/quality_thresholds/heavy_code/top10pct_333ccd44.json` |
+| `configs/experiments/training_duration/duration_0.5x.yaml` | `output/mixes/duration-0.5x_e326e56e.json` | `output/mixes/training_duration/duration_0.5x_e326e56e.json` |
+| `configs/experiments/quality_thresholds/heavy_code/top10pct.yaml` | `output/mixes/quality-top10pct-heavy-code_333ccd44.json` | `output/mixes/quality_thresholds/heavy_code/top10pct_333ccd44.json` |
 
 ---
 
@@ -20,7 +20,7 @@ The CLI keeps the single-file pattern. For batch operations, users use shell scr
 
 ```bash
 # Launch all experiments in a directory
-for f in config/examples/launch/quality_thresholds/**/*.yaml; do
+for f in configs/experiments/quality_thresholds/**/*.yaml; do
     olmix launch run --config "$f"
 done
 ```
@@ -41,10 +41,10 @@ output/mixes/quality_thresholds/heavy_science/top10pct_789ghi.json
 |------|--------|
 | `olmix/cli.py` | Update `_save_launch_metadata()` to derive output path from config path |
 | `olmix/launch/launch_utils.py` | Update `mk_mixes()` to derive output path from config path |
-| `config/examples/launch/README.md` | Update documentation to reflect new output structure |
-| `config/examples/launch/data_proportions/batch_run.sh` | Create batch launch script |
-| `config/examples/launch/quality_thresholds/batch_run.sh` | Create batch launch script |
-| `config/examples/launch/training_duration/batch_run.sh` | Create batch launch script |
+| `configs/experiments/README.md` | Update documentation to reflect new output structure |
+| `configs/experiments/data_proportions/batch_run.sh` | Create batch launch script |
+| `configs/experiments/quality_thresholds/batch_run.sh` | Create batch launch script |
+| `configs/experiments/training_duration/batch_run.sh` | Create batch launch script |
 
 ## Implementation
 
@@ -55,7 +55,7 @@ def _get_output_path_from_config(config_path: Path, group_uuid: str) -> Path:
     """Derive output path from config path, mirroring the config hierarchy.
 
     Example:
-        config/examples/launch/quality_thresholds/heavy_code/top10pct.yaml
+        configs/experiments/quality_thresholds/heavy_code/top10pct.yaml
         -> output/mixes/quality_thresholds/heavy_code/top10pct_<uuid>.json
     """
     config_path = Path(config_path).resolve()
@@ -124,7 +124,7 @@ output = _get_output_path_from_config(config_file, group_uuid)
 
 ### 4. Create batch_run.sh scripts
 
-**`config/examples/launch/data_proportions/batch_run.sh`:**
+**`configs/experiments/data_proportions/batch_run.sh`:**
 ```bash
 #!/bin/bash
 # Batch launch all data proportion experiments
@@ -138,7 +138,7 @@ for config in "$SCRIPT_DIR"/*.yaml; do
 done
 ```
 
-**`config/examples/launch/training_duration/batch_run.sh`:**
+**`configs/experiments/training_duration/batch_run.sh`:**
 ```bash
 #!/bin/bash
 # Batch launch all training duration experiments
@@ -152,7 +152,7 @@ for config in "$SCRIPT_DIR"/*.yaml; do
 done
 ```
 
-**`config/examples/launch/quality_thresholds/batch_run.sh`:**
+**`configs/experiments/quality_thresholds/batch_run.sh`:**
 ```bash
 #!/bin/bash
 # Batch launch all quality threshold experiments (nested directories)
@@ -176,7 +176,7 @@ Launch metadata is saved to `output/mixes/{name}_{group_id}.json` with:
 **After:**
 ```
 Launch metadata is saved to `output/mixes/<experiment_path>/{name}_{group_id}.json`, mirroring the config hierarchy. For example:
-- Config: `config/examples/launch/quality_thresholds/heavy_code/top10pct.yaml`
+- Config: `configs/experiments/quality_thresholds/heavy_code/top10pct.yaml`
 - Output: `output/mixes/quality_thresholds/heavy_code/top10pct_abc123.json`
 ```
 
@@ -189,19 +189,19 @@ Launch metadata is saved to `output/mixes/<experiment_path>/{name}_{group_id}.js
 
 2. **Dry-run an experiment and verify output path:**
    ```bash
-   olmix launch run --config config/examples/launch/training_duration/duration_0.5x.yaml --dry-run
+   olmix launch run --config configs/experiments/training_duration/duration_0.5x.yaml --dry-run
    ```
    Should show output path like: `output/mixes/training_duration/duration_0.5x_<uuid>.json`
 
 3. **Test with nested config:**
    ```bash
-   olmix launch run --config config/examples/launch/quality_thresholds/heavy_code/top10pct.yaml --dry-run
+   olmix launch run --config configs/experiments/quality_thresholds/heavy_code/top10pct.yaml --dry-run
    ```
    Should show: `output/mixes/quality_thresholds/heavy_code/top10pct_<uuid>.json`
 
 4. **Verify batch scripts are executable:**
    ```bash
-   ls -la config/examples/launch/*/batch_run.sh
+   ls -la configs/experiments/*/batch_run.sh
    ```
 
 ## Notes

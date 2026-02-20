@@ -45,7 +45,7 @@ Update `get_leaf_configs()` function to handle quality nesting:
 
 ### Phase 3: Create Experiment Configs
 
-Manually create `config/examples/launch/quality_thresholds/`:
+Manually create `configs/experiments/quality_thresholds/`:
 - `quality_top10pct.yaml` - top 10% quality (vigintile_0019, vigintile_0020)
 - `quality_top30pct.yaml` - top 30% quality (vigintile_0015 - vigintile_0020)
 - `quality_top50pct.yaml` - top 50% quality (vigintile_0011 - vigintile_0020)
@@ -128,11 +128,11 @@ sources:
 | Create | `plans/012_quality_threshold_experiments.md` - This plan |
 | Modify | `olmix/aliases.py` - Add QualityConfig, update TopicConfig/SourceConfig |
 | Modify | `olmix/launch/synthesize_mixture.py` - Update get_leaf_configs() |
-| Create | `config/examples/launch/quality_thresholds/quality_top10pct.yaml` |
-| Create | `config/examples/launch/quality_thresholds/quality_top30pct.yaml` |
-| Create | `config/examples/launch/quality_thresholds/quality_top50pct.yaml` |
-| Create | `config/examples/launch/quality_thresholds/quality_top70pct.yaml` |
-| Create | `config/examples/launch/quality_thresholds/quality_top100pct.yaml` |
+| Create | `configs/experiments/quality_thresholds/quality_top10pct.yaml` |
+| Create | `configs/experiments/quality_thresholds/quality_top30pct.yaml` |
+| Create | `configs/experiments/quality_thresholds/quality_top50pct.yaml` |
+| Create | `configs/experiments/quality_thresholds/quality_top70pct.yaml` |
+| Create | `configs/experiments/quality_thresholds/quality_top100pct.yaml` |
 
 ## Verification
 
@@ -143,19 +143,19 @@ sources:
 
 2. **Config validation:**
    ```bash
-   for f in config/examples/launch/quality_thresholds/quality_*.yaml; do
+   for f in configs/experiments/quality_thresholds/quality_*.yaml; do
        python -c "import yaml; yaml.safe_load(open('$f'))" && echo "$f: valid"
    done
    ```
 
 3. **Dry run test:**
    ```bash
-   olmix launch run --config config/examples/launch/quality_thresholds/quality_top30pct.yaml --dry-run
+   olmix launch run --config configs/experiments/quality_thresholds/quality_top30pct.yaml --dry-run
    ```
 
 4. **Launch one experiment:**
    ```bash
-   yes | olmix launch run --config config/examples/launch/quality_thresholds/quality_top30pct.yaml
+   yes | olmix launch run --config configs/experiments/quality_thresholds/quality_top30pct.yaml
    ```
 
 ## Summary

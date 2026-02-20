@@ -191,7 +191,7 @@ These stay on their Pydantic models, nested under `DataConfig.sources`:
 | `olmix/fit/utils.py` | Refactor `compute_constraints_from_config()` to take constraint params directly. Update sub-config field accesses. |
 | `olmix/fit/loaders.py` | Update sub-config field accesses (~6 changes) |
 | `olmix/fit/core.py` | Update sub-config field accesses (~4 changes) |
-| `config/examples/launch/**/*.yaml` (31 files) | Convert flat YAML to nested format with `infra:`, `training:`, `data:`, `swarm:` sections |
+| `configs/experiments/**/*.yaml` (31 files) | Convert flat YAML to nested format with `infra:`, `training:`, `data:`, `swarm:` sections |
 | `tests/test_config.py` | Update test fixtures to use nested format |
 
 ## Implementation steps
@@ -239,11 +239,11 @@ These stay on their Pydantic models, nested under `DataConfig.sources`:
 ## Verification
 
 1. `python -c "from olmix.aliases import ExperimentConfig, InfraConfig, TrainingConfig, DataConfig, SwarmConfig"` — imports work
-2. `python -c "import yaml; from olmix.aliases import ExperimentConfig; ExperimentConfig(**yaml.safe_load(open('config/examples/launch/data_proportions/mix_baseline.yaml')))"` — nested YAML loading works
+2. `python -c "import yaml; from olmix.aliases import ExperimentConfig; ExperimentConfig(**yaml.safe_load(open('configs/experiments/data_proportions/mix_baseline.yaml')))"` — nested YAML loading works
 3. `python -m pytest tests/ -x -q` — all existing tests pass
 4. `ruff check olmix/ && pyright olmix/` — lint + typecheck pass
-5. `olmix launch run --config config/examples/launch/data_proportions/mix_baseline.yaml --dry-run` — dry-run successfully outputs metadata files to `output/mixes/`
-6. Prepare an `olmix launch run --config config/examples/launch/data_proportions/mix_baseline.yaml` command for user review (do NOT execute — user will review and launch manually)
+5. `olmix launch run --config configs/experiments/data_proportions/mix_baseline.yaml --dry-run` — dry-run successfully outputs metadata files to `output/mixes/`
+6. Prepare an `olmix launch run --config configs/experiments/data_proportions/mix_baseline.yaml` command for user review (do NOT execute — user will review and launch manually)
 
 ## Key files
 
@@ -256,4 +256,4 @@ These stay on their Pydantic models, nested under `DataConfig.sources`:
 | `olmix/fit/cli.py:30-98` | FitConfig dataclass — absorbs constraint fields, rename `config` |
 | `olmix/fit/cli.py:350-593` | `fit()` — loads ExperimentConfig, uses data/swarm fields |
 | `olmix/fit/loaders.py` | `load_from_wandb` — reconstructs ExperimentConfig from JSON |
-| `config/examples/launch/**/*.yaml` | 31 YAML files to convert to nested format |
+| `configs/experiments/**/*.yaml` | 31 YAML files to convert to nested format |

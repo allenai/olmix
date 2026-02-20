@@ -185,6 +185,6 @@ class CodeTasks(Enum):
 
 6. **Test run with all 60 tasks**:
    ```bash
-   yes | olmix launch run --config config/examples/launch/training_duration/duration_0.5x.yaml
+   yes | olmix launch run --config configs/experiments/training_duration/duration_0.5x.yaml
    ```
    Verify all 60 BPB v2 metrics appear in WandB.

@@ -243,7 +243,7 @@ max_tokens: 140000000  # 20 * 14M * 0.5
 |------|--------|
 | `olmix/fit/config.py` | PriorsConfig unchanged |
 | `olmix/fit/cli.py` | No changes needed |
-| `config/examples/launch/**/*.yaml` | Left as-is (old workflow) |
+| `configs/experiments/**/*.yaml` | Left as-is (old workflow) |
 
 ## Verification
 

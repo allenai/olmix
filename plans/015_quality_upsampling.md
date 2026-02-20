@@ -51,7 +51,7 @@ Modify the weight calculation to use quality bucket weights when provided:
 ### 3. Create directory structure
 
 ```
-config/examples/launch/quality_upsampling/
+configs/experiments/quality_upsampling/
 ├── README.md
 ├── batch_run.sh
 ├── heavy_adult/
@@ -109,7 +109,7 @@ Weights are normalized within each topic: 70 + 30 = 100 → top10pct gets 70%, 1
 |------|--------|
 | `olmix/aliases.py` | Add `weight: float \| None = None` to `QualityConfig` |
 | `olmix/launch/synthesize_mixture.py` | Use quality weights in mix calculation when provided |
-| `config/examples/launch/quality_upsampling/` | Create 8 new config files + README + batch_run.sh |
+| `configs/experiments/quality_upsampling/` | Create 8 new config files + README + batch_run.sh |
 
 ---
 
@@ -118,7 +118,7 @@ Weights are normalized within each topic: 70 + 30 = 100 → top10pct gets 70%, 1
 1. **Run tests:** `pytest tests/ -v`
 2. **Dry-run a config:**
    ```bash
-   olmix launch run --config config/examples/launch/quality_upsampling/heavy_code/gradual.yaml --dry-run
+   olmix launch run --config configs/experiments/quality_upsampling/heavy_code/gradual.yaml --dry-run
    ```
 3. **Verify mix output shows different weights for quality buckets**
 

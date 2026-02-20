@@ -25,7 +25,7 @@ All use same data mix:
 ## Proposed Structure
 
 ```
-config/examples/launch/
+configs/experiments/
 ├── README.md                      # Documentation with results
 ├── training_duration/             # Experiment 1: vary training length
 │   ├── duration_0.5x.yaml        # 140M tokens, ~8 min
@@ -42,7 +42,7 @@ config/examples/launch/
 
 ### Phase 1: Rename and Reorganize
 
-1. Rename `configs/test/` → `config/examples/launch/`
+1. Rename `configs/test/` → `configs/experiments/`
 2. Create subdirectory `training_duration/`
 3. Move and rename configs:
    - `verify_tokens_140m.yaml` → `training_duration/duration_0.5x.yaml`
@@ -89,13 +89,13 @@ Include:
 
 | Action | Path |
 |--------|------|
-| Rename dir | `configs/test/` → `config/examples/launch/` |
-| Create dir | `config/examples/launch/training_duration/` |
-| Create dir | `config/examples/launch/data_proportions/` |
+| Rename dir | `configs/test/` → `configs/experiments/` |
+| Create dir | `configs/experiments/training_duration/` |
+| Create dir | `configs/experiments/data_proportions/` |
 | Move+rename | `verify_tokens_140m.yaml` → `training_duration/duration_0.5x.yaml` |
 | Move+rename | `verify_tokens_700m.yaml` → `training_duration/duration_2.5x.yaml` |
 | Move+rename | `verify_tokens_1400m.yaml` → `training_duration/duration_5.0x.yaml` |
-| Create | `config/examples/launch/README.md` |
+| Create | `configs/experiments/README.md` |
 | Create | `data_proportions/mix_baseline.yaml` |
 | Create | `data_proportions/mix_heavy_code.yaml` |
 | Create | `data_proportions/mix_heavy_science.yaml` |
@@ -105,13 +105,13 @@ Include:
 
 1. Verify directory structure created correctly
 2. Verify configs are valid YAML
-3. Test launch: `olmix launch run --config config/examples/launch/training_duration/duration_0.5x.yaml`
+3. Test launch: `olmix launch run --config configs/experiments/training_duration/duration_0.5x.yaml`
 4. Run one proportion experiment to verify it works
 
 ## Summary
 
 This reorganization:
-- Renames `configs/test/` → `config/examples/launch/` with clear subdirectories
+- Renames `configs/test/` → `configs/experiments/` with clear subdirectories
 - Documents existing training duration results in README
 - Adds 4 new proportion experiment configs for testing data mix effects
 - Total: 7 experiment configs organized into 2 logical suites

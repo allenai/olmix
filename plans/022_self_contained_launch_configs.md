@@ -154,8 +154,8 @@ The CLI's own `click.confirm("Proceed with this configuration?")` remains the si
 ## Verification
 
 1. `make run-checks` passes (format, lint, pyright 0 errors, 97 tests pass)
-2. `olmix generate -c configs/generations/example.yaml --base config/examples/launch/data_proportions/mix_baseline.yaml -o /tmp/test_gen` — produces 4 self-contained LaunchConfig YAMLs with `mix` and `group_id` fields
+2. `olmix generate -c configs/generations/example.yaml --base configs/experiments/data_proportions/mix_baseline.yaml -o /tmp/test_gen` — produces 4 self-contained LaunchConfig YAMLs with `mix` and `group_id` fields
 3. `olmix launch preview -v /tmp/test_gen/` — prints training commands for all 4 variants (no `--config` needed)
 4. `olmix launch run -v /tmp/test_gen/` — submits all 4 experiments to Beaker, confirmed 4/4 `STATUS_QUEUED`
 5. `olmix launch run --help` — shows `-v/--variants` only, no `--config`
-6. Existing `LaunchConfig.from_yaml("config/examples/launch/...")` still works (mix=None, group_id=None)
+6. Existing `LaunchConfig.from_yaml("configs/experiments/...")` still works (mix=None, group_id=None)
