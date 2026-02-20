@@ -181,7 +181,7 @@ regression:
   type: log_linear
   seed: 0
   n_test: 0
-  train_split: [1.0]
+  train_split: 1.0
   aggregate_task_families: true
 
 proposer:
@@ -199,7 +199,6 @@ constraints:
 
 filtering:
   keep_sources: []
-  support_domains: []
   drop_metrics: ["ultrachat_masked_ppl",
     "wildchat_masked_ppl",
     "qasper_yesno:rc::olmes",

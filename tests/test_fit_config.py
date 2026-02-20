@@ -51,7 +51,7 @@ class TestFitConfig:
         assert cfg.regression.type == "log_linear"
         assert cfg.regression.seed == 0
         assert cfg.regression.n_test == 0
-        assert cfg.regression.train_split == [1.0]
+        assert cfg.regression.train_split == 1.0
         assert cfg.regression.aggregate_task_families is False
 
         assert cfg.proposer.type == "exact"
@@ -64,7 +64,6 @@ class TestFitConfig:
         assert cfg.constraints.target_tokens is None
         assert cfg.constraints.repetition_factor == 5.0
 
-        assert cfg.filtering.support_domains == []
         assert cfg.filtering.drop_metrics == []
         assert cfg.filtering.fixed_weight == {}
         assert cfg.filtering.obj_weights == {}
@@ -128,7 +127,7 @@ class TestFitConfig:
                 "type": "log_linear",
                 "seed": 42,
                 "n_test": 10,
-                "train_split": [0.8],
+                "train_split": 0.8,
                 "aggregate_task_families": True,
             },
             "proposer": {
@@ -144,7 +143,6 @@ class TestFitConfig:
                 "repetition_factor": 3.0,
             },
             "filtering": {
-                "support_domains": ["a", "b"],
                 "drop_metrics": ["bad_metric"],
                 "fixed_weight": {"a": 0.7},
                 "obj_weights": {"task1": 0.5, "task2": 0.5},
@@ -202,7 +200,7 @@ class TestRegressionConfig:
     def test_defaults(self):
         cfg = RegressionConfig()
         assert cfg.type == "log_linear"
-        assert cfg.train_split == [1.0]
+        assert cfg.train_split == 1.0
 
 
 class TestProposerConfig:

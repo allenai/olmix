@@ -179,7 +179,7 @@ regression:
   type: log_linear
   seed: 0
   n_test: 0
-  train_split: [1.0]
+  train_split: 1.0
   aggregate_task_families: true
 
 proposer:
@@ -197,7 +197,6 @@ constraints:
 
 filtering:
   keep_sources: []
-  support_domains: []
   drop_metrics: []
   fixed_weight: {}
   obj_weights: {}

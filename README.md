@@ -89,7 +89,6 @@ constraints:
 
 filtering:
   keep_sources: []
-  support_domains: []
   drop_metrics: []
   fixed_weight: {}
   obj_weights: {}
@@ -160,7 +159,6 @@ That's it. All settings come from the YAML config. The two required CLI flags ar
 | Field | What it does |
 |-------|-------------|
 | `keep_sources` | Only use runs where these sources have nonzero weight (and all others are zero). |
-| `support_domains` | Only use runs where these domains' ratios sum to 1. |
 | `drop_metrics` | Exclude specific metrics from fitting. |
 | `fixed_weight` | Pin specific domains to fixed weights — they are excluded from optimization. Native dict syntax (not JSON string). |
 | `obj_weights` | Non-uniform weights for averaging BPB across tasks. Default is uniform. |

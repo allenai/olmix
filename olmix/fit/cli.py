@@ -48,7 +48,7 @@ def fit(config_path: str, output_dir_arg: str):
     cfg = FitConfig.from_yaml(config_path)
 
     # ── Load CSVs ─────────────────────────────────────────────────────────
-    ratios, metrics = load_from_csv(cfg.swarm.ratios, cfg.swarm.metrics)
+    ratios, metrics, domain_cols, metric_cols = load_from_csv(cfg.swarm.ratios, cfg.swarm.metrics)
 
     # ── Priors ────────────────────────────────────────────────────────────
     priors_data = cfg.priors.to_tuple()
@@ -56,7 +56,7 @@ def fit(config_path: str, output_dir_arg: str):
 
     original_priors_data = deepcopy(priors_data)
 
-    # Apply fixed_weight adjustments to priors and ratios
+    # If fixed_weight is set, remove the fixed domains from the priors and ratios and renormalize the rest
     fixed_weight_dict = cfg.filtering.fixed_weight if cfg.filtering.fixed_weight else None
     if fixed_weight_dict:
         new_priors = {k: v for k, v in priors_data[0].items() if k not in fixed_weight_dict}
@@ -65,27 +65,27 @@ def fit(config_path: str, output_dir_arg: str):
         priors_data[0].clear()
         priors_data[0].update(new_priors)
 
-        domains = ratios.columns[3:]
-        ratios[domains] = ratios[domains].div(ratios[domains].sum(axis=1), axis=0)
+        domain_cols = [c for c in domain_cols if c not in fixed_weight_dict]
+        ratios[domain_cols] = ratios[domain_cols].div(ratios[domain_cols].sum(axis=1), axis=0)
 
     logger.info("Source weights:")
     logger.info(priors_data[0])
 
-    # ── Validate constraints ─────────────────────────────────────────────
+    # Validate constraints
     if cfg.constraints.enabled and cfg.constraints.target_tokens is None:
         raise click.UsageError("constraints.enabled requires constraints.target_tokens")
 
-    # ── Validate eval config ──────────────────────────────────────────────
+    # Validate eval config
     if cfg.regression.aggregate_task_families and cfg.eval is None:
         raise click.UsageError("regression.aggregate_task_families requires eval config with task families")
 
-    # ── Validate proposer ─────────────────────────────────────────────────
+    # Validate proposer config
     if cfg.proposer.type == "search" and cfg.regression.type != "search":
         raise click.UsageError("proposer.type 'search' only works with regression.type 'search'")
     if cfg.proposer.kl_reg is not None and cfg.proposer.type != "exact":
         raise click.UsageError("proposer.kl_reg requires proposer.type 'exact'")
 
-    # ── Output directory ──────────────────────────────────────────────────
+    # output directory
     pathlib.Path(output_dir_arg).mkdir(parents=True, exist_ok=True)
     output_dir = _save_fit_config(cfg, output_dir_arg)
 
@@ -99,20 +99,21 @@ def fit(config_path: str, output_dir_arg: str):
         priors_data,
         original_priors_data,
         output_dir,
+        domain_cols=domain_cols,
+        metric_cols=metric_cols,
         eval_metrics=cfg.eval.metric_names if cfg.eval else None,
         task_families=cfg.eval.task_families if cfg.eval else None,
         experiment_groups=None,
         launch_configs=None,
         full_group_names=None,
         regression_type=cfg.regression.type,
-        train_split=tuple(cfg.regression.train_split),
+        train_split=cfg.regression.train_split,
         n_test=cfg.regression.n_test,
         seed=cfg.regression.seed,
         early_stopping=0.0,
         proposer_type=cfg.proposer.type,
         constrain_objective=cfg.constraints.enabled,
         temperature=cfg.proposer.temperature,
-        support_domains=tuple(cfg.filtering.support_domains),
         drop_metrics=tuple(cfg.filtering.drop_metrics),
         fixed_weight=fixed_weight_str,
         fit_only=cfg.proposer.fit_only,

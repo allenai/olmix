@@ -100,7 +100,7 @@ priors: # from https://huggingface.co/datasets/allenai/olmix/blob/main/mixture_r
     dclm:travel_and_tourism: 57642815530
     finemath-3plus: 34057973953 # 34 billion
     pes2o: 58552461187 # 60 billion
-    s2pdf:adult: 303073226 # taken from v2 
+    s2pdf:adult: 303073226 # taken from v2
     s2pdf:art_design: 6833185034
     s2pdf:crime_law: 42538674743
     s2pdf:education_jobs: 138127926093
@@ -143,7 +143,7 @@ regression:
   type: log_linear
   seed: 0
   n_test: 0
-  train_split: [256]
+  train_split: 256
   aggregate_task_families: false
 
 proposer:

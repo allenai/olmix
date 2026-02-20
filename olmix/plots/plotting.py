@@ -35,26 +35,11 @@ _bounds = [-1.0, -0.9, 0.9, 10]
 _norm = BoundaryNorm(_bounds, _cmap.N, extend="both")
 
 
-def bh_adjust(pvals: np.ndarray) -> np.ndarray:
-    """Benjamini-Hochberg FDR adjustment to convert p-values to q-values."""
-    flat = pvals.ravel().astype(float)
-    n = flat.size
-    order = np.argsort(flat)
-    ranks = np.empty_like(order)
-    ranks[order] = np.arange(1, n + 1)
-    q = flat * n / ranks
-    # enforce monotonicity
-    q_sorted = np.minimum.accumulate(q[order][::-1])[::-1]
-    out = np.empty_like(q_sorted)
-    out[order] = q_sorted
-    return out.reshape(pvals.shape)
-
-
 def mk_output_prefix(
     output_dir: str,
     metric: str,
     regression_type: str,
-    train_split: tuple[float, ...],
+    train_split: float,
     n_test: int,
     split_seed: int,
 ) -> str:
@@ -63,11 +48,11 @@ def mk_output_prefix(
     def sanitize(s: str) -> str:
         return re.sub(r"[^a-zA-Z0-9_\\-]", "_", s)
 
-    train_split_str = [str(t) for t in train_split]
+    train_split_str = str(train_split)
     return (
         os.path.join(output_dir, sanitize(metric))
         + (f"_{regression_type}_reg" if regression_type != "lightgbm" else "")
-        + (f"_trainsplit_{'_'.join(train_split_str)}" if train_split[0] != 1.0 else "")
+        + (f"_trainsplit_{train_split_str}" if train_split != 1.0 else "")
         + (f"_ntest_{n_test}" if n_test != 0 else "")
         + (f"_seed_{split_seed}" if split_seed != 0 else "")
     )
@@ -80,7 +65,7 @@ def plot_correlation(
     X_train: np.ndarray,
     index: int,
     predictors: list["Regressor"],
-    train_split: tuple[float, ...],
+    train_split: float,
     n_test: int,
     split_seed: int,
     metric_name: str,
@@ -112,8 +97,8 @@ def plot_correlation(
 
     corr_results = {}
 
-    if train_split[0] == 1 and n_test == 0 and len(test_ratios_path) == 0:
-        # Only plot train if train and test are the same
+    if n_test == 0 and len(test_ratios_path) == 0:
+        # Only plot train if no test set is defined
         sns.regplot(
             x=y_pred_train,
             y=y_true_train,
@@ -183,16 +168,13 @@ def plot_correlation(
     plt.grid(True, linestyle="dashed")
     plt.tight_layout()
 
+    output_prefix = mk_output_prefix(output_dir, metric_name, regression_type, train_split, n_test, split_seed)
+
     # Save figure
-    plt.savefig(
-        f"{mk_output_prefix(output_dir, metric_name, regression_type, train_split, n_test, split_seed)}_fit.png"
-    )
+    plt.savefig(f"{output_prefix}_fit.png")
     plt.close()
 
-    with open(
-        f"{mk_output_prefix(output_dir, metric_name, regression_type, train_split, n_test, split_seed)}_correlations.json",
-        "w",
-    ) as f:
+    with open(f"{output_prefix}_correlations.json", "w") as f:
         f.write(json.dumps(corr_results))
 
 
@@ -203,65 +185,24 @@ def plot_interaction_matrix(
     domain_names: list[str],
     metric_names: list[str],
     ratios: pd.DataFrame,
-    interactions: list[str] | None = None,
 ):
     """Create a heatmap showing domain-metric interaction coefficients."""
     metric_names = [metric.split("/")[-1].split(" ")[0] for metric in metric_names]
 
-    interaction_pairs = []
-    if interactions is not None:
-        for interaction in interactions:
-            interaction_pairs.append(tuple([int(var) for var in interaction.split(",")]))
-
-    interaction_matrix = np.zeros((len(metric_names), len(domain_names) + len(interaction_pairs)))
+    interaction_matrix = np.zeros((len(metric_names), len(domain_names)))
 
     for i, predictor in enumerate(predictors):
         if regression_type == "lightgbm":
             interaction_matrix[i] = predictor.model.feature_importances_
         elif regression_type == "log_linear":
             interaction_matrix[i] = predictor.model[1:]
-        elif regression_type == "linear":
-            # normalize coefficients by the standard deviation of the corresponding domain
-            # std = ratios[ratios.columns[3:]].std(ddof=0).values  # std for selected columns only
-            interaction_matrix[i] = predictor.model.params  # * std
-        elif regression_type == "quadratic":
-            interaction_matrix[i] = predictor.model.params
-
-    domain_reordering = None
-    if "a3d4f82c" in output_dir:
-        # hardcode the nice block structure for the superswarm
-        new_order = [
-            "code_fim",
-            "dolminomath",
-            "megamatt",
-            "openmathreasoning-fullthoughts-rewrite",
-            "swallowcode",
-            "swallowmath",
-            "tinymath-mind",
-            "tinymath-pot",
-            "flan",
-            "instruction-new-format",
-            "nemotron-synth-qa",
-            "rcqa",
-            "reddit-high",
-            "sponge",
-            "hqweb-pdf",
-        ]
-        domain_reordering = [domain_names.index(d) for d in new_order]
-        domain_names = new_order
-        interaction_matrix = interaction_matrix[:, domain_reordering]
+        else:
+            logger.info(f"Unknown regression type: {regression_type}, skipping...")
+            return
 
     sorted_metric_indices = np.argsort(metric_names)
     metric_names = [metric_names[i] for i in sorted_metric_indices]
     interaction_matrix = interaction_matrix[sorted_metric_indices, :]
-
-    if "olmo3:dev:7b:gen" in metric_names and "olmo3:dev:7b:math:v2" in metric_names:
-        if metric_names.index("olmo3:dev:7b:gen") < metric_names.index("olmo3:dev:7b:math:v2"):
-            # Swap the two if they are in the wrong order
-            idx_gen = metric_names.index("olmo3:dev:7b:gen")
-            idx_math = metric_names.index("olmo3:dev:7b:math:v2")
-            metric_names[idx_gen], metric_names[idx_math] = metric_names[idx_math], metric_names[idx_gen]
-            interaction_matrix[[idx_gen, idx_math]] = interaction_matrix[[idx_math, idx_gen]]
 
     plt.figure(figsize=(20, 16))
     plt.imshow(interaction_matrix, cmap="rainbow", aspect="auto")
@@ -280,13 +221,9 @@ def plot_interaction_matrix(
 
     # Annotate each cell with its value
     for i in range(len(metric_names)):
-        if regression_type in ["linear", "quadratic"]:
-            p_values = predictors[i].model.pvalues
         for j in range(len(domain_names)):
             val = interaction_matrix[i, j]
             text_str = f"β={val:.2f}"
-            if regression_type in ["linear", "quadratic"]:
-                text_str += f"\np={p_values[j]:.2g}"
             plt.text(
                 j,
                 i,
@@ -307,148 +244,16 @@ def plot_interaction_matrix(
     np.save(f"{output_dir}/interaction_matrix.npy", interaction_matrix)
 
 
-def plot_interaction_matrix_signed_evidence(
-    output_dir: str,
-    predictors: list,
-    regression_type: str,
-    domain_names: list[str],
-    metric_names: list[str],
-    ratios: pd.DataFrame,
-    use_fdr: bool = False,
-    p_cap: float = 10.0,  # kept for API compatibility; unused in p-coloring
-    sig_threshold: float = 0.05,
-    gamma: float = 1.5,  # >1 makes the color mapping less drastic
-):
-    """Create a signed evidence heatmap with p-value coloring."""
-    # Normalize metric labels
-    metric_names = [m.split("/")[-1].split(" ")[0] for m in metric_names]
-
-    # Optional hardcoded domain block structure + build a column permutation
-    domain_reordering = None
-    if "a3d4f82c" in output_dir:
-        new_order = [
-            "code_fim",
-            "dolminomath",
-            "megamatt",
-            "openmathreasoning-fullthoughts-rewrite",
-            "swallowcode",
-            "swallowmath",
-            "tinymath-mind",
-            "tinymath-pot",
-            "flan",
-            "instruction-new-format",
-            "nemotron-synth-qa",
-            "rcqa",
-            "reddit-high",
-            "sponge",
-            "hqweb-pdf",
-        ]
-        domain_reordering = [domain_names.index(d) for d in new_order]
-        domain_names = new_order
-
-    # Collect coefficients (B) and p-values (P)
-    B = np.zeros((len(metric_names), len(domain_names)))
-    P = np.full_like(B, np.nan, dtype=float)
-
-    for i, pred in enumerate(predictors):
-        if regression_type == "linear":
-            # Assumes pred.model.params and pred.model.pvalues are aligned to current domain_names order
-            B[i] = pred.model.params
-            P[i] = pred.model.pvalues
-        elif regression_type == "lightgbm":
-            # Feature importances only; no p-values
-            B[i] = getattr(pred.model, "feature_importances_", np.zeros(len(domain_names)))
-        elif regression_type == "log_linear":
-            # e.g., first element intercept, then one per domain
-            B[i] = pred.model[1:]
-
-    # Row (metric) sorting
-    order = np.argsort(metric_names)
-    metric_names = [metric_names[k] for k in order]
-    B = B[order]
-    P = P[order]
-
-    if "olmo3:dev:7b:gen" in metric_names and "olmo3:dev:7b:math:v2" in metric_names:
-        if metric_names.index("olmo3:dev:7b:gen") < metric_names.index("olmo3:dev:7b:math:v2"):
-            # Swap the two if they are in the wrong order
-            idx_gen = metric_names.index("olmo3:dev:7b:gen")
-            idx_math = metric_names.index("olmo3:dev:7b:math:v2")
-            metric_names[idx_gen], metric_names[idx_math] = metric_names[idx_math], metric_names[idx_gen]
-            B[[idx_gen, idx_math]] = B[[idx_math, idx_gen]]
-            P[[idx_gen, idx_math]] = P[[idx_math, idx_gen]]
-
-    # Column (domain) reordering to match hardcoded order, if requested
-    if domain_reordering is not None:
-        B = B[:, domain_reordering]
-        P = P[:, domain_reordering]
-
-    # Plotting
-    if regression_type == "linear" and np.isfinite(P).any():
-        # Optionally compute FDR q-values for dimming only
-        bh_adjust(P) if use_fdr else P
-
-        # ---- COLOR BY p, gently (bounded), while TEXT shows raw p ----
-        # Map p in [0,1] to a gentle strength via (1 - p)^(1/gamma), then apply sign(β)
-        P_safe = np.clip(P, 0.0, 1.0)
-        p_strength = (1.0 - P_safe) ** (1.0 / max(gamma, 1e-6))
-        signed_score = np.sign(B) * p_strength  # in [-1, 1]
-
-        plt.figure(figsize=(20, 16))
-        # im = plt.imshow(
-        #    signed_score,
-        #    cmap="coolwarm",
-        #    norm=TwoSlopeNorm(vmin=-v, vcenter=0.0, vmax=v),
-        #    aspect="auto",
-        # )
-
-        im = plt.imshow(signed_score, cmap=_cmap, norm=_norm, aspect="auto")
-
-        # Dim non-significant cells (gray overlay)
-        # mask = (Q if use_fdr else P_safe) > sig_threshold
-        # overlay = np.zeros((*signed_score.shape, 4))
-        # overlay[mask] = [0.7, 0.7, 0.7, 0.6]
-        # plt.imshow(overlay, aspect="auto")
-
-        # Annotate with β and RAW p (as requested)
-        for i in range(len(metric_names)):
-            for j in range(len(domain_names)):
-                text_str = f"β={B[i, j]:.2f}\np={P[i, j]:.2g}"
-                text_color = "black"  # if abs(signed_score[i, j]) < 0.5 * v else "white"
-                plt.text(j, i, text_str, ha="center", va="center", fontsize=8, color=text_color)
-
-        cbar = plt.colorbar(im)
-        cbar.set_label(r"sign(β) × (1 − p)$^{1/\gamma}$")
-        better = "lower is better"
-        plt.title(f"Signed evidence heatmap (color ∝ p, gentler gradient; text shows raw p)\n({better})")
-
-    else:
-        # No p-values available: show β heatmap only
-        plt.figure(figsize=(25, 16))
-        im = plt.imshow(B, cmap="coolwarm", aspect="auto")
-        for i in range(len(metric_names)):
-            for j in range(len(domain_names)):
-                plt.text(j, i, f"{B[i, j]:.2f}", ha="center", va="center", fontsize=8)
-        cbar = plt.colorbar(im)
-        cbar.set_label("β value")
-        plt.title(f"β heatmap ({regression_type})")
-
-    plt.xticks(ticks=np.arange(len(domain_names)), labels=domain_names, rotation=90)
-    plt.yticks(ticks=np.arange(len(metric_names)), labels=metric_names)
-    plt.tight_layout()
-    plt.savefig(f"{output_dir}/interaction_matrix_signed_evidence.png", bbox_inches="tight")
-    plt.close()
-
-
 def plot_and_log_weights(
     prior: dict[str, float],
     original_prior: dict[str, float],
     prediction: np.ndarray,
     metric_name: str,
     regression_type: str,
-    train_split: tuple[float, ...],
+    train_split: float,
     n_test: int,
     split_seed: int,
-    df_config: pd.DataFrame,
+    domain_cols: list[str],
     output_dir: str = BASE_OUTPUT_DIR,
     fixed_weight: dict[str, float] | None = None,
     expand_collapsed_weights_fn=None,
@@ -466,14 +271,14 @@ def plot_and_log_weights(
         out = [{"domain": domain, "weight": weight} for domain, weight in opt_weight_dict.items()]
         columns = list(prior.keys())
     else:
-        columns = df_config.columns[3:].to_list()
+        columns = domain_cols
         out = [{"domain": columns[idx], "weight": weight} for idx, weight in enumerate(prediction)]
 
     if fixed_weight is not None and add_back_in_fixed_source_weights_fn is not None:
         opt_weight_dict = add_back_in_fixed_source_weights_fn(opt_weight_dict, original_prior, fixed_weight)
         out = [{"domain": domain, "weight": weight} for domain, weight in opt_weight_dict.items()]
 
-    if len(out) != len(df_config.columns[3:]):
+    if len(out) != len(domain_cols):
         logger.info("RAW WEIGHTS:")
         raw_weights = [{"domain": columns[idx], "weight": weight} for idx, weight in enumerate(prediction)]
         logger.info(raw_weights)
