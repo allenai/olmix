@@ -1,6 +1,3 @@
-# DCLM baseline fit config
-# Fits regression models against 127 DCLM swarm runs across 24 DataDelve domains
-
 swarm:
   ratios: ratios.csv # https://huggingface.co/datasets/allenai/olmix/blob/main/mixture_reuse/real_world/full_reuse/update5_partition_pdfs_seed0/ratios.csv
   metrics: metrics.csv # https://huggingface.co/datasets/allenai/olmix/blob/main/mixture_reuse/real_world/full_reuse/update5_partition_pdfs_seed0/metrics.csv

@@ -1,0 +1,51 @@
+swarm:
+  ratios: ratios.csv # https://huggingface.co/datasets/allenai/olmix/blob/main/mixture_reuse/real_world/full_reuse/update2_add_more_sources_seed0/ratios.csv
+  metrics: metrics.csv # https://huggingface.co/datasets/allenai/olmix/blob/main/mixture_reuse/real_world/full_reuse/update2_add_more_sources_seed0/metrics.csv
+
+priors: # from https://huggingface.co/datasets/allenai/olmix/blob/main/mixture_reuse/real_world/full_reuse/update2_add_more_sources_seed0/meta.json
+  relative_sizes:
+    algebraicstack: 0.02
+    arxiv: 0.04
+    existing: 0.7
+    finemath-3plus: 0.1
+    pes2o: 0.02
+    s2pdfv2: 0.1
+    wikipedia: 0.02
+  token_counts:
+    algebraicstack: 11818955329
+    arxiv: 20773846846
+    existing: 5136849631296
+    finemath-3plus: 34057973953
+    pes2o: 58552461187
+    s2pdfv2: 1034238607178
+    wikipedia: 10067758073
+
+regression:
+  type: log_linear
+  seed: 0
+  n_test: 0
+  train_split: 1.0
+  aggregate_task_families: false
+
+proposer:
+  type: exact
+  temperature: null
+  kl_reg: 0.05
+  fit_only: false
+  make_worst_mix: false
+
+constraints:
+  enabled: true
+  target_tokens: 1_000_000_000_000
+  repetition_factor: 4.0
+
+filtering:
+  drop_metrics: ["ultrachat_masked_ppl",
+    "wildchat_masked_ppl",
+    "qasper_yesno:rc::olmes",
+    "sciriff_yesno:rc::olmes",
+    "lab_bench_dbqa",
+    "lab_bench_protocolqa",
+    "medqa_en:rc::none"
+  ]
+  obj_weights: {}
