@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Annotated, Any, Literal, Union
 
 import yaml
-from pydantic import BaseModel, Discriminator, Tag, model_validator
+from pydantic import BaseModel, Discriminator, Tag
 
 PathType = Union[Path, PathLike[Any], str]
 
@@ -21,34 +21,15 @@ class SwarmDataConfig(BaseModel):
 
 
 class PriorsConfig(BaseModel):
-    """Token distribution across domains.
+    """Token distribution across domains (inline priors)."""
 
-    Only ``token_counts`` is stored; ``relative_sizes`` and ``total_tokens``
-    are computed properties derived from it.
-    """
-
+    relative_sizes: dict[str, float]
+    total_tokens: int | None = None  # we don't actually use this for now
     token_counts: dict[str, int]
 
-    @model_validator(mode="before")
-    @classmethod
-    def _strip_derived_fields(cls, data: Any) -> Any:
-        """Drop ``relative_sizes`` and ``total_tokens`` from input for backward compat."""
-        if isinstance(data, dict):
-            data = {k: v for k, v in data.items() if k not in ("relative_sizes", "total_tokens")}
-        return data
-
-    @property
-    def relative_sizes(self) -> dict[str, float]:
-        """Normalized token fractions (sum to 1)."""
-        total = sum(self.token_counts.values())
-        if total == 0:
-            return {k: 0.0 for k in self.token_counts}
-        return {k: v / total for k, v in self.token_counts.items()}
-
-    @property
-    def total_tokens(self) -> int:
-        """Total token count across all domains."""
-        return sum(self.token_counts.values())
+    def to_tuple(self) -> tuple[dict[str, float], int | None, dict[str, int]]:
+        """Return the (relative_sizes, total_tokens, token_counts) tuple expected by run_fit."""
+        return (dict(self.relative_sizes), self.total_tokens, dict(self.token_counts))
 
 
 class RegressionConfig(BaseModel):
@@ -57,7 +38,7 @@ class RegressionConfig(BaseModel):
     type: str = "log_linear"
     seed: int = 0
     n_test: int = 0
-    train_split: list[float] = [1.0]
+    train_split: float = 1.0
     aggregate_task_families: bool = False
 
 
@@ -67,7 +48,6 @@ class ProposerConfig(BaseModel):
     type: str = "exact"
     temperature: float | None = None
     kl_reg: float | None = None
-    use_natural_kl: bool = False
     fit_only: bool = False
     make_worst_mix: bool = False
 
@@ -77,16 +57,13 @@ class ConstraintsConfig(BaseModel):
 
     enabled: bool = False
     target_tokens: int | None = None
-    repetition_factor: float = 5.0
+    repetition_factor: float = 4.0
 
 
 class FilteringConfig(BaseModel):
     """Domain/metric filtering."""
 
-    keep_sources: list[str] = []
-    support_domains: list[str] = []
     drop_metrics: list[str] = []
-    fixed_weight: dict[str, float] = {}
     obj_weights: dict[str, float] = {}
 
 
@@ -117,7 +94,7 @@ class InLoopEvalConfig(BaseModel):
 
 
 class OfflineEvalConfig(BaseModel):
-    """Eval config for offline (cookbook-eval) metrics.
+    """Eval config for offline metrics.
 
     Tasks are nested by family: {family: [metric_name, ...]}.
     Used by ``olmix fit`` only.
@@ -157,7 +134,7 @@ class FitConfig(BaseModel):
 
     swarm: SwarmDataConfig
     priors: PriorsConfig
-    eval: EvalConfig
+    eval: EvalConfig | None = None
     regression: RegressionConfig = RegressionConfig()
     proposer: ProposerConfig = ProposerConfig()
     constraints: ConstraintsConfig = ConstraintsConfig()
@@ -185,9 +162,9 @@ class FitConfig(BaseModel):
         with open(path) as f:
             data = yaml.safe_load(f)
 
-        # Preprocess fraction strings in filtering.obj_weights and filtering.fixed_weight
+        # Preprocess fraction strings in filtering.obj_weights
         if "filtering" in data and isinstance(data["filtering"], dict):
-            for field_name in ["obj_weights", "fixed_weight"]:
+            for field_name in ["obj_weights"]:
                 if field_name in data["filtering"] and isinstance(data["filtering"][field_name], dict):
                     result = {}
                     for key, value in data["filtering"][field_name].items():

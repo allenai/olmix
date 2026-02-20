@@ -95,7 +95,7 @@ def compute_constraints_from_config(
     config: LaunchConfig,
     *,
     target_tokens: int,
-    repetition_factor: float = 5.0,
+    repetition_factor: float = 4.0,
     use_cache: bool = True,
 ) -> tuple[int, dict[str, float], float]:
     """Compute constraints from config's sources and target settings.
@@ -465,19 +465,17 @@ class Proposer:
 class SimulationProposer(Proposer):
     def propose(
         self,
-        index: int,
         predictor: list[Regressor],
         prior_distributions: dict,
         token_counts: dict[str, int],
         seed: int = 1337,
         search_iterations: int = 10,
         constrain_objective: bool = False,
-        swarm_config: LaunchConfig | None = None,
         obj_weights: list | None = None,
         temperature: float | None = None,
         make_worst_mix: bool = False,
         target_tokens: int | None = None,
-        repetition_factor: float = 5.0,
+        repetition_factor: float = 4.0,
         **kwargs,
     ) -> np.ndarray:
         np.random.seed(seed)
@@ -582,14 +580,12 @@ class SimulationProposer(Proposer):
 class SearchProposer(Proposer):
     def propose(
         self,
-        index: int,
         predictor: list[SearchRegressor],
         prior_distributions: dict,
         token_counts: dict[str, int],
         constrain_objective: bool = False,
-        swarm_config: LaunchConfig | None = None,
         target_tokens: int | None = None,
-        repetition_factor: float = 5.0,
+        repetition_factor: float = 4.0,
         **kwargs,
     ):
         if constrain_objective:
@@ -625,12 +621,10 @@ class LogLinearExactProposer(Proposer):
         prior_distributions: dict,
         token_counts: dict[str, int],
         constrain_objective: bool = False,
-        swarm_config: LaunchConfig | None = None,
-        kl_reg: float | None = 0.1,
+        kl_reg: float | None = 0.05,
         obj_weights: list | None = None,
-        manual_kl: dict | None = None,
         target_tokens: int | None = None,
-        repetition_factor: float = 5.0,
+        repetition_factor: float = 4.0,
         **kwargs,
     ):
         if kl_reg is None:
@@ -650,13 +644,8 @@ class LogLinearExactProposer(Proposer):
 
         x = cp.Variable(d)
 
-        if manual_kl is not None:
-            logger.info(f"Using manual KL prior distribution: {manual_kl}")
-            q = np.array(list(manual_kl.values()))
-        else:
-            logger.info(f"Using prior distribution for KL: {prior_distributions}")
-            q = np.array(list(prior_distributions.values()))
-
+        logger.info(f"Using prior distribution for KL: {prior_distributions}")
+        q = np.array(list(prior_distributions.values()))
         q = np.asarray(q, dtype=float)
         eps = 1e-12
         q = np.maximum(q, eps)  # ensure strictly positive
@@ -721,33 +710,6 @@ def build_regression(
     reg = REGRESSION_TYPES[regression_type](requested_tokens=requested_tokens)
     reg.fit(X_train, Y_train, idx, early_stopping=early_stopping)
     return reg
-
-
-def get_runs_without_wandb(full_group_name, dashboard="olmo-3-evals"):  # "regmixer"):
-    bucket = "ai2-llm"
-    base_prefix = f"evaluation/{dashboard}/"
-
-    s3 = boto3.client("s3")
-
-    paginator = s3.get_paginator("list_objects_v2")
-    pages = paginator.paginate(Bucket=bucket, Prefix=base_prefix)
-
-    # Extract unique display names that match the pattern
-    display_names = set()
-    for page in pages:
-        if "Contents" in page:
-            for obj in page["Contents"]:
-                key = obj["Key"]
-                # Extract the display name from the key
-                # Format: evaluation/{dashboard}/{display_name}/...
-                parts = key.split("/")
-                if len(parts) >= 3:
-                    display_name = parts[2]  # The display name part
-                    if display_name.startswith(full_group_name):
-                        display_names.add(display_name)
-
-    print(f"Found display names: {sorted(display_names)}")
-    return display_names
 
 
 def get_runs_from_api(
@@ -1062,7 +1024,7 @@ def expand_collapsed_weights(
     collapsed_prior: dict[str, float],
 ) -> dict[str, float]:
     topics_to_expand = list(set(list(original_prior.keys())).difference(set(list(collapsed_prior.keys()))))
-    collapsed_sources = list(set(list(collapsed_prior.keys())).difference(set(list(original_prior.keys()))))
+    collapsed_sources = sorted(list(set(list(collapsed_prior.keys())).difference(set(list(original_prior.keys())))))
 
     for source in collapsed_sources:
         topics_per_source = sorted([t for t in topics_to_expand if source in t])
@@ -1073,41 +1035,6 @@ def expand_collapsed_weights(
         opt_weights.update(topic_weights)  # add the topic keys with their expanded weights
 
     return opt_weights
-
-
-def add_back_in_fixed_source_weights(
-    opt_weights: dict[str, float], original_prior: dict[str, float], fixed_weight: dict[str, float]
-) -> dict[str, float]:
-    domains_to_add_back_in = list(set(list(original_prior.keys())).difference(set(list(opt_weights.keys()))))
-
-    final_weights = {}
-    for source, weight in fixed_weight.items():
-        if any([domain.startswith(source + ":") for domain in opt_weights]):
-            # this source is already in the opt_weights, we just need to normalize it
-            # get all the topics associated with this source, normalize the within-source distribution, and scale it by the fixed weights
-            topics_per_source = {t: w for t, w in opt_weights.items() if t.startswith(source + ":")}
-            total = sum(list(topics_per_source.values()))
-            topics_per_source = {t: w / total * weight for t, w in topics_per_source.items()}
-            final_weights.update(topics_per_source)
-
-        elif source in domains_to_add_back_in:
-            # this source is not in the opt_weights, but it is in the original prior and has a fixed weight
-            # we can just add it back in with its fixed weight
-            final_weights[source] = weight
-
-        elif any([domain.startswith(source + ":") for domain in domains_to_add_back_in]):
-            # this source is not in the opt_weights, but it has topics in the original prior
-            # we need to expand the fixed weight according to the original prior distribution
-            topics_per_source = {t: w for t, w in original_prior.items() if t.startswith(source + ":")}
-            total = sum(list(topics_per_source.values()))
-            topics_per_source = {t: w / total * weight for t, w in topics_per_source.items()}
-            final_weights.update(topics_per_source)
-
-    # normalize again just to fix any numerical issues
-    total = sum(final_weights.values())
-    final_weights = {k: v / total for k, v in final_weights.items()}
-
-    return final_weights
 
 
 def save_fit_config(fit_config: dict, output_dir: str, custom_name: str | None = None) -> str:

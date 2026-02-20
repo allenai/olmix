@@ -17,48 +17,61 @@ cd olmix
 uv pip install -e ".[dev]"
 ```
 
-## Part 1: Fitting from CSV data
+## Part 1: Mixture optimization from CSV data
 
-The easiest way to use Olmix is to bring your own swarm results as CSV files. Our swarms are available on [Huggingface](https://huggingface.co/datasets/allenai/olmix). This section explains how to run regression fitting and mixture optimization.
+The easiest way to use Olmix is to bring your own swarm results as CSV files. Our swarms (30M models trained on 3B tokens) are available on [Huggingface](https://huggingface.co/datasets/allenai/olmix). This section explains how to run regression fitting on the swarm to output an optimized data mixture.
 
 ### Input format
 
-Prepare two CSV files. Each row is one training run from your swarm, and the two files are joined on the ID column (`run` or `run_id`).
+Prepare two CSV files. Each row is one proxy run from your swarm, and the two files are joined on the ID column (`run` or `run_id`).
 
 **`ratios.csv`** — the mixing weights used in each run. Domain columns must sum to ~1.0 per row:
 
-| run     | dclm  | wikipedia | arxiv |
-|---------|-------|-----------|-------|
-| run_001 | 0.45  | 0.30      | 0.25  |
-| run_002 | 0.60  | 0.20      | 0.20  |
-| run_003 | 0.33  | 0.33      | 0.34  |
+| run      | name          | index | dclm  | wikipedia | arxiv |
+|----------|---------------|-------|-------|-----------|-------|
+| hz0dfydj | my-swarm-0000 | 0     | 0.45  | 0.30      | 0.25  |
+| pj0hxxl7 | my-swarm-0001 | 1     | 0.60  | 0.20      | 0.20  |
+| sqleanmq | my-swarm-0002 | 2     | 0.33  | 0.33      | 0.34  |
 
 **`metrics.csv`** — the evaluation metrics measured for each run (lower is better for BPB metrics):
 
-| run     | arc_challenge_bpb | hellaswag_bpb | mmlu_stem_bpb |
-|---------|-------------------|---------------|---------------|
-| run_001 | 1.23              | 0.87          | 1.45          |
-| run_002 | 1.15              | 0.91          | 1.38          |
-| run_003 | 1.20              | 0.89          | 1.42          |
+| run      | name          | index | arc_challenge_bpb | hellaswag_bpb | mmlu_stem_bpb |
+|----------|---------------|-------|-------------------|---------------|---------------|
+| hz0dfydj | my-swarm-0000 | 0     | 1.23              | 0.87          | 1.45          |
+| pj0hxxl7 | my-swarm-0001 | 1     | 1.15              | 0.91          | 1.38          |
+| sqleanmq | my-swarm-0002 | 2     | 1.20              | 0.89          | 1.42          |
 
-The domain column names in `ratios.csv` and the metric column names in `metrics.csv` can be anything — olmix derives them from the CSV headers. Both `run` and `run_id` are accepted as the ID column. An optional `name` column in either file provides human-readable run labels.
+The domain column names in `ratios.csv` and the metric column names in `metrics.csv` can be anything — Olmix derives them automatically from the CSV headers. The following columns are treated as metadata and skipped during fitting: `run` (or `run_id`) — the required ID column used to join the two files; `name` — an optional human-readable label; `index` — an optional sequential index; and any unnamed row-index columns (e.g., added by pandas on export). Only `run` or `run_id` is required.
 
 ### Fit config
 
-`olmix fit` is configured entirely via a YAML file. See [`configs/fits/dclm_baseline.yaml`](configs/fits/dclm_baseline.yaml) for a full example. The config has these sections:
+`olmix fit` is configured via a YAML file. Run it with:
+
+```bash
+olmix fit --config configs/fits/dclm_baseline.yaml --output-dir output/my_fit
+```
+
+| Flag | Description |
+|------|-------------|
+| `--config` | Path to the YAML fit configuration file |
+| `--output-dir` | Directory for saving fit outputs |
+
+See [`configs/fits/dclm_baseline.yaml`](configs/fits/dclm_baseline.yaml) for a full example. The config has these sections:
 
 ```yaml
 swarm:
   ratios: path/to/ratios.csv        # Required — CSV with domain mixture ratios per run
   metrics: path/to/metrics.csv      # Required — CSV with eval metrics per run
 
-priors:                              # Required — token distribution across domains
+priors:
+  relative_sizes:
+    domain_a: 0.6
+    domain_b: 0.4
   token_counts:
     domain_a: 600000000
     domain_b: 400000000
 
-eval:                                 # Required — evaluation task definitions
-  type: offline                       # offline | inloop
+eval:                                # optional — omit to use all metrics without grouping
   tasks:
     math:
       - "minerva_math_algebra::olmes"
@@ -71,98 +84,77 @@ regression:
   type: log_linear                   # log_linear | lightgbm | search | gp | autoscale | bimix
   seed: 0
   n_test: 0
-  train_split: [1.0]
+  train_split: 1.0
   aggregate_task_families: false
 
 proposer:
   type: exact                        # exact | simulation | search
   temperature: null
   kl_reg: 0.1
-  use_natural_kl: false
   fit_only: false
   make_worst_mix: false
 
 constraints:
   enabled: false
   target_tokens: null                # Total token budget for the final training run
-  repetition_factor: 5.0
+  repetition_factor: 4.0
 
 filtering:
-  keep_sources: []
-  support_domains: []
   drop_metrics: []
-  fixed_weight: {}
   obj_weights: {}
 ```
 
-The **priors** section defines the natural token distribution across your domains via `token_counts`. Relative sizes and total tokens are computed automatically. Use `olmix priors compute` to scan S3 sources and generate the token counts for a config.
-
-The **eval** section defines which evaluation tasks to use, grouped by family. Two types are supported:
-
-- **`offline`** — for cookbook-eval metrics (used by `olmix fit` with CSV data). Tasks are metric names matching CSV column headers.
-- **`inloop`** — for WandB in-loop metrics (used by `olmix launch` and `olmix fit`). Tasks map olmo-core task IDs to WandB metric names: `{task_id: "eval/downstream/task_id (BPB v2)"}`.
-
-Task families are defined by the nesting structure (e.g., `math`, `code`, `qa`) and are used by `aggregate_task_families`.
-
-### Running a fit
-
-```bash
-olmix fit --config configs/fits/dclm_baseline.yaml --output-dir output/my_fit
-```
-
-That's it. All settings come from the YAML config. The two required CLI flags are:
-
-| Flag | Description |
-|------|-------------|
-| `--config` | Path to the YAML fit configuration file |
-| `--output-dir` | Directory for saving fit outputs |
-
 ### Config reference
+
+Only `swarm` and `priors` are required. All other sections are optional and fall back to the defaults shown above.
+
+#### `priors` section
+
+| Field | What it does |
+|-------|-------------|
+| `relative_sizes` | Fractional weight of each domain in the natural corpus (should sum to ~1.0). Defines the prior distribution used as the KL regularization target in the proposer. |
+| `token_counts` | Absolute token count per domain. Used for repetition constraint. |
+| `total_tokens` | (Optional) Total token budget across all domains, equal to the sum across `token_counts`. |
 
 #### `eval` section
 
 | Field | What it does |
 |-------|-------------|
-| `type` | Eval type: `offline` (cookbook-eval metrics for CSV-based fitting) or `inloop` (WandB in-loop metrics for launch + fitting) |
-| `tasks` | Tasks grouped by family. For `offline`: `{family: [metric_name, ...]}`. For `inloop`: `{family: {task_id: wandb_metric_name}}`. |
+| `tasks` | Metrics to include, grouped by task family. Each family maps to a list of metric names matching CSV column headers. Task families are used by `aggregate_task_families`. The entire `eval` section is optional — if omitted, all metrics in the CSV are used. |
 
 #### `regression` section
 
 | Field | What it does |
 |-------|-------------|
 | `type` | Model type: `log_linear` (default, parametric scaling law), `lightgbm` (gradient-boosted trees), `gp` (Gaussian process), `autoscale` (power-law autoscaling), `bimix` (BiMix-style power law) |
-| `aggregate_task_families` | Fit one model per task family (math, code, QA) instead of per individual task. Much faster with many metrics. |
-| `train_split` | Fraction of runs used for training. Default `[1.0]` uses all runs for both training and evaluation. |
-| `n_test` | Number of held-out test samples for evaluating the regression model. |
+| `aggregate_task_families` | Fit one model per task family (e.g., math, code, QA) instead of per individual task. Requires task family to be defined in `eval.tasks`. |
+| `train_split` | Fraction/number of runs used for fitting the regression model. Default `1.0` uses all runs. |
+| `n_test` | Number of held-out test samples for evaluating the regression model. If nonzero, only reports fit quality and does not propose a mix. |
 | `seed` | Random state for train-test split. |
 
 #### `proposer` section
 
 | Field | What it does |
 |-------|-------------|
-| `type` | How to search for optimal weights: `exact` (convex optimization for log-linear), `simulation` (Dirichlet Monte Carlo), `search` (grid over observed points) |
-| `kl_reg` | KL divergence regularization strength (exact proposer only). Penalizes the proposed mix for diverging from the prior. |
-| `use_natural_kl` | Use the natural (token-count-based) distribution as the KL reference, even when a manual prior is set. |
+| `type` | How to search for optimal weights: `exact` (convex optimization for log-linear), `simulation` (Dirichlet Monte Carlo), `search` (over swarm mixes) |
+| `kl_reg` | KL divergence regularization strength (exact proposer only). Penalizes the proposed mix for diverging from the prior as specified in `relative_sizes`. |
 | `temperature` | Temperature for adjusting the Dirichlet prior in simulation. Closer to 0 = more uniform. |
-| `fit_only` | Only fit the regression models, skip the mixture proposal step. Useful for inspecting model quality. |
+| `fit_only` | Only fit the regression models, skip the mixture proposal step. |
 | `make_worst_mix` | Invert the objective function and produce a bad mix (for counterfactual analysis). |
 
 #### `constraints` section
 
 | Field | What it does |
 |-------|-------------|
-| `enabled` | Enable token budget constraints on the proposed mixture. |
+| `enabled` | Enable repetition constraints in the optimization step. |
 | `target_tokens` | Total token budget for the final training run. Required when `enabled: true`. |
-| `repetition_factor` | Maximum times a source's tokens can be repeated (default: 5.0). |
+| `repetition_factor` | Maximum times a source's tokens can be repeated (default: 4.0). |
 
 #### `filtering` section
 
 | Field | What it does |
 |-------|-------------|
-| `keep_sources` | Only use runs where these sources have nonzero weight (and all others are zero). |
-| `support_domains` | Only use runs where these domains' ratios sum to 1. |
-| `drop_metrics` | Exclude specific metrics from fitting. |
-| `fixed_weight` | Pin specific domains to fixed weights — they are excluded from optimization. Native dict syntax (not JSON string). |
+| `drop_metrics` | Exclude specific metrics from the objective. |
 | `obj_weights` | Non-uniform weights for averaging BPB across tasks. Default is uniform. |
 
 ### Output
@@ -173,13 +165,12 @@ All results are written to a hashed subdirectory under the `--output-dir` you sp
 |------|-------------|
 | `config.json` | Full configuration used for this fit (for reproducibility) |
 | `interaction_matrix.png` | Heatmap of regression coefficients: rows are domains, columns are metrics. Shows which domains help or hurt each metric. |
-| `interaction_matrix_signed_evidence.png` | Same matrix colored by statistical significance. Green = significant positive effect, red = significant negative effect. |
 | `interaction_matrix.npy` | Raw interaction matrix as a NumPy array (for downstream analysis). |
 | `{metric}_*_fit.png` | Per-metric regression plot: predicted vs. actual values. Tight clustering along the diagonal means the model fits well. |
 | `{metric}_*_correlations.json` | Correlation metrics (e.g. R²) for each regression fit. |
 | `path_to_regression_model.txt` | Path to the cached regression model (pickle). Reused on subsequent fits with the same regression config. |
 
-When `fit_only: false`, the proposer step also produces:
+By default (unless `fit_only: true`), the proposer step also produces:
 
 | File | Description |
 |------|-------------|
