@@ -1,5 +1,4 @@
-# DCLM baseline fit config
-# Fits regression models against 127 DCLM swarm runs across 24 DataDelve domains
+# Config for full recomputation (c=3, seed 0), which is in Figure 10, Section 5.1 of Olmix https://arxiv.org/abs/2602.12237
 
 swarm:
   ratios: ratios.csv # https://huggingface.co/datasets/allenai/olmix/blob/main/mixture_reuse/real_world/full_recomputation/ratios.csv

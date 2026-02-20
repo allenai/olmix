@@ -1,0 +1,69 @@
+swarm:
+  ratios: ratios.csv # https://huggingface.co/datasets/allenai/olmix/blob/main/mixture_reuse/real_world/full_reuse/update1_add_stack_edu_seed0/ratios.csv
+  metrics: metrics.csv # https://huggingface.co/datasets/allenai/olmix/blob/main/mixture_reuse/real_world/full_reuse/update1_add_stack_edu_seed0/metrics.csv
+
+priors: # from https://huggingface.co/datasets/allenai/olmix/blob/main/mixture_reuse/real_world/full_reuse/update1_add_stack_edu_seed0/meta.json
+  relative_sizes:
+    dclm: 0.75
+    stack-edu:C: 0.00865014067293728
+    stack-edu:CSharp: 0.01316138975818085
+    stack-edu:Cpp: 0.02289090157264869
+    stack-edu:Go: 0.0025549851774443176
+    stack-edu:Java: 0.05726673428187064
+    stack-edu:JavaScript: 0.016234921995839823
+    stack-edu:Markdown: 0.05282498744087811
+    stack-edu:PHP: 0.013509414033430703
+    stack-edu:Python: 0.03291538382194868
+    stack-edu:Ruby: 0.002533393389274945
+    stack-edu:Rust: 0.002591251285383368
+    stack-edu:SQL: 0.0129037118936806
+    stack-edu:Shell: 0.004644948347541362
+    stack-edu:Swift: 0.0027585368895402655
+    stack-edu:TypeScript: 0.004559299439400369
+token_counts:
+    dclm: 5000000000000
+    stack-edu:C: 4735074247
+    stack-edu:CSharp: 7204525343
+    stack-edu:Cpp: 12530445761
+    stack-edu:Go: 1398595118
+    stack-edu:Java: 31347725888
+    stack-edu:JavaScript: 8886972357
+    stack-edu:Markdown: 28916320218
+    stack-edu:PHP: 7395033318
+    stack-edu:Python: 18017832560
+    stack-edu:Ruby: 1386775805
+    stack-edu:Rust: 1418447132
+    stack-edu:SQL: 7063472860
+    stack-edu:Shell: 2542637875
+    stack-edu:Swift: 1510019025
+    stack-edu:TypeScript: 2495753789
+
+regression:
+  type: log_linear
+  seed: 0
+  n_test: 0
+  train_split: 1.0
+  aggregate_task_families: false
+
+proposer:
+  type: exact
+  temperature: null
+  kl_reg: 0.05
+  fit_only: false
+  make_worst_mix: false
+
+constraints:
+  enabled: true
+  target_tokens: 1_000_000_000_000
+  repetition_factor: 4.0
+
+filtering:
+  drop_metrics: ["ultrachat_masked_ppl",
+    "wildchat_masked_ppl",
+    "qasper_yesno:rc::olmes",
+    "sciriff_yesno:rc::olmes",
+    "lab_bench_dbqa",
+    "lab_bench_protocolqa",
+    "medqa_en:rc::none"
+  ]
+  obj_weights: {}

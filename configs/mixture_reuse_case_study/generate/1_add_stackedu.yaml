@@ -1,4 +1,4 @@
-name: mixture-reuse-swarm
+name: mixture-reuse-swarm-add-stackedu
 
 data:
   sources:
@@ -258,4 +258,4 @@ swarm:
 
 
 
-max_tokens: 2910233600  # e.g. 20 * 14M params * 0.5 chinchilla multiple
+max_tokens: 2910233600
