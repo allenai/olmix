@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """One-time migration script: extract nested weights into explicit top-level `mix` fields.
 
-Walks each LaunchConfig YAML in configs/experiments/, computes flat mix entries
+Walks each LaunchConfig YAML in config/examples/launch/, computes flat mix entries
 from the product of source/topic/quality weights, removes nested weight fields,
 and adds a top-level `mix` section.
 
@@ -137,7 +137,7 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Preview without writing")
     args = parser.parse_args()
 
-    configs_dir = Path("configs/experiments")
+    configs_dir = Path("config/examples/launch")
     yaml_files = sorted(configs_dir.rglob("*.yaml"))
 
     print(f"Found {len(yaml_files)} config files in {configs_dir}/")

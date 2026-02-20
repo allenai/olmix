@@ -1,0 +1,41 @@
+swarm:
+  ratios: ratios.csv # https://huggingface.co/datasets/allenai/olmix/blob/main/mixture_reuse/real_world/full_reuse/update3_revise_pdfs_seed0/ratios.csv
+  metrics: metrics.csv # https://huggingface.co/datasets/allenai/olmix/blob/main/mixture_reuse/real_world/full_reuse/update3_revise_pdfs_seed0/metrics.csv
+
+priors: # from https://huggingface.co/datasets/allenai/olmix/blob/main/mixture_reuse/real_world/full_reuse/update3_revise_pdfs_seed0/meta.json
+  relative_sizes:
+    existing: 0.98
+    s2pdfv1: 0.02
+  token_counts:
+    existing: 5272120626684
+    s2pdfv1: 1034238607178
+
+regression:
+  type: search
+  seed: 0
+  n_test: 0
+  train_split: 8
+  aggregate_task_families: false
+
+proposer:
+  type: search
+  temperature: null
+  kl_reg: null
+  fit_only: false
+  make_worst_mix: false
+
+constraints:
+  enabled: true
+  target_tokens: 1_000_000_000_000
+  repetition_factor: 4.0
+
+filtering:
+  drop_metrics: ["ultrachat_masked_ppl",
+    "wildchat_masked_ppl",
+    "qasper_yesno:rc::olmes",
+    "sciriff_yesno:rc::olmes",
+    "lab_bench_dbqa",
+    "lab_bench_protocolqa",
+    "medqa_en:rc::none"
+  ]
+  obj_weights: {}

@@ -1,0 +1,85 @@
+swarm:
+  ratios: ratios.csv # https://huggingface.co/datasets/allenai/olmix/blob/main/dclm_swarm/ratios.csv
+  metrics: metrics.csv # https://huggingface.co/datasets/allenai/olmix/blob/main/dclm_swarm/metrics.csv
+
+priors: # from https://huggingface.co/datasets/allenai/olmix/blob/main/dclm_swarm/metrics.json
+  relative_sizes:
+    adult_content: 0.011426145559378242
+    art_and_design: 0.017115279947642753
+    crime_and_law: 0.03760251381333424
+    education_and_jobs: 0.03819063764260111
+    electronics_and_hardware: 0.02252846927808186
+    entertainment: 0.09499472729589659
+    fashion_and_beauty: 0.009181677850877463
+    finance_and_business: 0.06572786800235751
+    food_and_dining: 0.020291659593193807
+    games: 0.0510904592313224
+    health: 0.10085821548021548
+    history_and_geography: 0.028007795295185975
+    home_and_hobbies: 0.034621890011029464
+    industrial: 0.010640504851475604
+    literature: 0.05367136256765137
+    politics: 0.09838421860766539
+    religion: 0.04030199076983852
+    science_math_and_technology: 0.06933979163830614
+    social_life: 0.04443687756758139
+    software: 0.025134154331657502
+    software_development: 0.04835767747466825
+    sports_and_fitness: 0.03455368961865927
+    transportation: 0.02686612455867175
+    travel_and_tourism: 0.01667626901270792
+  token_counts:
+    adult_content: 67760078203
+    art_and_design: 70659711995
+    crime_and_law: 170130914779
+    education_and_jobs: 184690792861
+    electronics_and_hardware: 80168541745
+    entertainment: 441768061760
+    fashion_and_beauty: 37256539512
+    finance_and_business: 310313927581
+    food_and_dining: 105937299687
+    games: 229992491702
+    health: 393496227836
+    history_and_geography: 161049719459
+    home_and_hobbies: 126910777314
+    industrial: 43572140450
+    literature: 364834344848
+    politics: 611198130192
+    religion: 277776929208
+    science_math_and_technology: 427131054341
+    social_life: 218731841124
+    software: 108039380021
+    software_development: 223384974282
+    sports_and_fitness: 196759999355
+    transportation: 90793306202
+    travel_and_tourism: 57642815530
+
+regression:
+  type: log_linear
+  seed: 0
+  n_test: 0
+  train_split: 64
+  aggregate_task_families: false
+
+proposer:
+  type: exact
+  temperature: null
+  kl_reg: 0.05
+  fit_only: false
+  make_worst_mix: false
+
+constraints:
+  enabled: true
+  target_tokens: 1_000_000_000_000
+  repetition_factor: 4.0
+
+filtering:
+  drop_metrics: ["ultrachat_masked_ppl",
+    "wildchat_masked_ppl",
+    "qasper_yesno:rc::olmes",
+    "sciriff_yesno:rc::olmes",
+    "lab_bench_dbqa",
+    "lab_bench_protocolqa",
+    "medqa_en:rc::none"
+  ]
+  obj_weights: {}
