@@ -56,18 +56,6 @@ def fit(config_path: str, output_dir_arg: str):
 
     original_priors_data = deepcopy(priors_data)
 
-    # If fixed_weight is set, remove the fixed domains from the priors and ratios and renormalize the rest
-    fixed_weight_dict = cfg.filtering.fixed_weight if cfg.filtering.fixed_weight else None
-    if fixed_weight_dict:
-        new_priors = {k: v for k, v in priors_data[0].items() if k not in fixed_weight_dict}
-        total = sum(new_priors.values())
-        new_priors = {k: v / total for k, v in new_priors.items()}
-        priors_data[0].clear()
-        priors_data[0].update(new_priors)
-
-        domain_cols = [c for c in domain_cols if c not in fixed_weight_dict]
-        ratios[domain_cols] = ratios[domain_cols].div(ratios[domain_cols].sum(axis=1), axis=0)
-
     logger.info("Source weights:")
     logger.info(priors_data[0])
 
@@ -88,9 +76,6 @@ def fit(config_path: str, output_dir_arg: str):
     # output directory
     pathlib.Path(output_dir_arg).mkdir(parents=True, exist_ok=True)
     output_dir = _save_fit_config(cfg, output_dir_arg)
-
-    # ── Convert fixed_weight to JSON string for run_fit ───────────────────
-    fixed_weight_str = json.dumps(fixed_weight_dict) if fixed_weight_dict else None
 
     # ── Run fit ───────────────────────────────────────────────────────────
     run_fit(
@@ -115,7 +100,6 @@ def fit(config_path: str, output_dir_arg: str):
         constrain_objective=cfg.constraints.enabled,
         temperature=cfg.proposer.temperature,
         drop_metrics=tuple(cfg.filtering.drop_metrics),
-        fixed_weight=fixed_weight_str,
         fit_only=cfg.proposer.fit_only,
         make_worst_mix=cfg.proposer.make_worst_mix,
         kl_reg=cfg.proposer.kl_reg,

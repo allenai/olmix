@@ -1037,41 +1037,6 @@ def expand_collapsed_weights(
     return opt_weights
 
 
-def add_back_in_fixed_source_weights(
-    opt_weights: dict[str, float], original_prior: dict[str, float], fixed_weight: dict[str, float]
-) -> dict[str, float]:
-    domains_to_add_back_in = list(set(list(original_prior.keys())).difference(set(list(opt_weights.keys()))))
-
-    final_weights = {}
-    for source, weight in fixed_weight.items():
-        if any([domain.startswith(source + ":") for domain in opt_weights]):
-            # this source is already in the opt_weights, we just need to normalize it
-            # get all the topics associated with this source, normalize the within-source distribution, and scale it by the fixed weights
-            topics_per_source = {t: w for t, w in opt_weights.items() if t.startswith(source + ":")}
-            total = sum(list(topics_per_source.values()))
-            topics_per_source = {t: w / total * weight for t, w in topics_per_source.items()}
-            final_weights.update(topics_per_source)
-
-        elif source in domains_to_add_back_in:
-            # this source is not in the opt_weights, but it is in the original prior and has a fixed weight
-            # we can just add it back in with its fixed weight
-            final_weights[source] = weight
-
-        elif any([domain.startswith(source + ":") for domain in domains_to_add_back_in]):
-            # this source is not in the opt_weights, but it has topics in the original prior
-            # we need to expand the fixed weight according to the original prior distribution
-            topics_per_source = {t: w for t, w in original_prior.items() if t.startswith(source + ":")}
-            total = sum(list(topics_per_source.values()))
-            topics_per_source = {t: w / total * weight for t, w in topics_per_source.items()}
-            final_weights.update(topics_per_source)
-
-    # normalize again just to fix any numerical issues
-    total = sum(final_weights.values())
-    final_weights = {k: v / total for k, v in final_weights.items()}
-
-    return final_weights
-
-
 def save_fit_config(fit_config: dict, output_dir: str, custom_name: str | None = None) -> str:
     # Serialize dict in a stable way
     config_str = json.dumps(fit_config, sort_keys=True)

@@ -64,7 +64,6 @@ class FilteringConfig(BaseModel):
     """Domain/metric filtering."""
 
     drop_metrics: list[str] = []
-    fixed_weight: dict[str, float] = {}
     obj_weights: dict[str, float] = {}
 
 
@@ -163,9 +162,9 @@ class FitConfig(BaseModel):
         with open(path) as f:
             data = yaml.safe_load(f)
 
-        # Preprocess fraction strings in filtering.obj_weights and filtering.fixed_weight
+        # Preprocess fraction strings in filtering.obj_weights
         if "filtering" in data and isinstance(data["filtering"], dict):
-            for field_name in ["obj_weights", "fixed_weight"]:
+            for field_name in ["obj_weights"]:
                 if field_name in data["filtering"] and isinstance(data["filtering"][field_name], dict):
                     result = {}
                     for key, value in data["filtering"][field_name].items():

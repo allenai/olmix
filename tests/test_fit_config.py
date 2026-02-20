@@ -65,7 +65,6 @@ class TestFitConfig:
         assert cfg.constraints.repetition_factor == 5.0
 
         assert cfg.filtering.drop_metrics == []
-        assert cfg.filtering.fixed_weight == {}
         assert cfg.filtering.obj_weights == {}
 
     def test_from_yaml(self, sample_config_dict, tmp_path):
@@ -144,7 +143,6 @@ class TestFitConfig:
             },
             "filtering": {
                 "drop_metrics": ["bad_metric"],
-                "fixed_weight": {"a": 0.7},
                 "obj_weights": {"task1": 0.5, "task2": 0.5},
             },
         }
@@ -156,7 +154,6 @@ class TestFitConfig:
         assert cfg.regression.seed == 42
         assert cfg.constraints.enabled is True
         assert cfg.constraints.target_tokens == 1_000_000_000
-        assert cfg.filtering.fixed_weight == {"a": 0.7}
 
 
 class TestPriorsConfig:
@@ -220,12 +217,7 @@ class TestConstraintsConfig:
 class TestFilteringConfig:
     def test_defaults(self):
         cfg = FilteringConfig()
-        assert cfg.fixed_weight == {}
         assert cfg.obj_weights == {}
-
-    def test_native_dict(self):
-        cfg = FilteringConfig(fixed_weight={"domain_a": 0.3, "domain_b": 0.7})
-        assert cfg.fixed_weight["domain_a"] == 0.3
 
 
 class TestInLoopEvalConfig:

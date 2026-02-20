@@ -73,8 +73,8 @@ priors: # from https://huggingface.co/datasets/allenai/olmix/blob/main/mixture_r
     wikipedia: 0.02040816327
   total_tokens: null
   token_counts:
-    arxiv: 20773846846 # 20 billion
-    dclm:adult_content: 67760078203 # multiplied natural distribution by 5T guess
+    arxiv: 20773846846
+    dclm:adult_content: 67760078203
     dclm:art_and_design: 70659711995
     dclm:crime_and_law: 170130914779
     dclm:education_and_jobs: 184690792861
@@ -100,7 +100,7 @@ priors: # from https://huggingface.co/datasets/allenai/olmix/blob/main/mixture_r
     dclm:travel_and_tourism: 57642815530
     finemath-3plus: 34057973953 # 34 billion
     pes2o: 58552461187 # 60 billion
-    s2pdf:adult: 303073226 # taken from v2
+    s2pdf:adult: 303073226
     s2pdf:art_design: 6833185034
     s2pdf:crime_law: 42538674743
     s2pdf:education_jobs: 138127926093
@@ -161,7 +161,6 @@ constraints:
 
 filtering:
   keep_sources: []
-  support_domains: []
   drop_metrics: ["ultrachat_masked_ppl",
     "wildchat_masked_ppl",
     "qasper_yesno:rc::olmes",
@@ -170,5 +169,4 @@ filtering:
     "lab_bench_protocolqa",
     "medqa_en:rc::none"
   ]
-  fixed_weight: {}
   obj_weights: {}
