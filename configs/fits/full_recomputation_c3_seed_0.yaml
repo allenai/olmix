@@ -71,7 +71,6 @@ priors: # from https://huggingface.co/datasets/allenai/olmix/blob/main/mixture_r
     stack-edu:Swift: 0.0019703834928440217
     stack-edu:TypeScript: 0.003256642457235611
     wikipedia: 0.02040816327
-  total_tokens: null
   token_counts:
     arxiv: 20773846846
     dclm:adult_content: 67760078203

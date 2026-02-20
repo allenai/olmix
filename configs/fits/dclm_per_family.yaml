@@ -31,7 +31,6 @@ priors: # from https://huggingface.co/datasets/allenai/olmix/blob/main/dclm_swar
     sports_and_fitness: 0.03455368961865927
     transportation: 0.02686612455867175
     travel_and_tourism: 0.01667626901270792
-  total_tokens: 5_000_000_000_000
   token_counts:
     adult_content: 67_760_078_203
     art_and_design: 70_659_711_995

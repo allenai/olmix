@@ -1,8 +1,9 @@
-name: example-swarm
+name: example-swarm-2
 
 data:
   sources:
     - name: dclm
+      weight: 0.7
       topics:
         - name: science_math_and_technology
           paths:
@@ -14,9 +15,11 @@ data:
           paths:
             - "s3://ai2-llm/preprocessed/dclm/baseline_topic_ft_lr05_ng2_n3M6_ova_20pct/allenai/dolma2-tokenizer/education_and_jobs/**/*.npy"
     - name: wikipedia
+      weight: 0.01
       paths:
         - "s3://ai2-llm/preprocessed/wikipedia-dolma-0823/allenai/dolma2-tokenizer/*.npy"
     - name: arxiv
+      weight: 0.29
       paths:
         - "s3://ai2-llm/preprocessed/proof-pile-2/v0_decontaminated-0625_tokenized/arxiv/train/allenai/dolma2-tokenizer/*.npy"
 
@@ -41,5 +44,9 @@ swarm:
   min_strength: 0.1
   max_strength: 5.0
   minimum_weight: 0.002
+  manual_topic_prior:
+    dclm:education_and_jobs: 0.1
+    dclm:science_math_and_technology: 0.1
+    dclm:software_development: 0.8
 
 max_tokens: 140000000  # e.g. 20 * 14M params * 0.5 chinchilla multiple

@@ -31,7 +31,6 @@ priors:
     sports_and_fitness: 0.040
     transportation: 0.020
     travel_and_tourism: 0.030
-  total_tokens: 3_000_000_000_000
   token_counts:
     adult_content: 45_000_000_000
     art_and_design: 105_000_000_000

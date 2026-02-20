@@ -3,12 +3,14 @@ import logging
 import os
 import pathlib
 import random
+import re
 from collections import defaultdict
 from copy import deepcopy
 from typing import Any
 from urllib.parse import urlparse
 
 import gcsfs
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import s3fs
@@ -32,7 +34,6 @@ class ConfigDefaults:
     min_strength: float = 0.1
     max_strength: float = 5.0
     sample_multiplier: int = 10
-    maximum_repetition: int = 5
     minimum_weight: float = 2e-3  # 0.002
 
 
@@ -89,29 +90,6 @@ def clip_candidates_by_level(
     return candidates
 
 
-def sample_has_required_sources(sample_vector, domains, nonzero_sources, minimum_source_weight, minimum_topic_weight):
-    # Convert leaf-level weights to source and topic level weights
-    source_weights = leaf_to_source(sample_vector, domains)
-    topic_weights = defaultdict(list)  # source -> list of (idx, weight)
-
-    for idx, weight in enumerate(sample_vector):
-        domain = domains[idx]
-        source = domain.split(":", 1)[0] if ":" in domain else domain
-        topic_weights[source].append((idx, weight))
-
-    # Only count topics that are above the minimum topic weight * source_weights[source] towards the source weight.
-    clipped_source_sums = defaultdict(float)
-    for source, topics in topic_weights.items():
-        total = source_weights[source]
-        threshold = minimum_topic_weight * total
-        for _, weight in topics:
-            if weight >= threshold:
-                clipped_source_sums[source] += weight
-
-    # Check that all nonzero sources pass threshold
-    return all(clipped_source_sums[source] > minimum_source_weight for source in nonzero_sources)
-
-
 def sample_has_required_sources_and_topics(
     sample_vector, domains, nonzero_domains, minimum_source_weight, minimum_topic_weight
 ):
@@ -163,13 +141,13 @@ def generate_weights_dirichlet(
     min_topic_strength: float,
     max_topic_strength: float,
     max_tokens: int,
-    available_tokens: int,
-    allow_repetition: bool,
+    leaf_tokens: dict[str, int],
+    repetition_factor: float,
     manual_prior: dict[str, float] | None,
+    manual_topic_prior: dict[str, float] | None,
     sample_multiplier: int | None,
     enable_bound: bool = True,
     nonzero_weight: list[str] | None = None,
-    fixed_source_weights: dict[str, float] | None = None,
     existing_mix_file: str | None = None,
 ):
     """
@@ -177,49 +155,108 @@ def generate_weights_dirichlet(
     The list of domains is always sorted to be in alphabetical order (i.e. alphabetical on sources, then on topics).
     """
 
-    token_scale = available_tokens / max_tokens
-    logger.info(f"Source token population is {token_scale:.2f}:1 target population.")
-
     collected_samples: list[tuple[np.ndarray, np.ndarray]] = []
     weight_bounds = None
 
     prior_dist = np.array([v for _, v in leaf_dist.items()])
-    logger.info(f"Dimension of leaf-level distribution: {len(prior_dist)}")
+    logger.info(f"Number of leaf domains: {len(prior_dist)}")
     domains = [k for k, _ in leaf_dist.items()]
     source_names = [source.name for source in sources]
     idx_to_level = ["source" if name in source_names else "topic" for name in leaf_dist]
 
     if enable_bound:
-        # weight bounds are at the leaf level and computed using the number of available tokens per source/topic.
-        weight_bounds = [(0.0, min(prior_dist[idx] * token_scale, 1.0)) for idx in range(len(prior_dist))]
+        # construct weight bound based on leaf_token counts, repetition_factor and max_tokens
+        leaf_tokens_list = np.array([leaf_tokens[k] for k in leaf_dist])
+        caps = np.minimum(leaf_tokens_list * repetition_factor / max_tokens, 1.0)
+        weight_bounds = [(0.0, caps[idx]) for idx in range(len(prior_dist))]
         grouped_bounds = {domain: weight_bounds[idx] for idx, domain in enumerate(domains)}
-        logger.info("Weight bounds:")
-        logger.info(grouped_bounds)
+        logger.info(f"Weight bounds: {grouped_bounds}")
 
     # split prior distribution into source and topic distributions and tweak it according to the manual prior
     # Note: "topic" here refers to any leaf-level unit (could be topic, quality bucket, or topic:quality)
     topic_distributions = {}
     source_distribution = []
+
+    # If manual_topic_prior spans multiple sources, derive per-source ratios from it and fold them
+    # into manual_prior so the source-level Dirichlet uses the correct proportions.
+    if manual_topic_prior is not None:
+        manual_sources_from_topics = set(key.split(":")[0] for key in manual_topic_prior.keys())
+        if len(manual_sources_from_topics) > 1:
+            manual_source_ratios_from_topics = {}
+            for domain in manual_sources_from_topics:
+                domain_total = sum(value for key, value in manual_topic_prior.items() if key.startswith(f"{domain}:"))
+                manual_source_ratios_from_topics[domain] = domain_total
+            manual_source_ratios_from_topics = {
+                domain: ratio / sum(manual_source_ratios_from_topics.values())
+                for domain, ratio in manual_source_ratios_from_topics.items()
+            }
+            remaining_sources = set(source_names).difference(manual_sources_from_topics)
+            remaining_ratios = {}
+            for domain in remaining_sources:
+                if manual_prior is not None and domain in manual_prior:
+                    remaining_ratios[domain] = manual_prior[domain]
+                else:
+                    remaining_ratios[domain] = sum(v for k, v in leaf_dist.items() if k.startswith(f"{domain}:"))
+            total_remaining = sum(remaining_ratios.values())
+            total_for_manual_domains = 1 - total_remaining
+            manual_source_ratios_from_topics = {
+                domain: ratio * total_for_manual_domains for domain, ratio in manual_source_ratios_from_topics.items()
+            }
+            remaining_ratios.update(manual_source_ratios_from_topics)
+            manual_prior = remaining_ratios
+
     for source_config in sorted(sources, key=lambda x: x.name):
         if source_config.topics:
             # this source has topics - collect all leaf-level units
-            unit_weights = []
-            for topic in sorted(source_config.topics, key=lambda x: x.name):
-                if topic.quality:
-                    # Each quality bucket is a separate unit
-                    for q in sorted(topic.quality, key=lambda x: x.name):
-                        unit_weights.append(leaf_dist[f"{source_config.name}:{topic.name}:{q.name}"])
-                else:
-                    # Topic is the unit
-                    unit_weights.append(leaf_dist[f"{source_config.name}:{topic.name}"])
-            weights = np.array(unit_weights)
-            normalized_weights = weights / weights.sum()
-            topic_distributions[source_config.name] = normalized_weights
+            if manual_topic_prior is not None and all(
+                f"{source_config.name}:{topic.name}" in manual_topic_prior for topic in source_config.topics
+            ):
+                # Use manual topic prior, expanding to leaf level for sources with quality buckets.
+                unit_weights = []
+                for topic in sorted(source_config.topics, key=lambda x: x.name):
+                    topic_weight = manual_topic_prior[f"{source_config.name}:{topic.name}"]
+                    if topic.quality:
+                        quality_counts = [
+                            leaf_dist[f"{source_config.name}:{topic.name}:{q.name}"]
+                            for q in sorted(topic.quality, key=lambda x: x.name)
+                        ]
+                        total_quality = sum(quality_counts)
+                        for qc in quality_counts:
+                            unit_weights.append(topic_weight * (qc / total_quality) if total_quality > 0 else 0)
+                    else:
+                        unit_weights.append(topic_weight)
+                normalized_weights = np.array(unit_weights)
+                topic_distributions[source_config.name] = normalized_weights / normalized_weights.sum()
 
-            if manual_prior is not None and source_config.name in manual_prior:
-                source_distribution.append(manual_prior[source_config.name])
+                if manual_prior is not None and source_config.name in manual_prior:
+                    source_distribution.append(manual_prior[source_config.name])
+                else:
+                    natural_sum = 0.0
+                    for topic in sorted(source_config.topics, key=lambda x: x.name):
+                        if topic.quality:
+                            for q in sorted(topic.quality, key=lambda x: x.name):
+                                natural_sum += leaf_dist[f"{source_config.name}:{topic.name}:{q.name}"]
+                        else:
+                            natural_sum += leaf_dist[f"{source_config.name}:{topic.name}"]
+                    source_distribution.append(natural_sum)
             else:
-                source_distribution.append(weights.sum())
+                unit_weights = []
+                for topic in sorted(source_config.topics, key=lambda x: x.name):
+                    if topic.quality:
+                        # Each quality bucket is a separate unit
+                        for q in sorted(topic.quality, key=lambda x: x.name):
+                            unit_weights.append(leaf_dist[f"{source_config.name}:{topic.name}:{q.name}"])
+                    else:
+                        # Topic is the unit
+                        unit_weights.append(leaf_dist[f"{source_config.name}:{topic.name}"])
+                weights = np.array(unit_weights)
+                normalized_weights = weights / weights.sum()
+                topic_distributions[source_config.name] = normalized_weights
+
+                if manual_prior is not None and source_config.name in manual_prior:
+                    source_distribution.append(manual_prior[source_config.name])
+                else:
+                    source_distribution.append(weights.sum())
         elif source_config.quality:
             # Source-level quality buckets (no topics)
             unit_weights = [
@@ -262,9 +299,6 @@ def generate_weights_dirichlet(
         logger.info(f"Topic priors after temperature scaling: {topic_priors}")
     else:
         topic_priors = deepcopy(topic_distributions)
-
-    if not allow_repetition and weight_bounds:
-        logger.info("Limiting candidates to within bounds, repetition is disabled...")
 
     fixed_topic_weights = {}
     for source in sources:
@@ -310,9 +344,13 @@ def generate_weights_dirichlet(
     sample_multiplier = sample_multiplier if sample_multiplier else ConfigDefaults.sample_multiplier
 
     fixed_source_weights_list: list[float] | None = None
-    if fixed_source_weights is not None:
+    if any(source.weight is not None for source in sources):
+        missing = [s.name for s in sources if s.weight is None]
+        if missing:
+            raise ValueError(f"All sources must have a weight if any do; missing: {missing}")
         fixed_source_weights_list = [
-            fixed_source_weights[source_config.name] for source_config in sorted(sources, key=lambda x: x.name)
+            source_config.weight  # type: ignore[list-item]
+            for source_config in sorted(sources, key=lambda x: x.name)
         ]
 
     if existing_mix_file is not None:
@@ -375,8 +413,8 @@ def generate_weights_dirichlet(
 
         filtered_candidates = []
 
-        # If we don't allow repetition, we need to filter out candidates that are outside the bounds
-        if weight_bounds and not allow_repetition:
+        # Filter out candidates that are outside the bounds
+        if weight_bounds:
             filtered_candidates = [
                 sample
                 for sample in candidates
@@ -412,7 +450,7 @@ def generate_weights_dirichlet(
                 candidates, idx_to_level, domains, minimum_source_weight, minimum_topic_weight, fixed_topic_weights
             )
 
-        if weight_bounds and not allow_repetition:
+        if weight_bounds:
             # need to check for out-of-bounds candidates again, in case normalization caused bounds to be violated.
             if any(
                 candidates[0][idx] < lower or candidates[0][idx] > upper
@@ -433,18 +471,18 @@ def generate_weights_dirichlet(
                 continue
 
         reject = False
-        if allow_repetition:
-            for idx, _ in enumerate(domains):
-                available_tokens = int(prior_dist[idx] * available_tokens)
-                required_tokens = int(selected[0][idx] * max_tokens)
+        for idx, domain in enumerate(domains):
+            domain_tokens = leaf_tokens[domain]
+            required_tokens = int(selected[0][idx] * max_tokens)
 
-                repetition = np.ceil(required_tokens / available_tokens * 1000) / 1000 if available_tokens != 0 else 0
+            repetition = np.ceil(required_tokens / domain_tokens * 1000) / 1000
 
-                if repetition > ConfigDefaults.maximum_repetition:
-                    reject = True
-                    break
+            if repetition > repetition_factor:
+                logger.info(f"Repetition factor {repetition} exceeds maximum {repetition_factor}")
+                reject = True
+                break
 
-                selected[1][idx] = max(1, repetition)
+            selected[1][idx] = max(1, repetition)
 
         if not reject:
             collected_samples.append(selected)
@@ -466,24 +504,15 @@ def generate_weights_dirichlet(
     selected_samples = random.sample(deduped, num_samples_out)
     selected_samples = np.stack(selected_samples, axis=0)
 
-    logger.info("Number of nonzero domains per swarm run: ")
-    print([len(np.where(selected_samples[i][0] != 0)[0]) for i in range(len(selected_samples))])
-
-    all_diffs = []
-    for i in range(len(selected_samples)):
-        for j in range(i + 1, len(selected_samples)):
-            diff = np.linalg.norm(selected_samples[i][0] - selected_samples[j][0])
-            if diff < 0.01:
-                logger.info(f"Sample {i} and Sample {j} are too close to each other!")
-                logger.info(f"Sample {i}: {selected_samples[i][0]}")
-                logger.info(f"Sample {j}: {selected_samples[j][0]}")
-            all_diffs.append(diff)
+    num_nonzero = [len(np.where(selected_samples[i][0] != 0)[0]) for i in range(len(selected_samples))]
+    logger.info(f"Number of nonzero domains per swarm run: {num_nonzero}")
 
     return selected_samples
 
 
 def mk_mixtures(
     config: GenerationConfig,
+    group_uuid: str | None = None,
 ) -> list[dict[str, MixEntry]]:
     random.seed(config.swarm.seed)
     np.random.seed(config.swarm.seed)
@@ -491,17 +520,12 @@ def mk_mixtures(
     num_samples = config.swarm.variants
     sources = config.data.sources
     leaf_dist = config.priors.relative_sizes
-    available_tokens = config.priors.total_tokens
     leaf_tokens = config.priors.token_counts
+    available_tokens = sum(leaf_tokens.values())
     logger.info(f"Total tokens for config: {available_tokens:,}")
     logger.info(f"Using seed: {config.swarm.seed}")
 
-    logger.info("Source distribution:")
-    logger.info(leaf_dist)
-    logger.info("Source tokens:")
-
-    leaf_tokens = {k: f"{v:,}" for k, v in leaf_tokens.items() if v > 0}
-    logger.info(leaf_tokens)
+    logger.info(f"Leaf distribution: {leaf_dist}")
 
     leaf_items = list(leaf_dist.items())
     prior_dist = [v for _, v in leaf_items]
@@ -548,13 +572,13 @@ def mk_mixtures(
         max_source_strength=max_source_strength,
         min_topic_strength=min_topic_strength,
         max_topic_strength=max_topic_strength,
-        allow_repetition=swarm.allow_repetition,
         max_tokens=config.max_tokens,
-        available_tokens=available_tokens,
-        enable_bound=True,
+        leaf_tokens=leaf_tokens,
+        repetition_factor=swarm.repetition_factor,
+        enable_bound=swarm.enable_bound,
         nonzero_weight=swarm.nonzero_weight,
-        fixed_source_weights=swarm.fixed_source_weights,
         manual_prior=swarm.manual_prior,
+        manual_topic_prior=swarm.manual_topic_prior,
         sample_multiplier=swarm.sample_multiplier,
         existing_mix_file=swarm.existing_mix_file,
     )
@@ -567,13 +591,27 @@ def mk_mixtures(
 
         weight_maps.append(weight_map)
 
-    # Log weight ranges for topics
+    out_dir = pathlib.Path("cache") / "swarms" / str(group_uuid) if group_uuid is not None else None
+
+    # Log weight ranges for topics (and save histograms if group_uuid is set)
     for i in range(len(domains)):
         if ":" in domains[i]:
             weights = np.array([mix[0][i] for mix in mixtures])
             logger.info(f"Topic {domains[i]}, min: {weights.min()}, max: {weights.max()}")
 
-    # Log weight ranges for sources
+            if out_dir is not None:
+                out_dir.mkdir(parents=True, exist_ok=True)
+                safe_topic = re.sub(r"[^A-Za-z0-9_.-]+", "_", domains[i])
+                plt.figure(figsize=(8, 5))
+                plt.hist(weights[~np.isnan(weights)], bins=10)
+                plt.title(safe_topic)
+                plt.xlabel("Weight")
+                plt.ylabel("Frequency")
+                plt.tight_layout()
+                plt.savefig(out_dir / f"{safe_topic}_weights_hist.png", dpi=200)
+                plt.close()
+
+    # Log weight ranges for sources (and save histograms if group_uuid is set)
     source_to_indices = defaultdict(list)
     for i, domain in enumerate(domains):
         source = domain.split(":", 1)[0]
@@ -586,6 +624,18 @@ def mk_mixtures(
             source_weights.append(total)
         source_weights = np.array(source_weights)
         logger.info(f"Source {source}, min: {source_weights.min()}, max: {source_weights.max()}")
+
+        if out_dir is not None:
+            out_dir.mkdir(parents=True, exist_ok=True)
+            safe_source = re.sub(r"[^A-Za-z0-9_.-]+", "_", source)
+            plt.figure(figsize=(8, 5))
+            plt.hist(source_weights[~np.isnan(source_weights)], bins=10)
+            plt.title(source)
+            plt.xlabel("Weight")
+            plt.ylabel("Frequency")
+            plt.tight_layout()
+            plt.savefig(out_dir / f"{safe_source}_source_weights_hist.png", dpi=200)
+            plt.close()
 
     return weight_maps
 
