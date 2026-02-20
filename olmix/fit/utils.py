@@ -4,15 +4,12 @@ import logging
 import os
 import platform
 import random
-import subprocess
 import warnings
 from copy import deepcopy
 from dataclasses import dataclass
-from io import StringIO
 from pathlib import Path
 from typing import Any
 
-import boto3
 import cvxpy as cp
 import lightgbm as lgb
 import numpy as np
@@ -25,37 +22,10 @@ from sklearn.gaussian_process.kernels import RBF, ConstantKernel, WhiteKernel
 from tqdm import tqdm
 from wandb.apis.public import Run
 
-from olmix.aliases import LaunchConfig, SourceConfig, compute_max_tokens, get_model_num_params
+from olmix.aliases import LaunchConfig, SourceConfig
 from olmix.fit.law import ScalingLaw
 from olmix.generate.synthesize_mixture import calculate_priors
 from olmix.plots import BASE_OUTPUT_DIR
-
-
-def get_target_tokens(
-    target_tokens: int | None = None,
-    target_chinchilla_multiple: float | None = None,
-    target_model_id: str | None = None,
-) -> int | None:
-    """Compute target tokens for the final run.
-
-    Uses target_tokens directly if set, otherwise computes from
-    target_chinchilla_multiple and target_model_id.
-
-    Returns:
-        Target token count for constraint optimization, or None if not configured.
-
-    Raises:
-        ValueError: If target_chinchilla_multiple is set but target_model_id is not.
-    """
-    if target_tokens is not None:
-        return target_tokens
-    if target_chinchilla_multiple is not None:
-        if target_model_id is None:
-            raise ValueError("target_model_id required when using target_chinchilla_multiple")
-        num_params = get_model_num_params(target_model_id)
-        return compute_max_tokens(target_chinchilla_multiple, num_params)
-    return None
-
 
 logger = logging.getLogger(__name__)
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -66,54 +36,6 @@ if platform.system() == "Darwin":  # Darwin is the system name for macOS
 
     os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
     mp.set_start_method("spawn", force=True)
-
-
-def get_token_counts_and_ratios(
-    source_configs: list[SourceConfig],
-    dtype,
-    use_cache: bool = True,
-) -> tuple[dict[str, float], int]:
-    """
-    Get token counts and ratios for a list of source configurations.
-
-    This is a compatibility wrapper around calculate_priors that provides
-    the same interface as the old cookbook.utils.data.get_token_counts_and_ratios.
-
-    Args:
-        source_configs: List of SourceConfig objects
-        dtype: Data type for numpy datasets
-        use_cache: Whether to use cached results
-
-    Returns:
-        Tuple of (relative_sizes dict, total_tokens)
-    """
-    priors, total_tokens, _ = calculate_priors(source_configs, dtype, use_cache)
-    return priors, total_tokens
-
-
-def compute_constraints_from_config(
-    config: LaunchConfig,
-    *,
-    target_tokens: int,
-    repetition_factor: float = 4.0,
-    use_cache: bool = True,
-) -> tuple[int, dict[str, float], float]:
-    """Compute constraints from config's sources and target settings.
-
-    Args:
-        config: ExperimentConfig (used for sources and dtype)
-        target_tokens: Target token count for the final run
-        repetition_factor: Max repetition factor for constraint checking
-        use_cache: Whether to use cached token counts
-
-    Returns:
-        Tuple of (target_tokens, available_tokens_per_source, repetition_factor)
-    """
-    token_universe = get_token_counts_and_ratios(config.data.sources, config.data.dtype, use_cache)
-    available_tokens_per_source = {
-        path: relative_size * token_universe[1] for path, relative_size in token_universe[0].items()
-    }
-    return target_tokens, available_tokens_per_source, repetition_factor
 
 
 # Match regmix setup: https://github.com/sail-sg/regmix/blob/main/regression_fitting/regression.ipynb
@@ -803,219 +725,9 @@ def mk_run_metrics(
             results[metric_name] = df.loc[:, metric_name].tail(1).mean()
 
         if len(offline_tasks) > 0:
-            # need to obtain offline results
-            for d in dashboard:
-                logger.info(f"Getting offline results for {display_name} in {d} dashboard")
-                offline_results = get_offline_evals(
-                    display_name,
-                    offline_tasks,
-                    group_name,
-                    dashboard=d,
-                )
-                results.update(offline_results)
+            raise NotImplementedError("Offline evaluation is implemented but out of date!")
 
     return results
-
-
-def get_offline_evals_from_dashboard(display_name, tasks, dashboard):
-    command = [
-        "olmo-cookbook-eval",
-        "results",
-        "--dashboard",
-        f"{dashboard}",
-    ]
-
-    for task in tasks:
-        command.append("--tasks")
-        command.append(task)
-
-    command.extend(["--format", "csv", "--skip-on-fail"])
-
-    result = subprocess.run(command, capture_output=True, text=True)
-
-    # Check for errors
-    if result.returncode != 0:
-        print("Error:", result.stderr)
-    else:
-        # Load CSV content into a DataFrame
-        csv_data = result.stdout
-        df = pd.read_csv(StringIO(csv_data))
-
-    df = df[df["name"].str.contains(display_name)]
-    assert len(df) == 1
-
-    df = df[tasks]
-    return df.to_dict()
-
-
-def get_offline_evals(
-    display_name,
-    tasks,
-    group_name,
-    dashboard="regmixer",
-):  # "olmo-3-evals"):# "regmixer"):
-    bucket = "ai2-llm"
-    prefix = f"evaluation/{dashboard}/{display_name}"
-
-    s3 = boto3.client("s3")
-
-    # Get list of all files under the prefix
-    paginator = s3.get_paginator("list_objects_v2")
-    pages = paginator.paginate(Bucket=bucket, Prefix=prefix)
-
-    json_files = []
-    jsonl_files = []
-
-    for page in pages:
-        for obj in page.get("Contents", []):
-            key = obj["Key"]
-            if not key.endswith("/"):
-                if key.endswith(".jsonl"):
-                    jsonl_files.append(key)
-                elif key.endswith(".json"):
-                    json_files.append(key)
-
-    all_jsonl_data = []
-
-    for key in jsonl_files:
-        if key.endswith("metrics-all.jsonl"):
-            obj = s3.get_object(Bucket=bucket, Key=key)
-            for line in obj["Body"].iter_lines():
-                if line:
-                    try:
-                        data = json.loads(line.decode("utf-8"))
-                        all_jsonl_data.append(data)
-                    except json.JSONDecodeError as e:
-                        print(f"Error decoding JSON line in {key}: {e}")
-
-    # all_available_tasks = [data['task_config'].get('metadata', {}).get('alias')  for data in all_jsonl_data]
-    # logger.info(f"Available tasks in JSONL data for {display_name}:")
-    # for task in sorted(all_available_tasks):
-    #    print(f'"{task}",')
-    # raise ValueError()
-
-    offline_results = {}
-    for _i, task in enumerate(tasks):
-        task_data = [
-            data
-            for data in all_jsonl_data
-            if (data["task_config"].get("metadata", {}).get("alias") == task or data["task_name"] == task)
-        ]
-        if len(task_data) == 0:
-            task = task.replace("bpb:", "")
-            task_data = [
-                data
-                for data in all_jsonl_data
-                if (data["task_config"].get("metadata", {}).get("alias") == task or data["task_name"] == task)
-            ]
-            if len(task_data) == 0:
-                task = task + ":full"
-                task_data = [
-                    data
-                    for data in all_jsonl_data
-                    if (data["task_config"].get("metadata", {}).get("alias") == task or data["task_name"] == task)
-                ]
-                if len(task_data) == 0:
-                    all_available_tasks = [
-                        data["task_config"].get("metadata", {}).get("alias") for data in all_jsonl_data
-                    ]
-
-                    if (
-                        task.replace(":full", "")
-                        in [
-                            "ultrachat_masked_ppl",
-                            "wildchat_masked_ppl",
-                            "qasper_yesno:rc::olmes",
-                            "sciriff_yesno:rc::olmes",
-                            "lab_bench_dbqa",
-                            "lab_bench_protocolqa",
-                            "medqa_en:rc::none",
-                        ]
-                        and group_name == "pretraining_tasks_for_paper"
-                    ):
-                        continue
-                    else:
-                        logger.warning(
-                            f"Task {task} not found in JSONL data for {display_name}. Available tasks: {all_available_tasks}"
-                        )
-                        continue
-                else:
-                    logger.info(
-                        f"Task {task} found in JSONL data for {display_name} with alias {task_data[0]['task_config'].get('metadata', {}).get('alias')}"
-                    )
-
-        data = task_data[0]
-        if "bits_per_byte_corr" in data["metrics"]:
-            name = data["task_config"]["metadata"]["alias"].replace("bpb:", "").replace(":full", "")
-            offline_results[name] = data["metrics"]["bits_per_byte_corr"]
-            # logger.info(
-            #    f"Task {name} found in JSONL data for {display_name} with bits_per_byte_corr {data['metrics']['bits_per_byte_corr']}"
-            # )
-        elif "bits_per_byte_corr_macro" in data["metrics"]:
-            name = data["task_config"]["metadata"]["alias"].replace("bpb:", "").replace(":full", "")
-            offline_results[name] = data["metrics"]["bits_per_byte_corr_macro"]
-            # logger.info(
-            #    f"Task {name} found in JSONL data for {display_name} with bits_per_byte_corr_macro {data['metrics']['bits_per_byte_corr_macro']}"
-            # )
-        elif "bits_per_byte" in data["metrics"]:
-            name = data["task_name"].replace("bpb:", "").replace(":full", "")
-            offline_results[name] = data["metrics"]["bits_per_byte"]
-            # logger.info(
-            #    f"Task {name} found in JSONL data for {display_name} with bits_per_byte {data['metrics']['bits_per_byte']}"
-            # )
-        else:
-            logger.warning(
-                f"{data['task_name']} does not have bits_per_byte_corr or bits_per_byte_corr_macro in metrics {data['metrics'].keys()}"
-            )
-
-    return offline_results
-
-
-def mk_weights_from_config(config: dict, priors: tuple, display_name: str, patched: bool = False) -> dict[str, float]:
-    source_mixture_config = config.get("dataset", {}).get("source_mixture_config", {})
-
-    sources = (
-        source_mixture_config.get("source_configs") or source_mixture_config.get("source_list").get("sources") or []
-    )
-
-    source_configs = {source["source_name"]: source for source in sources}
-
-    prefixes = ["dclm", "s2pdf", "pes2o", "stack-edu", "finemath-3plus", "arxiv", "wikipedia"]
-    source_configs = {
-        (
-            name.replace("_", ":", 1)
-            if any(name.startswith(prefix + "_") and not name.startswith("dclm_v2") for prefix in prefixes)
-            else name
-        ): value
-        for name, value in source_configs.items()
-    }
-
-    if "62e7dc06" in display_name and patched:
-        # need this when patching to align up all the domain names
-        source_configs = {f"dclm:{k}": v for k, v in source_configs.items()}
-
-    weights = {}
-    for domain in priors[0].keys():
-        if domain not in source_configs:
-            # two cases
-            if ":" in domain and domain.split(":")[0] in source_configs:
-                # 1) prior (i.e., swarm config) requests a leaf but mixes from the wandb (i.e. launched outside of the swarm, like natural distr) are specified at the source level
-                source_name = domain.split(":")[0]
-                weights[domain] = source_configs[source_name].get("target_ratio", 0.0) * priors[0][domain]
-            elif ":" in domain and domain.split(":")[-1] in source_configs:
-                domain_name = domain.split(":")[-1]
-                weights[domain] = source_configs[domain_name].get("target_ratio", 0.0)
-            elif ":" not in domain:
-                # 2) prior requests a source (i.e. when we condition on a topic-level p* mix) but wandb mixes are specified at the leaf level
-                cfg = {k: v.get("target_ratio", 0.0) for k, v in source_configs.items() if f"{domain}:" in k}
-                weights[domain] = sum(cfg.values()) if cfg else 0.0
-            else:
-                # 3) prior's domain has 0 weight in the wandb config
-                weights[domain] = 0.0
-        else:
-            weights[domain] = source_configs.get(domain, {}).get("target_ratio", 0.0)
-
-    return weights
 
 
 def expand_collapsed_weights(
@@ -1058,45 +770,6 @@ def save_fit_config(fit_config: dict, output_dir: str, custom_name: str | None =
 
     print(f"[INFO] Saved config to {config_path}")
     return folder_path
-
-
-def filter_constrained_swarm(final_cookbook_path: Path, run_ratios: list, run_metrics: list) -> tuple[list, list]:
-    assert final_cookbook_path is not None, (
-        "final_cookbook_path must be set to determine how to construct swarm to be unconstrained."
-    )
-
-    with open(final_cookbook_path) as f:
-        data = yaml.safe_load(f)
-
-    final_config = LaunchConfig(**data)
-    desired_tokens = final_config.training.get_max_tokens()
-
-    token_universe = get_token_counts_and_ratios(final_config.data.sources, final_config.data.dtype, True)
-    available_tokens_per_source = {
-        path: relative_size * token_universe[1] for path, relative_size in token_universe[0].items()
-    }
-
-    original_swarm_size = len(run_ratios)
-
-    valid_runs = [
-        run["run"]
-        for run in run_ratios
-        if all(
-            [
-                run[source] * desired_tokens <= num_available_tokens
-                for source, num_available_tokens in available_tokens_per_source.items()
-            ]
-        )
-    ]
-
-    run_ratios = [run for run in run_ratios if run["run"] in valid_runs]
-    run_metrics = [run for run in run_metrics if run["run"] in valid_runs]
-
-    logger.info(
-        f"Removed {original_swarm_size - len(run_ratios)} swarm runs that would repeat tokens at the final run scale."
-    )
-
-    return run_ratios, run_metrics
 
 
 def calculate_priors_with_manual(

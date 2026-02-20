@@ -139,7 +139,7 @@ def generate(config: str, base: str, output: str):
     base_config = LaunchConfig.from_yaml(base)
     group_uuid = generate_uuid()[:8]
 
-    mixes = mk_mixes(gen_config)
+    mixes = mk_mixes(gen_config, group_uuid=group_uuid)
 
     # Write each mix as a self-contained LaunchConfig YAML file
     output_path = Path(output)
@@ -408,6 +408,7 @@ def priors():
 def priors_compute(config: str, no_cache: bool, output: str | None):
     """Compute token counts for a config by scanning data sources."""
     from olmix.aliases import DataConfig
+    from olmix.fit.config import PriorsConfig
     from olmix.generate.synthesize_mixture import calculate_priors
 
     with open(config) as f:
@@ -417,9 +418,14 @@ def priors_compute(config: str, no_cache: bool, output: str | None):
     data_section = data.get("data", data)
     data_config = DataConfig(**data_section)
 
-    _, _, token_counts = calculate_priors(data_config.sources, data_config.dtype, use_cache=not no_cache)
+    relative_sizes, _, token_counts = calculate_priors(data_config.sources, data_config.dtype, use_cache=not no_cache)
 
-    result = yaml.dump({"priors": {"token_counts": token_counts}}, default_flow_style=False, sort_keys=True)
+    priors = PriorsConfig(relative_sizes=relative_sizes, token_counts=token_counts)
+    result = yaml.dump(
+        {"priors": priors.model_dump()},
+        default_flow_style=False,
+        sort_keys=True,
+    )
 
     if output:
         Path(output).parent.mkdir(parents=True, exist_ok=True)

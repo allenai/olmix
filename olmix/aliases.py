@@ -200,12 +200,12 @@ class SwarmConfig(BaseModel):
     minimum_source_weight: float | None = None
     minimum_topic_weight: float | None = None
     nonzero_weight: list[str] | None = None
-    fixed_source_weights: dict[str, float] | None = None
     manual_prior: dict[str, float] | None = None
     manual_topic_prior: dict[str, float] | None = None
-    allow_repetition: bool = True
     sample_multiplier: int | None = None
     existing_mix_file: str | None = None
+    repetition_factor: float = 1.0
+    enable_bound: bool = True
 
 
 class GenerationConfig(BaseModel):

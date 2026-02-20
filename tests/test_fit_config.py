@@ -26,7 +26,6 @@ def sample_config_dict():
         },
         "priors": {
             "relative_sizes": {"domain_a": 0.6, "domain_b": 0.4},
-            "total_tokens": 1_000_000,
             "token_counts": {"domain_a": 600_000, "domain_b": 400_000},
         },
         "eval": {
@@ -44,7 +43,6 @@ class TestFitConfig:
         cfg = FitConfig(**sample_config_dict)
         assert cfg.swarm.ratios == "ratios.csv"
         assert cfg.swarm.metrics == "metrics.csv"
-        assert cfg.priors.total_tokens == 1_000_000
 
     def test_defaults(self, sample_config_dict):
         cfg = FitConfig(**sample_config_dict)
@@ -74,7 +72,6 @@ class TestFitConfig:
 
         cfg = FitConfig.from_yaml(config_file)
         assert cfg.swarm.ratios == "ratios.csv"
-        assert cfg.priors.total_tokens == 1_000_000
 
     def test_from_yaml_with_overrides(self, sample_config_dict, tmp_path):
         sample_config_dict["regression"] = {"type": "lightgbm"}
@@ -112,7 +109,6 @@ class TestFitConfig:
             "swarm": {"ratios": "r.csv", "metrics": "m.csv"},
             "priors": {
                 "relative_sizes": {"a": 0.5, "b": 0.5},
-                "total_tokens": 2_000_000,
                 "token_counts": {"a": 1_000_000, "b": 1_000_000},
             },
             "eval": {
@@ -160,22 +156,20 @@ class TestPriorsConfig:
     def test_to_tuple(self):
         priors = PriorsConfig(
             relative_sizes={"a": 0.6, "b": 0.4},
-            total_tokens=1_000_000,
             token_counts={"a": 600_000, "b": 400_000},
         )
-        rel, total, counts = priors.to_tuple()
+        rel, counts = priors.to_tuple()
         assert rel == {"a": 0.6, "b": 0.4}
-        assert total == 1_000_000
+        assert sum(counts.values()) == 1_000_000
         assert counts == {"a": 600_000, "b": 400_000}
 
     def test_to_tuple_returns_copies(self):
         """Mutating the returned dicts should not affect the original."""
         priors = PriorsConfig(
             relative_sizes={"a": 0.6, "b": 0.4},
-            total_tokens=1_000_000,
             token_counts={"a": 600_000, "b": 400_000},
         )
-        rel, _, counts = priors.to_tuple()
+        rel, counts = priors.to_tuple()
         rel["c"] = 0.0
         counts["c"] = 0
         assert "c" not in priors.relative_sizes
@@ -278,7 +272,6 @@ class TestEvalDiscriminator:
             swarm={"ratios": "r.csv", "metrics": "m.csv"},
             priors={
                 "relative_sizes": {"a": 0.5, "b": 0.5},
-                "total_tokens": 1_000_000,
                 "token_counts": {"a": 500_000, "b": 500_000},
             },
             eval={"tasks": {"qa": ["metric1"]}},
@@ -290,7 +283,6 @@ class TestEvalDiscriminator:
             swarm={"ratios": "r.csv", "metrics": "m.csv"},
             priors={
                 "relative_sizes": {"a": 0.5, "b": 0.5},
-                "total_tokens": 1_000_000,
                 "token_counts": {"a": 500_000, "b": 500_000},
             },
             eval={"type": "inloop", "tasks": {"qa": {"task_a": "metric_a"}}},
@@ -300,22 +292,11 @@ class TestEvalDiscriminator:
 
 class TestDCLMBaselineConfig:
     def test_loads_example_config(self):
-        """Verify the shipped example config loads and validates."""
-        cfg = FitConfig.from_yaml("configs/fits/dclm_baseline.yaml")
-        assert cfg.swarm.ratios == "dclm_ratios.csv"
-        assert cfg.swarm.metrics == "dclm_metrics.csv"
+        """Verify the example config loads and validates."""
+        cfg = FitConfig.from_yaml("configs/examples/fit/example.yaml")
+        assert cfg.swarm.ratios == "ratios.csv"
+        assert cfg.swarm.metrics == "metrics.csv"
         assert len(cfg.priors.relative_sizes) == 24
         assert cfg.regression.type == "log_linear"
         assert cfg.proposer.type == "exact"
         assert cfg.proposer.kl_reg == 0.1
-
-    def test_eval_config(self):
-        """Verify the eval section of the shipped config."""
-        cfg = FitConfig.from_yaml("configs/fits/dclm_baseline.yaml")
-        assert cfg.eval.type == "offline"
-        assert len(cfg.eval.metric_names) == 110
-        families = cfg.eval.task_families
-        assert set(families.keys()) == {"math", "code", "qa"}
-        assert len(families["math"]) == 7
-        assert len(families["code"]) == 19
-        assert len(families["qa"]) == 84
